@@ -1,0 +1,86 @@
+package com.dlsc.animatorfx.model;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * An animation document. Size is in document pixels, duration in seconds; the frame rate is used
+ * for snapping and display only. Layers are ordered bottom to top.
+ */
+public record Animation(int formatVersion, String name, double width, double height, double frameRate,
+                        double duration, Rgba background, List<Marker> markers, List<Asset> assets,
+                        List<Layer> layers) {
+
+    public static final int CURRENT_FORMAT = 1;
+
+    public Animation {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(background, "background");
+        markers = List.copyOf(markers);
+        assets = List.copyOf(assets);
+        layers = List.copyOf(layers);
+    }
+
+    /**
+     * An empty document at 60 frames per second with a transparent background.
+     */
+    public static Animation create(String name, double width, double height, double duration) {
+        return new Animation(CURRENT_FORMAT, name, width, height, 60, duration, Rgba.TRANSPARENT, List.of(),
+                List.of(), List.of());
+    }
+
+    public Optional<Marker> marker(String name) {
+        return markers.stream().filter(m -> m.name().equals(name)).findFirst();
+    }
+
+    public Animation withFormatVersion(int formatVersion) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withName(String name) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withWidth(double width) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withHeight(double height) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withFrameRate(double frameRate) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withDuration(double duration) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withBackground(Rgba background) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withMarkers(List<Marker> markers) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withAssets(List<Asset> assets) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+
+    public Animation withLayers(List<Layer> layers) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers);
+    }
+}
