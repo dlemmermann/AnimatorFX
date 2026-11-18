@@ -18,6 +18,8 @@
         <!-- mvn javafx:run -Danimatorfx.configDir=<dir> -Danimatorfx.args="<file.afx> ..." -->
         <animatorfx.configDir/>
         <animatorfx.args/>
+        <!-- Platform specific jpackage options of the "package" profile; empty = jpackage defaults (default icon). -->
+        <package.platform.options/>
         <!-- TestFX brings OSGi onto the test class path; Ikonli then tries its OSGi resolver and needs to read it. -->
         <surefire.jvm.args>${javafx.headless.jvm.args} --add-reads org.kordamp.ikonli.core=ALL-UNNAMED</surefire.jvm.args>
     </properties>
@@ -111,4 +113,129 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+      Native packaging: mvn -Ppackage -pl animatorfx-editor -am package
+      (add -DskipTests when the tests have already run). Needs the jlink and jpackage tools of the JDK that runs Maven.
+
+      1. copy-dependencies: the editor's runtime dependencies go to target/package/modules. All of them are explicit
+         JPMS modules (AnimatorFX, AtlantaFX, Ikonli and the platform JavaFX jars).
+      2. antrun: adds the editor jar and removes the empty, classifier-less JavaFX jars, which would otherwise be
+         automatic modules that clash with the real ones.
+      3. jlink: links a trimmed Java runtime containing the editor and everything it requires -> target/package/runtime.
+      4. jpackage: wraps that runtime into an application image for the current platform -> target/dist
+         (AnimatorFX.app on macOS, a directory AnimatorFX elsewhere). No installer, no signing.
+    -->
+    <profiles>
+        <profile>
+            <id>package-macos</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+            </activation>
+            <properties>
+                <package.platform.options>--icon "${project.basedir}/src/package/macos/AnimatorFX.icns" --mac-package-identifier com.dlsc.animatorfx.editor</package.platform.options>
+            </properties>
+        </profile>
+        <profile>
+            <id>package</id>
+            <properties>
+                <!-- jpackage accepts neither -SNAPSHOT nor, on macOS, a leading 0 -->
+                <package.version>1.0.0</package.version>
+                <package.work>${project.build.directory}/package</package.work>
+                <package.dist>${project.build.directory}/dist</package.dist>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>${maven-dependency-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>package-modules</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <includeScope>runtime</includeScope>
+                                    <outputDirectory>${package.work}/modules</outputDirectory>
+                                    <overWriteReleases>true</overWriteReleases>
+                                    <overWriteSnapshots>true</overWriteSnapshots>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>${maven-antrun-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>package-prepare</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                              todir="${package.work}/modules"/>
+                                        <delete>
+                                            <fileset dir="${package.work}/modules"
+                                                     includes="javafx-*-${javafx.editor.version}.jar"/>
+                                        </delete>
+                                        <!-- jlink and jpackage refuse to write into an existing directory -->
+                                        <delete dir="${package.work}/runtime"/>
+                                        <delete dir="${package.dist}"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>${exec-maven-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>package-jlink</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>${java.home}/bin/jlink</executable>
+                                    <arguments>
+                                        <argument>--module-path</argument>
+                                        <argument>${package.work}/modules</argument>
+                                        <argument>--add-modules</argument>
+                                        <argument>com.dlsc.animatorfx.editor</argument>
+                                        <argument>--strip-debug</argument>
+                                        <argument>--no-header-files</argument>
+                                        <argument>--no-man-pages</argument>
+                                        <argument>--output</argument>
+                                        <argument>${package.work}/runtime</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>package-jpackage</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>${java.home}/bin/jpackage</executable>
+                                    <commandlineArgs>--type app-image --name AnimatorFX --app-version ${package.version} --vendor DLSC --runtime-image "${package.work}/runtime" --module com.dlsc.animatorfx.editor/com.dlsc.animatorfx.editor.AnimatorApp --java-options --enable-native-access=javafx.graphics --dest "${package.dist}" ${package.platform.options}</commandlineArgs>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
