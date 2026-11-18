@@ -17,6 +17,7 @@ import com.dlsc.animatorfx.model.Vec2;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -180,7 +181,15 @@ public final class Commands {
      * Runs the commands one after the other as a single command.
      */
     public static Command all(String name, Command... commands) {
-        List<Command> copy = List.of(commands);
+        return batch(name, List.of(commands));
+    }
+
+    /**
+     * Runs the commands one after the other as a single command, and so as one undo step: an
+     * edit that applies to several layers at once.
+     */
+    public static Command batch(String name, List<Command> commands) {
+        List<Command> copy = List.copyOf(commands);
         return command(name, before -> {
             Animation after = before;
             for (Command c : copy) {
@@ -188,6 +197,77 @@ public final class Commands {
             }
             return after;
         });
+    }
+
+    /**
+     * A copied keyframe: where it came from, its time relative to the earliest copied keyframe,
+     * its value and its easing.
+     */
+    public record KeyframeCopy(String layerId, String propertyKey, double offset, Object value, Easing easing) {
+    }
+
+    /**
+     * The keyframes of the references as copies, earliest first. References to keyframes the
+     * document does not have are left out.
+     */
+    public static List<KeyframeCopy> copyKeyframes(Animation animation, Collection<KeyframeRef> refs) {
+        record Found(KeyframeRef ref, Keyframe<?> keyframe) {
+        }
+        List<Found> found = new ArrayList<>();
+        for (KeyframeRef ref : refs) {
+            Layer layer = Layers.find(animation, ref.layerId()).orElse(null);
+            if (layer == null || !hasProperty(layer, ref.propertyKey())) {
+                continue;
+            }
+            for (Keyframe<?> keyframe : LayerProperties.get(layer, ref.propertyKey()).keyframes()) {
+                if (keyframe.id().equals(ref.keyframeId())) {
+                    found.add(new Found(ref, keyframe));
+                }
+            }
+        }
+        found.sort(Comparator.comparingDouble(f -> f.keyframe().time()));
+        List<KeyframeCopy> copies = new ArrayList<>();
+        for (Found f : found) {
+            copies.add(new KeyframeCopy(f.ref().layerId(), f.ref().propertyKey(),
+                    f.keyframe().time() - found.get(0).keyframe().time(), f.keyframe().value(), f.keyframe().easing()));
+        }
+        return List.copyOf(copies);
+    }
+
+    /**
+     * Adds the copied keyframes to the properties they came from, the earliest one at the time
+     * and the others at their offsets after it. A keyframe that is already at such a time takes
+     * the pasted value and easing and keeps its id. Layers and properties that no longer exist
+     * are skipped.
+     */
+    public static Command pasteKeyframes(List<KeyframeCopy> copies, double time) {
+        List<KeyframeCopy> list = List.copyOf(copies);
+        return command("Paste Keyframes", before -> {
+            Animation after = before;
+            for (KeyframeCopy copy : list) {
+                after = editLayer(after, copy.layerId(), layer -> hasProperty(layer, copy.propertyKey())
+                        ? LayerProperties.set(layer, copy.propertyKey(), withKeyframe(
+                                LayerProperties.get(layer, copy.propertyKey()), time + copy.offset(), copy.value(),
+                                copy.easing()))
+                        : layer);
+            }
+            return after;
+        });
+    }
+
+    private static boolean hasProperty(Layer layer, String key) {
+        for (PropertyRef property : LayerProperties.list(layer)) {
+            if (property.key().equals(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The cast is checked afterwards: LayerProperties.set rejects values of the wrong type.
+    @SuppressWarnings("unchecked")
+    private static <T> Animatable<T> withKeyframe(Animatable<T> current, double time, Object value, Easing easing) {
+        return current.withKeyframe(time, (T) value, easing);
     }
 
     /**

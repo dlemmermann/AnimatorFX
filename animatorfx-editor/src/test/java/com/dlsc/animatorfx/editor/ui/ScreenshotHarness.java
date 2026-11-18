@@ -61,7 +61,7 @@ class ScreenshotHarness {
     @EnabledIfSystemProperty(named = DIR_PROPERTY, matches = ".+")
     void renderBothThemes() throws Exception {
         Path out = Path.of(System.getProperty(DIR_PROPERTY));
-        String prefix = System.getProperty(DIR_PROPERTY + ".prefix", "task-7");
+        String prefix = System.getProperty(DIR_PROPERTY + ".prefix", "task-8");
         Files.createDirectories(out);
         Path config = Files.createTempDirectory(out, "config-");
 
@@ -162,6 +162,46 @@ class ScreenshotHarness {
         mouse(MouseEvent.MOUSE_MOVED, fx(() -> canvas.documentToView(new Vec2(470, 275))));
         fx(() -> {
             doc.setPlayhead(1.14);
+            return null;
+        });
+        settle();
+        animate();
+    }
+
+    /** Task 8: keyframes, a marker and an expanded layer, through the timeline and the inspector. */
+    private void animate() throws Exception {
+        String badge = doc.getAnimation().layers().get(1).id();
+        fx(() -> {
+            doc.getSelection().layerIds().setAll(badge);
+            doc.setPlayhead(0.2);
+            doc.execute(com.dlsc.animatorfx.editor.doc.Commands.addKeyframe(badge, "transform.position", 0.2));
+            doc.execute(com.dlsc.animatorfx.editor.doc.Commands.setValueAt(badge, "transform.position", 1.2, new Vec2(300, 300), true));
+            doc.execute(com.dlsc.animatorfx.editor.doc.Commands.setValueAt(badge, "transform.scale", 0.2, new Vec2(0.6, 0.6), true));
+            doc.execute(com.dlsc.animatorfx.editor.doc.Commands.setValueAt(badge, "transform.scale", 0.8, new Vec2(1, 1), true));
+            doc.execute(com.dlsc.animatorfx.editor.doc.Commands.setValueAt(badge, "opacity", 0.0, 0.0, true));
+            doc.execute(com.dlsc.animatorfx.editor.doc.Commands.setValueAt(badge, "opacity", 0.5, 1.0, true));
+            doc.getViewState().getExpandedLayerIds().add(badge);
+            doc.execute(com.dlsc.animatorfx.editor.timeline.Markers.add(0.0));
+            doc.execute(com.dlsc.animatorfx.editor.timeline.Markers.rename("marker1", "intro"));
+            doc.execute(com.dlsc.animatorfx.editor.timeline.Markers.add(1.6));
+            doc.execute(com.dlsc.animatorfx.editor.timeline.Markers.rename("marker1", "success"));
+            doc.execute(com.dlsc.animatorfx.editor.timeline.Markers.setRange("Resize Marker", "success", 1.6, 2.8));
+            doc.setPlayhead(1.14);
+            return null;
+        });
+        settle();
+        var timeline = window.getTimelineView();
+        var tracks = timeline.getTrackPane();
+        double x = fx(() -> tracks.timeToX(0.2));
+        double y = fx(() -> tracks.rowCenter(tracks.rowOf(badge, "transform.position")));
+        fx(() -> {
+            Point2D scene = tracks.localToScene(x, y);
+            for (EventType<MouseEvent> type : List.of(MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED)) {
+                Event.fireEvent(tracks, new MouseEvent(type, scene.getX(), scene.getY(), scene.getX(), scene.getY(),
+                        MouseButton.PRIMARY, 1, false, false, false, false, type == MouseEvent.MOUSE_PRESSED, false,
+                        false, false, false, false, null));
+            }
+            timeline.getKeyframeActions().setEasing(com.dlsc.animatorfx.model.Easing.presets().get("Ease Out"));
             return null;
         });
         settle();

@@ -177,7 +177,7 @@ class MainWindowTest {
             assertFalse(document.isDirty());
             assertSame(document, window.getCanvasView().getDocument());
             assertSame(document, window.getSidePanel().getDocument());
-            assertSame(document, window.getTimelinePane().getDocument());
+            assertSame(document, window.getTimelineView().getDocument());
             assertEquals("800 × 600", text(window, "#status-size"));
             assertEquals("0 layers", text(window, "#status-layers"));
             assertEquals("0 selected", text(window, "#status-selection"));

@@ -25,6 +25,8 @@
     -afx-hover: rgba(125, 138, 155, 0.16);
     -afx-grid: rgba(42, 51, 64, 0.55);
     -afx-shadow: rgba(0, 0, 0, 0.45);
+    -afx-row-alt: #181f28;
+    -afx-playhead-soft: rgba(255, 92, 92, 0.16);
 
     /* AtlantaFX follows the editor palette */
     -color-bg-default: -afx-panel;
@@ -64,10 +66,33 @@
     -afx-hover: rgba(107, 120, 136, 0.14);
     -afx-grid: rgba(213, 219, 227, 0.75);
     -afx-shadow: rgba(29, 39, 51, 0.18);
+    -afx-row-alt: #f7f9fb;
+    -afx-playhead-soft: rgba(229, 72, 77, 0.12);
 }
 
 .main-window {
     -fx-background-color: -afx-bg;
+}
+
+/* Canvas drawing code reads the palette from here (ui.Palette). */
+.palette {
+    -afx-palette-bg: -afx-bg;
+    -afx-palette-panel: -afx-panel;
+    -afx-palette-panel-alt: -afx-panel-alt;
+    -afx-palette-row-alt: -afx-row-alt;
+    -afx-palette-line: -afx-line;
+    -afx-palette-fg: -afx-fg;
+    -afx-palette-muted: -afx-muted;
+    -afx-palette-accent: -afx-accent;
+    -afx-palette-accent-soft: -afx-accent-soft;
+    -afx-palette-accent-bar: -afx-accent-bar;
+    -afx-palette-key: -afx-key;
+    -afx-palette-key-soft: -afx-key-soft;
+    -afx-palette-key-bar: -afx-key-bar;
+    -afx-palette-playhead: -afx-playhead;
+    -afx-palette-hover: -afx-hover;
+    -afx-palette-grid: -afx-grid;
+    -afx-palette-on-accent: -afx-on-accent;
 }
 
 .ikonli-font-icon {
@@ -511,11 +536,56 @@
     -fx-text-fill: -afx-fg;
 }
 
+/* Inspector, Assets and Document share sections, rows and fields. */
+
+.inspector-scroll,
+.inspector-scroll > .viewport {
+    -fx-background-color: -afx-panel;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+}
+
+.inspector-empty {
+    -fx-padding: 22 16 16 16;
+    -fx-spacing: 6;
+    -fx-alignment: top-left;
+}
+
+.empty-title {
+    -fx-text-fill: -afx-fg;
+    -fx-font-weight: bold;
+}
+
+.hint {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 11px;
+}
+
 .section {
-    -fx-padding: 10 12 12 12;
-    -fx-spacing: 8;
     -fx-border-color: -afx-line;
     -fx-border-width: 0 0 1 0;
+}
+
+.section-header {
+    -fx-padding: 6 8 4 6;
+    -fx-spacing: 2;
+    -fx-min-height: 30;
+    -fx-cursor: hand;
+}
+
+.section-header.fixed {
+    -fx-padding: 6 8 4 12;
+    -fx-cursor: default;
+}
+
+.section:collapsed > .section-header {
+    -fx-padding: 6 8 6 6;
+}
+
+.section-header > .ikonli-font-icon {
+    -fx-icon-size: 15;
+    -fx-icon-color: -afx-muted;
 }
 
 .section-title {
@@ -524,28 +594,415 @@
     -fx-text-fill: -afx-muted;
 }
 
-.hint,
+.section-header:hover .section-title {
+    -fx-text-fill: -afx-fg;
+}
+
+.section-actions {
+    -fx-spacing: 2;
+}
+
+.section-content {
+    -fx-padding: 0 10 10 12;
+    -fx-spacing: 4;
+}
+
+.field-row {
+    -fx-spacing: 6;
+}
+
 .field-label {
     -fx-text-fill: -afx-muted;
+    -fx-font-size: 11px;
+    -fx-min-width: 62;
+    -fx-pref-width: 62;
+    -fx-max-width: 62;
+    -fx-min-height: 22;
+    -fx-alignment: center-left;
 }
 
-.field-grid {
-    -fx-hgap: 10;
-    -fx-vgap: 5;
+.keyframe-slot {
+    -fx-min-width: 16;
+    -fx-max-width: 16;
 }
 
-.field-label {
-    -fx-min-width: 70;
+.field-row > .keyframe-toggle {
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-max-height: 22;
 }
 
-.value-field {
-    -fx-background-color: -afx-panel-alt;
+.vec2-field,
+.color-field,
+.paint-head,
+.paint-row,
+.easing-choice,
+.marker-row {
+    -fx-spacing: 4;
+    -fx-alignment: center-left;
+}
+
+.number-field,
+.hex-field,
+.text-value-field {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+    -fx-border-width: 0;
+    -fx-padding: 0 6 0 6;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-max-height: 22;
+    -fx-font-size: 11px;
+    -fx-text-fill: -afx-fg;
+    -fx-prompt-text-fill: -afx-muted;
+    -fx-highlight-fill: -afx-accent-bar;
+    -fx-highlight-text-fill: -afx-fg;
+}
+
+.number-field:hover,
+.hex-field:hover,
+.text-value-field:hover {
+    -fx-background-color: -afx-muted, -afx-panel-alt;
+}
+
+.number-field:focused,
+.hex-field:focused,
+.text-value-field:focused {
+    -fx-background-color: -afx-accent, -afx-panel-alt;
+}
+
+.hex-field:error,
+.text-value-field:error {
+    -fx-background-color: -afx-playhead, -afx-panel-alt;
+}
+
+.number-field:disabled,
+.text-value-field:disabled {
+    -fx-opacity: 0.45;
+}
+
+.compact-combo {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-max-height: 22;
+    -fx-font-size: 11px;
+}
+
+.compact-combo:hover {
+    -fx-background-color: -afx-muted, -afx-panel-alt;
+}
+
+.compact-combo:focused,
+.compact-combo:showing {
+    -fx-background-color: -afx-accent, -afx-panel-alt;
+}
+
+.compact-combo > .list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 0 2 0 6;
+    -fx-text-fill: -afx-fg;
+}
+
+.compact-combo > .arrow-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0 6 0 2;
+}
+
+.compact-combo > .arrow-button > .arrow {
+    -fx-background-color: -afx-muted;
+    -fx-padding: 2 3.5 2 3.5;
+}
+
+.compact-combo:disabled {
+    -fx-opacity: 0.45;
+}
+
+.section-toggle {
+    -fx-padding: 0;
+    -fx-min-width: 22;
+    -fx-pref-width: 22;
+    -fx-max-width: 22;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-max-height: 22;
+}
+
+.section-toggle .ikonli-font-icon,
+.link-toggle .ikonli-font-icon {
+    -fx-icon-size: 14;
+    -fx-icon-color: -afx-muted;
+}
+
+.section-toggle:hover .ikonli-font-icon,
+.link-toggle:hover .ikonli-font-icon {
+    -fx-icon-color: -afx-fg;
+}
+
+.section-toggle.boxed {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+    -fx-min-width: 26;
+    -fx-pref-width: 26;
+    -fx-max-width: 26;
+}
+
+.section-toggle.boxed:selected {
+    -fx-background-color: -afx-accent, -afx-accent-soft, -afx-panel-alt;
+    -fx-background-insets: 0, 1, 1;
+}
+
+.section-toggle:selected .ikonli-font-icon,
+.link-toggle:selected .ikonli-font-icon {
+    -fx-icon-color: -afx-accent;
+}
+
+.toggle-row {
+    -fx-spacing: 3;
+    -fx-alignment: center-left;
+}
+
+.link-toggle {
+    -fx-padding: 0;
+    -fx-min-width: 18;
+    -fx-pref-width: 18;
+    -fx-max-width: 18;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-max-height: 22;
+}
+
+.section-button {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+    -fx-border-width: 0;
+    -fx-padding: 0 10 0 10;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-max-height: 22;
+    -fx-font-size: 11px;
+    -fx-text-fill: -afx-fg;
+    -fx-graphic-text-gap: 4;
+}
+
+.section-button .ikonli-font-icon {
+    -fx-icon-size: 14;
+    -fx-icon-color: -afx-muted;
+}
+
+.section-button:hover {
+    -fx-background-color: -afx-muted, -afx-panel-alt;
+}
+
+.section-button:pressed {
+    -fx-background-color: -afx-accent, -afx-accent-soft, -afx-panel-alt;
+    -fx-background-insets: 0, 1, 1;
+}
+
+.section-button:disabled {
+    -fx-opacity: 0.45;
+}
+
+/* colours and paints */
+
+.swatch {
+    -fx-background-color: -afx-line;
+    -fx-background-insets: 0;
     -fx-background-radius: 3;
+    -fx-border-width: 0;
+    -fx-padding: 1;
+    -fx-min-width: 22;
+    -fx-min-height: 22;
+    -fx-max-width: 22;
+    -fx-max-height: 22;
+}
+
+.swatch:hover {
+    -fx-background-color: -afx-muted;
+}
+
+.swatch-box {
+    -fx-min-width: 20;
+    -fx-min-height: 20;
+    -fx-max-width: 20;
+    -fx-max-height: 20;
+}
+
+/* what shows through a colour that is not opaque */
+.swatch-base,
+.alpha-bar {
+    -fx-background-color: linear-gradient(from 0px 0px to 6px 6px, repeat, -afx-on-accent 50%, -afx-muted 50%);
+    -fx-background-radius: 2;
+}
+
+.paint-field,
+.gradient-editor,
+.easing-editor {
+    -fx-spacing: 4;
+}
+
+.gradient-editor {
+    -fx-padding: 2 0 0 0;
+}
+
+.sub-label {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 10px;
+    -fx-min-width: 36;
+    -fx-pref-width: 36;
+    -fx-max-width: 36;
+}
+
+.gradient-bar:focused > .gradient-preview {
+    -fx-border-color: -afx-accent;
+    -fx-border-radius: 3;
+}
+
+.gradient-preview {
     -fx-border-color: -afx-line;
     -fx-border-radius: 3;
-    -fx-padding: 2 6 2 6;
+}
+
+.stop-handle {
+    -fx-border-color: -afx-muted;
+    -fx-border-width: 1;
+    -fx-border-radius: 2;
+}
+
+.stop-handle:selected {
+    -fx-border-color: -afx-accent;
+    -fx-border-width: 2;
+    -fx-border-radius: 3;
+}
+
+.color-popup {
+    -fx-background-color: -afx-line, -afx-panel;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 7, 6;
+    -fx-padding: 10;
+    -fx-spacing: 8;
+}
+
+.color-popup-frame {
+    -fx-padding: 4 12 16 12;
+    -fx-background-color: transparent;
+}
+
+.color-popup-frame > .color-popup {
+    -fx-effect: dropshadow(gaussian, -afx-shadow, 14, 0, 0, 4);
+}
+
+.sv-white {
+    -fx-background-color: linear-gradient(to right, white, transparent);
+    -fx-background-radius: 3;
+}
+
+.sv-black {
+    -fx-background-color: linear-gradient(to top, black, transparent);
+    -fx-background-radius: 3;
+}
+
+.hue-bar {
+    -fx-background-color: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+    -fx-background-radius: 3;
+}
+
+.picker-handle {
+    -fx-background-color: transparent;
+    -fx-border-color: black, white;
+    -fx-border-width: 1, 2;
+    -fx-border-insets: 0, 1;
+    -fx-border-radius: 6, 5;
+}
+
+/* easing */
+
+.easing-curve {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+}
+
+.easing-label {
+    -fx-font-size: 11px;
+}
+
+/* assets and document */
+
+.panel-header {
+    -fx-padding: 6 10 6 12;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 0 1 0;
+    -fx-min-height: 34;
+}
+
+.panel-content {
+    -fx-padding: 8 8 10 8;
+    -fx-spacing: 6;
+}
+
+.panel-content > .hint {
+    -fx-padding: 4 4 0 4;
+}
+
+.inline-message {
+    -fx-background-color: -afx-key-soft;
+    -fx-background-radius: 4;
+    -fx-border-color: -afx-key-bar;
+    -fx-border-radius: 4;
+    -fx-padding: 6 8 6 8;
     -fx-text-fill: -afx-fg;
     -fx-font-size: 11px;
+}
+
+.asset-list {
+    -fx-spacing: 2;
+}
+
+.asset-row {
+    -fx-spacing: 8;
+    -fx-padding: 4;
+    -fx-background-radius: 4;
+}
+
+.asset-row:hover {
+    -fx-background-color: -afx-hover;
+}
+
+.asset-thumbnail {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+}
+
+.asset-name {
+    -fx-text-fill: -afx-fg;
+}
+
+.asset-detail {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 10px;
+}
+
+.font-sample {
+    -fx-text-fill: -afx-fg;
+}
+
+.marker-list {
+    -fx-spacing: 4;
+}
+
+.marker-time {
+    -fx-min-width: 60;
+    -fx-pref-width: 60;
+    -fx-max-width: 60;
 }
 
 /* --------------------------------------------------------------- timeline */
@@ -554,51 +1011,217 @@
     -fx-background-color: -afx-panel;
 }
 
-.timeline-names {
+.timeline-column {
+    -fx-background-color: -afx-panel;
+}
+
+.timeline-divider {
+    -fx-background-color: -afx-line;
+    -fx-background-insets: 0 2 0 2;
+}
+
+.timeline-header {
+    -fx-background-color: -afx-panel-alt;
     -fx-border-color: -afx-line;
-    -fx-border-width: 0 1 0 0;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 0 6 0 6;
+    -fx-spacing: 2;
+    -fx-alignment: center-left;
+}
+
+.timeline-tool {
+    -fx-padding: 3 4 3 4;
+    -fx-min-height: 24;
+    -fx-pref-height: 24;
+}
+
+.timeline-tool .ikonli-font-icon {
+    -fx-icon-size: 15;
+    -fx-icon-color: -afx-muted;
+}
+
+.timeline-tool:hover .ikonli-font-icon {
+    -fx-icon-color: -afx-fg;
+}
+
+.timeline-tool:selected {
+    -fx-background-color: -afx-accent-soft;
+}
+
+.timeline-tool:selected .ikonli-font-icon {
+    -fx-icon-color: -afx-accent;
+}
+
+/* the record button: red while changes are keyed automatically */
+.timeline-tool.auto-key:selected {
+    -fx-background-color: -afx-playhead-soft;
+}
+
+.timeline-tool.auto-key:selected .ikonli-font-icon {
+    -fx-icon-color: -afx-playhead;
 }
 
 .timeline-row {
     -fx-border-color: -afx-line;
     -fx-border-width: 0 0 1 0;
-    -fx-min-height: 24;
-    -fx-pref-height: 24;
-    -fx-max-height: 24;
-    -fx-text-fill: -afx-fg;
+    -fx-padding: 0 4 0 0;
 }
 
-.timeline-row:selected {
+.layer-row:hover {
+    -fx-background-color: -afx-hover;
+}
+
+.layer-row:selected {
     -fx-background-color: -afx-accent-soft;
 }
 
-.timeline-row:slot {
+.layer-name {
+    -fx-text-fill: -afx-fg;
+    -fx-padding: 0 4 0 6;
+}
+
+.layer-icon {
+    -fx-icon-size: 13;
+    -fx-icon-color: -afx-muted;
+}
+
+.layer-row:selected .layer-icon {
+    -fx-icon-color: -afx-fg;
+}
+
+.layer-row:off .layer-name {
+    -fx-text-fill: -afx-muted;
+}
+
+.layer-row:slot .layer-name {
     -fx-text-fill: -afx-key;
 }
 
-.timeline-header {
-    -fx-background-color: -afx-panel-alt;
+.layer-row:slot .layer-icon {
+    -fx-icon-color: -afx-key;
+}
+
+.row-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 3;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+    -fx-min-width: 18;
+    -fx-pref-width: 18;
+    -fx-max-width: 18;
+    -fx-min-height: 18;
+    -fx-pref-height: 18;
+    -fx-max-height: 18;
+}
+
+.row-button .ikonli-font-icon {
+    -fx-icon-size: 13;
+    -fx-icon-color: -afx-muted;
+}
+
+.row-button.disclosure {
+    -fx-min-width: 14;
+    -fx-pref-width: 14;
+    -fx-max-width: 14;
+}
+
+.row-button.disclosure .ikonli-font-icon,
+.row-button.nav .ikonli-font-icon {
+    -fx-icon-size: 15;
+}
+
+.row-button:hover {
+    -fx-background-color: -afx-hover;
+}
+
+.row-button:hover .ikonli-font-icon {
+    -fx-icon-color: -afx-fg;
+}
+
+.row-button:disabled {
+    -fx-opacity: 0.3;
+}
+
+/* visibility and lock: faint until the row is hovered; plain when the layer is hidden or locked */
+.layer-row .eye,
+.layer-row .lock {
+    -fx-opacity: 0.22;
+}
+
+.layer-row:hover .eye,
+.layer-row:hover .lock {
+    -fx-opacity: 0.75;
+}
+
+.layer-row .eye:active,
+.layer-row .lock:active,
+.layer-row .eye:hover,
+.layer-row .lock:hover {
+    -fx-opacity: 1;
+}
+
+.layer-row .eye:active .ikonli-font-icon,
+.layer-row .lock:active .ikonli-font-icon {
+    -fx-icon-color: -afx-fg;
+}
+
+.property-row {
+    -fx-background-color: -afx-row-alt;
+}
+
+.property-name {
     -fx-text-fill: -afx-muted;
+    -fx-font-size: 11px;
+}
+
+.property-value {
+    -fx-text-fill: -afx-fg;
+    -fx-font-size: 11px;
+    -fx-padding: 0 6 0 8;
+}
+
+.drop-indicator {
+    -fx-background-color: -afx-accent;
+    -fx-background-radius: 1;
+}
+
+.drop-indicator:into {
+    -fx-background-color: -afx-accent-soft;
+    -fx-border-color: -afx-accent;
+    -fx-border-width: 1;
+    -fx-border-radius: 2;
+    -fx-background-radius: 2;
+}
+
+.timeline-rename {
+    -fx-background-color: -afx-accent, -afx-panel;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+    -fx-border-width: 0;
+    -fx-padding: 0 4 0 4;
+    -fx-font-size: 12px;
+    -fx-text-fill: -afx-fg;
+    -fx-highlight-fill: -afx-accent-bar;
+    -fx-highlight-text-fill: -afx-fg;
+    -fx-min-height: 0;
+}
+
+.timeline-rename:error {
+    -fx-background-color: -afx-playhead, -afx-panel;
+}
+
+.inline-error {
+    -fx-text-fill: -afx-playhead;
     -fx-font-size: 10px;
-    -fx-padding: 0 8 0 10;
+    -fx-background-color: -afx-panel;
+    -fx-background-radius: 3;
+    -fx-padding: 0 5 0 5;
 }
 
-.timeline-tick {
-    -fx-text-fill: -afx-muted;
+.timeline-tick,
+.marker-label {
     -fx-font-size: 10px;
-    -fx-border-color: -afx-line;
-    -fx-border-width: 0 0 0 1;
-    -fx-padding: 0 0 0 4;
-}
-
-.layer-bar {
-    -fx-background-color: -afx-accent, -afx-panel, -afx-accent-bar;
-    -fx-background-insets: 0, 1, 1;
-    -fx-background-radius: 2, 1, 1;
-}
-
-.layer-bar:slot {
-    -fx-background-color: -afx-key, -afx-panel, -afx-key-bar;
 }
 
 .playhead,
@@ -607,7 +1230,91 @@
 }
 
 .playhead-head {
-    -fx-shape: "M0 0 L9 0 L4.5 8 Z";
+    -fx-shape: "M0 0 L11 0 L11 4 L5.5 9 L0 4 Z";
+}
+
+.timeline-scroll-bar {
+    -fx-background-color: -afx-panel-alt;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-opacity: 1;
+}
+
+.timeline-scroll-bar > .track,
+.timeline-scroll-bar > .track-background {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+}
+
+.timeline-scroll-bar > .thumb {
+    -fx-background-color: -afx-line;
+    -fx-background-insets: 2;
+    -fx-background-radius: 4;
+}
+
+.timeline-scroll-bar > .thumb:hover,
+.timeline-scroll-bar > .thumb:pressed {
+    -fx-background-color: -afx-muted;
+}
+
+.timeline-scroll-bar > .increment-button,
+.timeline-scroll-bar > .decrement-button {
+    -fx-padding: 0;
+    -fx-min-width: 0;
+    -fx-min-height: 0;
+    -fx-pref-width: 0;
+    -fx-pref-height: 0;
+}
+
+.timeline-scroll-bar > .increment-button > .increment-arrow,
+.timeline-scroll-bar > .decrement-button > .decrement-arrow {
+    -fx-shape: null;
+    -fx-padding: 0;
+}
+
+/* the keyframe diamond of the timeline navigator and of the inspector rows */
+
+.keyframe-toggle {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+    -fx-min-width: 16;
+    -fx-pref-width: 16;
+    -fx-max-width: 16;
+    -fx-min-height: 18;
+    -fx-pref-height: 18;
+    -fx-max-height: 18;
+    -fx-alignment: center;
+}
+
+.keyframe-toggle .diamond {
+    -fx-shape: "M4.5 0 L9 4.5 L4.5 9 L0 4.5 Z";
+    -fx-min-width: 9;
+    -fx-min-height: 9;
+    -fx-max-width: 9;
+    -fx-max-height: 9;
+    -fx-background-color: transparent;
+    -fx-border-color: -afx-muted;
+    -fx-border-width: 1;
+}
+
+.keyframe-toggle:hover .diamond {
+    -fx-border-color: -afx-fg;
+}
+
+.keyframe-toggle:animated .diamond {
+    -fx-background-color: -afx-key-bar;
+    -fx-border-color: -afx-key;
+}
+
+.keyframe-toggle:keyed .diamond {
+    -fx-background-color: -afx-key;
+    -fx-border-color: -afx-key;
+}
+
+.keyframe-toggle:disabled {
+    -fx-opacity: 0.35;
 }
 
 /* ------------------------------------------------------------- status bar */

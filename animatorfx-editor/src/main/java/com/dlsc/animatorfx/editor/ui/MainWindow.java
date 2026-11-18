@@ -5,6 +5,7 @@ import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.session.RecoveryStore;
 import com.dlsc.animatorfx.editor.session.SessionState.Layout;
 import com.dlsc.animatorfx.editor.session.SessionStore;
+import com.dlsc.animatorfx.editor.timeline.TimelineView;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
@@ -36,7 +37,7 @@ import java.util.List;
  * the status bar below it.
  *
  * <p>Canvas, side panel and timeline each sit in their own slot. Their current content
- * ({@link CanvasView}, {@link SidePanel}, {@link TimelinePane}) follows the active document
+ * ({@link CanvasView}, {@link SidePanel}, {@link TimelineView}) follows the active document
  * through a {@code documentProperty()}; {@link #setCanvasContent}, {@link #setSidePanelContent}
  * and {@link #setTimelineContent} swap in another node, which then follows
  * {@code getWorkspace().activeDocumentProperty()} itself.
@@ -56,10 +57,10 @@ public final class MainWindow {
     private final StatusBar statusBar = new StatusBar();
     private final CanvasView canvasView = new CanvasView();
     private final SidePanel sidePanel = new SidePanel();
-    private final TimelinePane timelinePane = new TimelinePane();
+    private final TimelineView timelineView = new TimelineView();
     private final StackPane canvasSlot = new StackPane(canvasView);
     private final StackPane sideSlot = new StackPane(sidePanel);
-    private final StackPane timelineSlot = new StackPane(timelinePane);
+    private final StackPane timelineSlot = new StackPane(timelineView);
     private final SplitPane upperSplit = new SplitPane(canvasSlot, sideSlot);
     private final SplitPane mainSplit = new SplitPane();
     private final BooleanProperty sidePanelVisible = new SimpleBooleanProperty(this, "sidePanelVisible", true);
@@ -121,7 +122,7 @@ public final class MainWindow {
         theme.install(scene);
 
         for (var view : List.of(toolBar.documentProperty(), statusBar.documentProperty(),
-                canvasView.documentProperty(), sidePanel.documentProperty(), timelinePane.documentProperty())) {
+                canvasView.documentProperty(), sidePanel.documentProperty(), timelineView.documentProperty())) {
             view.bind(workspace.activeDocumentProperty());
         }
         workspace.activeDocumentProperty().addListener((obs, oldDoc, newDoc) -> bindTitle(newDoc));
@@ -227,8 +228,11 @@ public final class MainWindow {
         return sidePanel;
     }
 
-    public TimelinePane getTimelinePane() {
-        return timelinePane;
+    /**
+     * The timeline with the layer tree, the ruler, the markers and the keyframe tracks.
+     */
+    public TimelineView getTimelineView() {
+        return timelineView;
     }
 
     /**

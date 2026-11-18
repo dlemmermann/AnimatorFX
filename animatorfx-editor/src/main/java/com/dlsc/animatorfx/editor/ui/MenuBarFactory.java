@@ -4,6 +4,7 @@ import com.dlsc.animatorfx.editor.canvas.CanvasActions;
 import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
+import com.dlsc.animatorfx.editor.timeline.KeyframeActions;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.beans.binding.Bindings;
@@ -33,7 +34,8 @@ import java.util.function.Consumer;
  *
  * <p>With the system menu bar of macOS an accelerator fires before the focused control sees the
  * key. The Edit items therefore look at the focus first: while a text input has it, Undo, Redo,
- * Cut, Copy, Paste and Select All act on that text, and the other items do nothing.
+ * Cut, Copy, Paste and Select All act on that text, and the other items do nothing. Otherwise Cut,
+ * Copy and Paste act on the selected keyframes when there are any, and on the layers when not.
  */
 final class MenuBarFactory {
 
@@ -42,6 +44,7 @@ final class MenuBarFactory {
     private final MainWindow window;
     private final Workspace workspace;
     private final FileActions files;
+    private boolean keyframesCopiedLast;
 
     MenuBarFactory(MainWindow window) {
         this.window = window;
@@ -140,16 +143,20 @@ final class MenuBarFactory {
             redo.setText("Redo");
         });
 
-        MenuItem cut = textAware("menu-edit-cut", "Cut", shortcut(KeyCode.X), TextInputControl::cut,
-                () -> actions().cut());
-        MenuItem copy = textAware("menu-edit-copy", "Copy", shortcut(KeyCode.C), TextInputControl::copy,
-                () -> actions().copy());
+        MenuItem cut = textAware("menu-edit-cut", "Cut", shortcut(KeyCode.X), TextInputControl::cut, this::cut);
+        MenuItem copy = textAware("menu-edit-copy", "Copy", shortcut(KeyCode.C), TextInputControl::copy, this::copy);
         MenuItem paste = textAware("menu-edit-paste", "Paste", shortcut(KeyCode.V), TextInputControl::paste,
-                () -> actions().paste());
+                this::paste);
         MenuItem selectAll = textAware("menu-edit-select-all", "Select All", shortcut(KeyCode.A),
                 TextInputControl::selectAll, () -> actions().selectAll());
         MenuItem duplicate = onLayers("menu-edit-duplicate", "Duplicate", shortcut(KeyCode.D), CanvasActions::duplicate);
-        MenuItem delete = onLayers("menu-edit-delete", "Delete", null, CanvasActions::delete);
+        MenuItem delete = onLayers("menu-edit-delete", "Delete", null, a -> {
+            if (window.getTimelineView().hasTrackFocus()) {
+                window.getTimelineView().deleteSelection();
+            } else {
+                a.delete();
+            }
+        });
         MenuItem group = onLayers("menu-edit-group", "Group", shortcut(KeyCode.G), CanvasActions::group);
         MenuItem ungroup = onLayers("menu-edit-ungroup", "Ungroup", shortcut(KeyCode.G, KeyCombination.SHIFT_DOWN),
                 CanvasActions::ungroup);
@@ -182,6 +189,41 @@ final class MenuBarFactory {
 
     private CanvasActions actions() {
         return window.getCanvasView().getActions();
+    }
+
+    private KeyframeActions keyframes() {
+        return window.getTimelineView().getKeyframeActions();
+    }
+
+    // While keyframes are selected, Cut, Copy and Paste are about keyframes, otherwise about
+    // layers. Paste also follows what was copied last, so that keyframes can be pasted after
+    // the selection has been cleared.
+
+    private void copy() {
+        keyframesCopiedLast = keyframes().hasSelection();
+        if (keyframesCopiedLast) {
+            keyframes().copy();
+        } else {
+            actions().copy();
+        }
+    }
+
+    private void cut() {
+        keyframesCopiedLast = keyframes().hasSelection();
+        if (keyframesCopiedLast) {
+            keyframes().copy();
+            keyframes().delete();
+        } else {
+            actions().cut();
+        }
+    }
+
+    private void paste() {
+        if (keyframes().hasSelection() || keyframesCopiedLast) {
+            keyframes().paste();
+        } else {
+            actions().paste();
+        }
     }
 
     /** The text input that has the keyboard focus, or {@code null}. */
