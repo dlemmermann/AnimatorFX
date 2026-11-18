@@ -127,9 +127,31 @@ class ImportUiTest extends EditorUiTest {
         run(() -> ((Button) window.getNoticeBar().lookup(".notice-action")).fire());
         assertEquals(1, shownWarnings.size());
         assertEquals(List.of("Filters are not supported (1 element ignored)",
-                "Text is placed approximately: the baseline and the width are estimated without the font (1 text)"),
+                "Text is placed approximately: the baseline is estimated without the font (1 text)"),
                 shownWarnings.get(0));
         screenshot("task-10-svg.png");
+    }
+
+    @Test
+    void svgTextIsDrawnAboutItsAnchorPoint() throws IOException {
+        Path file = dir.resolve("anchors.svg");
+        Files.writeString(file, "<svg xmlns='http://www.w3.org/2000/svg' width='400' height='200' font-size='20'>"
+                + "<text id='start' x='200' y='40'>Anchored</text>"
+                + "<text id='middle' x='200' y='90' text-anchor='middle'>Anchored</text>"
+                + "<text id='end' x='200' y='140' text-anchor='end'>Anchored</text></svg>");
+        picked.add(file);
+        fire("menu-file-import-svg");
+
+        List<javafx.geometry.Bounds> drawn = new ArrayList<>();
+        for (Layer layer : active().getAnimation().layers()) {
+            drawn.add(fx(() -> canvas.getAnimationView().getLayerNode(layer.id()).getBoundsInParent()));
+        }
+        double width = drawn.get(0).getWidth();
+        assertTrue(width > 40, "a real width: " + width);
+        assertEquals(200, drawn.get(0).getMinX(), 1);
+        assertEquals(200, drawn.get(1).getCenterX(), 1);
+        assertEquals(200, drawn.get(2).getMaxX(), 1);
+        assertEquals(200 - width, drawn.get(2).getMinX(), 1);
     }
 
     @Test

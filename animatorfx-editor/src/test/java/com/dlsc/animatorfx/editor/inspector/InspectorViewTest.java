@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.dlsc.animatorfx.editor.canvas.Box;
 import com.dlsc.animatorfx.editor.canvas.tools.NewLayers;
+import com.dlsc.animatorfx.editor.canvas.tools.TextTool;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.RoundTrip;
 import com.dlsc.animatorfx.editor.inspector.fields.ColorField;
@@ -37,9 +39,11 @@ import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.Stroke;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Vec2;
+import com.dlsc.animatorfx.editor.ui.ToolKind;
 import java.util.List;
 import javafx.event.ActionEvent;
 import javafx.event.Event;
+import javafx.geometry.Bounds;
 import javafx.scene.Node;
 import javafx.scene.control.ButtonBase;
 import javafx.scene.control.ComboBox;
@@ -763,6 +767,43 @@ class InspectorViewTest extends EditorUiTest {
         assertEquals(TextLayer.Align.CENTER, ((TextLayer) layer("t")).alignment());
         assertTrue(fx(() -> ((ToggleButton) window.getScene().lookup("#inspector-text-align-center")).isSelected()));
         assertFalse(fx(() -> ((ToggleButton) window.getScene().lookup("#inspector-text-align-left")).isSelected()));
+    }
+
+    @Test
+    void theAlignmentButtonsMoveTheTextAboutItsOrigin() {
+        add(NewLayers.text(doc.getAnimation(), new Vec2(300, 200), "Hello").withBase(
+                NewLayers.text(doc.getAnimation(), new Vec2(300, 200), "x").base().withId("t")));
+        select("t");
+        Bounds left = fx(() -> canvas.getAnimationView().getLayerNode("t").getBoundsInParent());
+        double width = left.getWidth();
+        assertEquals(300, left.getMinX(), 1);
+
+        fire(lookup("#inspector-text-align-center"));
+        layout();
+        Bounds centre = fx(() -> canvas.getAnimationView().getLayerNode("t").getBoundsInParent());
+        assertEquals(300, centre.getCenterX(), 1);
+        assertEquals(width, centre.getWidth(), 0.01);
+
+        fire(lookup("#inspector-text-align-right"));
+        layout();
+        Bounds right = fx(() -> canvas.getAnimationView().getLayerNode("t").getBoundsInParent());
+        assertEquals(300, right.getMaxX(), 1);
+        assertEquals(200, right.getMinY(), 1);
+
+        // the selection box and the inline editor are where the text is drawn
+        Box box = fx(() -> canvas.getGeometry().localBox(layer("t")));
+        assertEquals(-width, box.minX(), 1);
+        assertEquals(0, box.maxX(), 1);
+        run(() -> ((TextTool) canvas.getTool(ToolKind.TEXT)).edit("t"));
+        layout();
+        TextField editor = lookup("#" + TextTool.EDITOR_ID);
+        double textLeft = fx(() -> canvas.documentToView(new Vec2(300 - width, 200)).x());
+        assertEquals(textLeft - 3, fx(editor::getLayoutX), 1.5);
+        run(() -> ((TextTool) canvas.getTool(ToolKind.TEXT)).cancel());
+
+        run(doc::undo);
+        layout();
+        assertEquals(300, fx(() -> canvas.getAnimationView().getLayerNode("t").getBoundsInParent()).getCenterX(), 1);
     }
 
     @Test

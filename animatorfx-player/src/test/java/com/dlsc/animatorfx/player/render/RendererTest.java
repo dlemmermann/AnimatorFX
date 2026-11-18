@@ -284,7 +284,41 @@ class RendererTest {
         assertEquals(Color.LIME, text.getFill());
         assertNull(text.getStroke());
         assertEquals(0, text.getBoundsInLocal().getMinY(), 0.5);
-        assertEquals(0, text.getBoundsInLocal().getMinX(), 0.5);
+    }
+
+    @Test
+    void textIsAlignedAboutTheLayerOrigin() {
+        Animation animation = doc(at(text("l", "Hello"), 100, 50),
+                at(text("c", "Hello").withAlignment(TextLayer.Align.CENTER), 100, 50),
+                at(text("r", "Hello").withAlignment(TextLayer.Align.RIGHT).withFontSize(keys(0, 20.0, 2, 60.0)), 100, 50));
+        show(animation, 0);
+
+        Bounds left = renderer.getLayerNode("l").getBoundsInParent();
+        Bounds centre = renderer.getLayerNode("c").getBoundsInParent();
+        Bounds right = renderer.getLayerNode("r").getBoundsInParent();
+        double width = left.getWidth();
+        assertTrue(width > 30, "a real width: " + width);
+        // left: starts at the origin; centre: centred on it; right: ends at it; the top stays the origin
+        assertEquals(100, left.getMinX(), 1);
+        assertEquals(100, centre.getCenterX(), 1);
+        assertEquals(width, centre.getWidth(), 0.01);
+        assertEquals(100, right.getMaxX(), 1);
+        assertEquals(100 - width, right.getMinX(), 1);
+        for (Bounds bounds : List.of(left, centre, right)) {
+            assertEquals(50, bounds.getMinY(), 0.5);
+        }
+
+        // the alignment follows the font size
+        renderer.apply(Evaluator.sample(animation, 2));
+        Bounds larger = renderer.getLayerNode("r").getBoundsInParent();
+        assertEquals(100, larger.getMaxX(), 2);
+        assertEquals(3 * width, larger.getWidth(), 3);
+
+        // and the text
+        show(doc(at(text("c", "Hello, hello").withAlignment(TextLayer.Align.CENTER), 100, 50)), 0);
+        Bounds longer = renderer.getLayerNode("c").getBoundsInParent();
+        assertTrue(longer.getWidth() > 1.5 * width);
+        assertEquals(100, longer.getCenterX(), 1);
     }
 
     @Test

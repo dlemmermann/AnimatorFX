@@ -242,6 +242,7 @@ abstract class LayerNode {
         private String family;
         private FontWeight weight;
         private FontPosture posture;
+        private TextLayer.Align alignment = TextLayer.Align.LEFT;
 
         TextNode(String id, boolean geometryOnly, boolean clip) {
             super(id, new Text(), geometryOnly, clip);
@@ -253,7 +254,9 @@ abstract class LayerNode {
         void writeStatics(Layer layer, Assets assets) {
             TextLayer source = (TextLayer) layer;
             text.setText(source.text());
-            text.setTextAlignment(TextAlignment.valueOf(source.alignment().name()));
+            alignment = source.alignment();
+            // lines against each other; where the text is against the origin is set with the font
+            text.setTextAlignment(TextAlignment.valueOf(alignment.name()));
             String assetFamily = source.fontAssetId() == null ? null : assets.fontFamily(source.fontAssetId());
             family = assetFamily != null ? assetFamily : source.fontFamily();
             weight = source.fontWeight() == TextLayer.Weight.BOLD ? FontWeight.BOLD : FontWeight.NORMAL;
@@ -265,6 +268,7 @@ abstract class LayerNode {
         void writeValues(LayerState old, LayerState state) {
             if (old == null || old.fontSize() != state.fontSize()) {
                 text.setFont(Font.font(family, weight, posture, state.fontSize()));
+                align();
             }
             if (geometryOnly) {
                 if (old == null) {
@@ -278,6 +282,20 @@ abstract class LayerNode {
                 text.setFill(PaintConverter.toFx(fill));
             }
             writeStroke(text, old, state);
+        }
+
+        /**
+         * Places the text against the layer origin: it starts there, is centred on it, or ends
+         * there. JavaFX aligns only the lines of a text against each other, which shows nothing
+         * for a single line.
+         */
+        private void align() {
+            double width = text.getLayoutBounds().getWidth();
+            text.setX(switch (alignment) {
+                case LEFT -> 0;
+                case CENTER -> -width / 2;
+                case RIGHT -> -width;
+            });
         }
     }
 

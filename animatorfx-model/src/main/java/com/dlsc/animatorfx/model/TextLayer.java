@@ -4,7 +4,9 @@ import java.util.Objects;
 
 /**
  * A text. {@code fontAssetId} names a font asset of the document and is {@code null} when the
- * font family is to be resolved by the platform; {@code stroke} may be {@code null}.
+ * font family is to be resolved by the platform; {@code stroke} may be {@code null}. The
+ * alignment is about the origin of the layer: the text starts at x = 0 ({@code LEFT}), is
+ * centred on it ({@code CENTER}) or ends there ({@code RIGHT}); its top is at y = 0.
  */
 public record TextLayer(LayerBase base, String text, String fontFamily, String fontAssetId,
                         Animatable<Double> fontSize, Weight fontWeight, boolean italic, Align alignment,

@@ -534,8 +534,8 @@ class LottieImporterTest {
         assertSolid(1, 0, 0, 1, title.stroke().paint().at(0));
         assertEquals(2, title.stroke().width().at(0));
         assertVec(100, 50, title.base().transform().position().at(0));
-        // baseline and centre of the text land on the position
-        assertVec(0.55 * 20 * 5 / 2, 0.8 * 20, title.base().transform().anchor().at(0));
+        // the baseline lands on the position; the player centres the text on the layer origin
+        assertVec(0, 0.8 * 20, title.base().transform().anchor().at(0));
 
         TextLayer plain = named(animation, "Plain", TextLayer.class);
         assertEquals("abc", plain.text());
@@ -544,10 +544,10 @@ class LottieImporterTest {
         assertFalse(plain.italic());
         assertEquals(TextLayer.Align.RIGHT, plain.alignment());
         assertNull(plain.stroke());
-        assertVec(0.55 * 10 * 3, 8, plain.base().transform().anchor().at(0));
+        assertVec(0, 8, plain.base().transform().anchor().at(0));
 
         assertEquals(List.of(
-                "Text is placed approximately: the baseline and the width are estimated without the font (2 texts)",
+                "Text is placed approximately: the baseline is estimated without the font (2 texts)",
                 "External images are not supported (1 layer ignored)"), result.warnings());
     }
 
@@ -590,7 +590,7 @@ class LottieImporterTest {
                 "The bounds of precompositions do not clip their content (1 precomposition)",
                 "Precompositions that are missing from the file are ignored (1 layer ignored)",
                 "Animated text is not supported; the first text is shown (1 layer)",
-                "Text is placed approximately: the baseline and the width are estimated without the font (1 text)",
+                "Text is placed approximately: the baseline is estimated without the font (1 text)",
                 "Inverted and luminance track mattes are not supported (1 matte ignored)"), result.warnings());
 
         // what is supported around the unsupported parts is still converted

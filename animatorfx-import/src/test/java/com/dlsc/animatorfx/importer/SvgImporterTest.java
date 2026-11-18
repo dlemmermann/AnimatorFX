@@ -380,14 +380,15 @@ class SvgImporterTest {
         assertTrue(styled.italic());
         assertEquals(TextLayer.Align.CENTER, styled.alignment());
         assertEquals(0.5, styled.stroke().width().at(0));
-        assertVec(150 - 0.55 * 16 * 7 / 2, 100 - 0.8 * 16, position(styled));
+        // the anchor point of SVG is the origin of the layer: the player centres the text on it
+        assertVec(150, 100 - 0.8 * 16, position(styled));
 
         TextLayer right = named(animation, "right", TextLayer.class);
         assertEquals(10, right.fontSize().at(0));
         assertEquals(TextLayer.Align.RIGHT, right.alignment());
-        assertVec(200 - 0.55 * 10 * 3, 50 - 8, position(right));
+        assertVec(200, 50 - 8, position(right));
 
-        assertEquals(List.of("Text is placed approximately: the baseline and the width are estimated without the font"
+        assertEquals(List.of("Text is placed approximately: the baseline is estimated without the font"
                 + " (3 texts)"), result.warnings());
     }
 
@@ -483,7 +484,7 @@ class SvgImporterTest {
                 "Text on a path is not supported (1 element ignored)",
                 "preserveAspectRatio values other than xMidYMid meet and none are not supported; the default is used",
                 "References to other files are not supported (1 <use> element ignored)",
-                "Text is placed approximately: the baseline and the width are estimated without the font (1 text)",
+                "Text is placed approximately: the baseline is estimated without the font (1 text)",
                 "Element <blink> is not supported (2 elements ignored)",
                 "Element <hatch> is not supported (1 element ignored)",
                 "Transforms that cannot be parsed are ignored"), result.warnings());

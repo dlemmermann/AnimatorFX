@@ -44,9 +44,8 @@ final class LottieLayers {
     private static final int AUDIO = 6;
     private static final int CAMERA = 13;
 
-    /** As in the SVG importer: ascent and average character advance as shares of the font size. */
+    /** As in the SVG importer: the ascent as a share of the font size. */
     private static final double ASCENT = 0.8;
-    private static final double ADVANCE = 0.55;
 
     /** One layer of a composition on its way to the model. */
     private static final class Unit {
@@ -306,9 +305,10 @@ final class LottieLayers {
     }
 
     /**
-     * The first text document of the layer. Lottie places text by its baseline at the point
-     * chosen by the justification; the model by its top left corner. The difference goes into
-     * the anchor, with ascent and width estimated for want of the font.
+     * The first text document of the layer. The justification becomes the alignment, which
+     * the player applies about the layer origin as Lottie does. Lottie places text by its
+     * baseline, the model by its top: the difference goes into the anchor, with the ascent
+     * estimated for want of the font.
      */
     private Layer text(Object json, LayerBase base) {
         Object text = get(json, "t");
@@ -335,14 +335,8 @@ final class LottieLayers {
             case 2 -> TextLayer.Align.CENTER;
             default -> TextLayer.Align.LEFT;
         };
-        int longest = 0;
-        for (String line : content.split("\n")) {
-            longest = Math.max(longest, line.length());
-        }
-        double width = ADVANCE * size * longest;
-        Vec2 origin = new Vec2(align == TextLayer.Align.CENTER ? width / 2 : align == TextLayer.Align.RIGHT ? width : 0,
-                ASCENT * size);
-        warnings.add("Text is placed approximately: the baseline and the width are estimated without the font",
+        Vec2 origin = new Vec2(0, ASCENT * size);
+        warnings.add("Text is placed approximately: the baseline is estimated without the font",
                 "text", "texts");
 
         Rgba fill = LottieProperties.color(LottieJson.numbers(get(document, "fc")), null);

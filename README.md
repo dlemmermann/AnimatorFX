@@ -472,8 +472,8 @@ with a warning. Every imported document is checked to be saveable before it is h
 `symbol`, `transform`, presentation attributes and inline `style` with inheritance, linear and
 radial gradients, `clipPath`, `opacity`. External entities and DTDs are never loaded.
 Not supported: filters, patterns, masks, markers, CSS stylesheets (`<style>`), external `use`,
-SMIL animation, `textPath`, `foreignObject`. Approximated: text position (one line, estimated
-without font metrics), radial gradients without focal point, `fill-rule: evenodd` (drawn
+SMIL animation, `textPath`, `foreignObject`. Approximated: text position (one line; the baseline
+is estimated without font metrics, `text-anchor` is exact), radial gradients without focal point, `fill-rule: evenodd` (drawn
 non-zero), elliptical `rect` corners.
 
 **Lottie JSON → animated document.** Supported: shape, solid, image, text, null and
@@ -513,6 +513,8 @@ Gaps in what is there:
 - **Multi-selection** can be moved, nudged, grouped and edited in the inspector, but has no
   scale or rotate handles.
 - **Text** is a single line in one style; multi-line text cannot be typed in the editor.
+  Alignment is about the origin of the layer: left-aligned text starts at it, centred text is
+  centred on it and right-aligned text ends at it, so changing the alignment moves the text.
 - **Colours** are stored with 8 bits per channel (`#RRGGBBAA`).
 - **Trim** affects the stroke only, never the fill.
 - **Gradients** blend between keyframes only when they have the same number of stops; otherwise

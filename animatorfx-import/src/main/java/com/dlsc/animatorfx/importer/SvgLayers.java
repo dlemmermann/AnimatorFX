@@ -42,8 +42,6 @@ final class SvgLayers {
 
     /** The share of the font size that lies above the baseline, for want of font metrics. */
     private static final double ASCENT = 0.8;
-    /** The average advance of a character as a share of the font size. */
-    private static final double ADVANCE = 0.55;
 
     private final Map<String, Element> ids;
     private final Warnings warnings;
@@ -478,9 +476,9 @@ final class SvgLayers {
     }
 
     /**
-     * A single line of text. The text origin of the model is the top left corner, that of SVG a
-     * point on the baseline chosen by {@code text-anchor}; without the font, ascent and width
-     * are estimates.
+     * A single line of text. {@code text-anchor} becomes the alignment, which the player
+     * applies about the layer origin as SVG does about x. The origin of the model is at the top
+     * of the text, that of SVG on the baseline; without the font, the ascent is an estimate.
      */
     private Layer text(Element element, SvgStyle style, double[] user) {
         StringBuilder collected = new StringBuilder();
@@ -496,17 +494,14 @@ final class SvgLayers {
         double x = SvgLength.parse(first(positioned.getAttribute("x")), viewportWidth, 0, warnings);
         double y = SvgLength.parse(first(positioned.getAttribute("y")), viewportHeight, 0, warnings);
 
-        double estimatedWidth = ADVANCE * size * content.length();
         TextLayer.Align align = switch (style.get("text-anchor", "start")) {
             case "middle" -> TextLayer.Align.CENTER;
             case "end" -> TextLayer.Align.RIGHT;
             default -> TextLayer.Align.LEFT;
         };
-        double shift = align == TextLayer.Align.CENTER ? estimatedWidth / 2
-                : align == TextLayer.Align.RIGHT ? estimatedWidth : 0;
-        double originX = x - shift;
+        double originX = x;
         double originY = y - ASCENT * size;
-        warnings.add("Text is placed approximately: the baseline and the width are estimated without the font",
+        warnings.add("Text is placed approximately: the baseline is estimated without the font",
                 "text", "texts");
 
         String weight = style.get("font-weight", "normal");

@@ -105,6 +105,10 @@ animatable property.
 Parenting is expressed by nesting inside a `GroupLayer`. There is no separate
 parent-pointer mechanism.
 
+The `alignment` of a `TextLayer` is relative to the layer's local origin: the
+text starts at x = 0 (`LEFT`), is centred on x = 0 (`CENTER`) or ends at x = 0
+(`RIGHT`); the top of the text is at y = 0 in all three cases.
+
 - `Fill`: none, solid colour, linear gradient, or radial gradient. Colours,
   gradient stops and gradient geometry are animatable.
 - `Stroke`: paint (as fill), `width`, `lineCap`, `lineJoin`, `miterLimit`,
