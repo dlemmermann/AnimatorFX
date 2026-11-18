@@ -1,6 +1,7 @@
 package com.dlsc.animatorfx.importer;
 
 import java.util.Base64;
+import java.util.Locale;
 
 /**
  * An embedded PNG or JPEG image.
@@ -22,7 +23,7 @@ record ImageData(byte[] bytes, String extension, int width, int height) {
         String trimmed = uri.trim();
         int comma = trimmed.indexOf(',');
         if (!trimmed.regionMatches(true, 0, "data:", 0, 5) || comma < 0
-                || !trimmed.substring(0, comma).toLowerCase().endsWith(";base64")) {
+                || !trimmed.substring(0, comma).toLowerCase(Locale.ROOT).endsWith(";base64")) {
             return null;
         }
         byte[] bytes;

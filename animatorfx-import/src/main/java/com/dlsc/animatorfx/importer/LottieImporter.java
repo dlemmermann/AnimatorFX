@@ -26,6 +26,11 @@ import static com.dlsc.animatorfx.importer.LottieJson.list;
  */
 public final class LottieImporter {
 
+    private static final double MIN_FRAME_RATE = 1;
+    private static final double MAX_FRAME_RATE = 1000;
+    /** Seconds: 24 hours. */
+    private static final double MAX_DURATION = 24 * 60 * 60;
+
     private LottieImporter() {
     }
 
@@ -35,18 +40,28 @@ public final class LottieImporter {
      *
      * @param name the name of the document if the file does not carry one
      * @throws IOException if the input cannot be read, is not JSON or is not a Lottie document
+     *                     with a usable size ({@code w}, {@code h}), frame rate ({@code fr}, 1 to
+     *                     1000) and time range ({@code ip}, {@code op}; at most 24 hours)
      */
     public static ImportResult read(InputStream in, String name) throws IOException {
         Object root = Json.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-        double width = dimension(root, "w");
-        double height = dimension(root, "h");
-        double frameRate = dimension(root, "fr");
+        double width = dimension(root, "w", Double.MIN_VALUE, Limits.MAX_MAGNITUDE);
+        double height = dimension(root, "h", Double.MIN_VALUE, Limits.MAX_MAGNITUDE);
+        double frameRate = dimension(root, "fr", MIN_FRAME_RATE, MAX_FRAME_RATE);
         if (!(get(root, "layers") instanceof List<?>)) {
-            throw new AnimationFormatException("Not a Lottie document: there are no layers", "layers");
+            throw new AnimationFormatException("Not a valid Lottie document: there are no layers", "layers");
         }
         double inPoint = LottieJson.number(root, "ip", 0);
         double outPoint = LottieJson.number(root, "op", inPoint);
+        if (!Limits.usable(inPoint) || !Limits.usable(outPoint)) {
+            throw new AnimationFormatException("Not a valid Lottie document: the in and out points \"ip\" and"
+                    + " \"op\" are out of range", "ip");
+        }
         double duration = Math.max(0, (outPoint - inPoint) / frameRate);
+        if (duration > MAX_DURATION) {
+            throw new AnimationFormatException("Not a valid Lottie document: it would run for more than 24 hours",
+                    "op");
+        }
 
         Warnings warnings = new Warnings();
         if (LottieJson.flag(root, "ddd")) {
@@ -69,17 +84,19 @@ public final class LottieImporter {
         List<Layer> layers = converter.composition(list(root, "layers"), -inPoint);
 
         String documentName = LottieJson.string(root, "nm", "");
-        Animation animation = new Animation(Animation.CURRENT_FORMAT, documentName.isBlank() ? name : documentName,
-                width, height, frameRate, duration, Rgba.TRANSPARENT,
-                markers(list(root, "markers"), properties, -inPoint, duration), converter.assets(), layers);
+        Animation animation = DocumentCheck.repair(new Animation(Animation.CURRENT_FORMAT,
+                documentName.isBlank() ? name : documentName, width, height, frameRate, duration, Rgba.TRANSPARENT,
+                markers(list(root, "markers"), properties, -inPoint, duration), converter.assets(), layers),
+                warnings);
         return new ImportResult(new AnimationFile(animation, converter.assetBytes()), warnings.lines());
     }
 
-    private static double dimension(Object root, String key) throws AnimationFormatException {
+    private static double dimension(Object root, String key, double min, double max)
+            throws AnimationFormatException {
         double value = LottieJson.number(root, key, Double.NaN);
-        if (!(value > 0) || Double.isInfinite(value)) {
-            throw new AnimationFormatException("Not a Lottie document: \"" + key + "\" is missing or not positive",
-                    key);
+        if (!(value >= min && value <= max)) {
+            throw new AnimationFormatException("Not a valid Lottie document: \"" + key + "\" is "
+                    + (Double.isNaN(value) ? "missing" : "out of range (" + value + ")"), key);
         }
         return value;
     }

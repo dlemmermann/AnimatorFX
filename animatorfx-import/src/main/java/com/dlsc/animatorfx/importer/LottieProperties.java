@@ -111,7 +111,7 @@ final class LottieProperties {
         List<Object> entries = list(k);
         boolean keyframed = !entries.isEmpty() && LottieJson.has(entries.get(0), "t");
         if (!keyframed) {
-            return Animatable.of(convert.apply(k));
+            return usable(k) ? Animatable.of(convert.apply(k)) : unusable(fallback);
         }
         List<Keyframe<T>> keyframes = new ArrayList<>();
         Object previousEnd = null;
@@ -130,6 +130,9 @@ final class LottieProperties {
                         "keyframe", "keyframes");
             }
             double time = time(frame.doubleValue(), frameOffset);
+            if (!Limits.usable(time) || !usable(value)) {
+                return unusable(fallback);
+            }
             Keyframe<T> keyframe = Keyframes.key(time, convert.apply(value), easing(entry));
             if (!keyframes.isEmpty()
                     && Math.abs(keyframes.get(keyframes.size() - 1).time() - time) < Animatable.TIME_EPSILON) {
@@ -142,6 +145,33 @@ final class LottieProperties {
             return Animatable.of(fallback);
         }
         return Keyframes.fromZero(Keyframes.of(keyframes));
+    }
+
+    /** A property with a value or a time that is not finite or absurdly large has its default value. */
+    private <T> Animatable<T> unusable(T fallback) {
+        warnings.add("Properties with values that are not finite or too large use their default", "property",
+                "properties");
+        return Animatable.of(fallback);
+    }
+
+    private static boolean usable(Object value) {
+        if (value instanceof Number number) {
+            return Limits.usable(number.doubleValue());
+        }
+        if (value instanceof List<?> list) {
+            for (Object element : list) {
+                if (!usable(element)) {
+                    return false;
+                }
+            }
+        } else if (value instanceof java.util.Map<?, ?> map) {
+            for (Object member : map.values()) {
+                if (!usable(member)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private static boolean curved(Object tangent) {

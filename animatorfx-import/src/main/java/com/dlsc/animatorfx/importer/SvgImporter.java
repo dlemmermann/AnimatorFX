@@ -60,9 +60,10 @@ public final class SvgImporter {
         Map<String, Element> ids = scan(root, warnings);
 
         double[] viewBox = viewBox(root);
-        double width = size(root.getAttribute("width"), viewBox == null ? DEFAULT_WIDTH : viewBox[2], DEFAULT_WIDTH);
+        double width = size(root.getAttribute("width"), viewBox == null ? DEFAULT_WIDTH : viewBox[2], DEFAULT_WIDTH,
+                warnings);
         double height = size(root.getAttribute("height"), viewBox == null ? DEFAULT_HEIGHT : viewBox[3],
-                DEFAULT_HEIGHT);
+                DEFAULT_HEIGHT, warnings);
         double[] rootMatrix = viewBox == null ? Matrix.identity()
                 : fit(viewBox, width, height, root.getAttribute("preserveAspectRatio"), warnings);
 
@@ -70,15 +71,15 @@ public final class SvgImporter {
                 viewBox == null ? height : viewBox[3]);
         SvgStyle style = SvgStyle.of(root, null);
         List<Layer> content = layers.children(root, style);
-        double opacity = SvgLayers.opacity(style);
+        double opacity = SvgLayers.opacity(style, warnings);
         if (!Matrix.isIdentity(rootMatrix) || opacity != 1) {
             String id = root.getAttribute("id");
             LayerBase base = LayerBase.create(id.isEmpty() ? "svg" : id, DURATION)
                     .withTransform(Matrix.decompose(rootMatrix)).withOpacity(Animatable.of(opacity));
             content = List.of(new GroupLayer(base, content));
         }
-        Animation animation = Animation.create(name, width, height, DURATION).withAssets(layers.assets())
-                .withLayers(content);
+        Animation animation = DocumentCheck.repair(Animation.create(name, width, height, DURATION)
+                .withAssets(layers.assets()).withLayers(content), warnings);
         return new ImportResult(new AnimationFile(animation, layers.assetBytes()), warnings.lines());
     }
 
@@ -171,11 +172,12 @@ public final class SvgImporter {
 
     private static double[] viewBox(Element root) {
         double[] numbers = SvgTransforms.numbers(root.getAttribute("viewBox"));
-        return numbers != null && numbers.length == 4 && numbers[2] > 0 && numbers[3] > 0 ? numbers : null;
+        return numbers != null && numbers.length == 4 && Limits.usable(numbers) && numbers[2] > 0 && numbers[3] > 0
+                ? numbers : null;
     }
 
-    private static double size(String text, double fromViewBox, double fallback) {
-        double size = SvgLength.isPercentage(text) ? fromViewBox : SvgLength.parse(text, 0, fromViewBox);
+    private static double size(String text, double fromViewBox, double fallback, Warnings warnings) {
+        double size = SvgLength.isPercentage(text) ? fromViewBox : SvgLength.parse(text, 0, fromViewBox, warnings);
         return size > 0 ? size : fallback;
     }
 

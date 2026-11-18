@@ -129,7 +129,7 @@ public final class ImportActions {
                 document = EditorDocument.imported(result.file());
                 warnings = result.warnings();
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | OutOfMemoryError | StackOverflowError e) {
             failed(file, e);
             return Optional.empty();
         }
@@ -162,7 +162,7 @@ public final class ImportActions {
         ImportResult result;
         try {
             result = read(file, Kind.SVG, baseName(file));
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | OutOfMemoryError | StackOverflowError e) {
             failed(file, e);
             return false;
         }
@@ -202,9 +202,10 @@ public final class ImportActions {
         }
     }
 
-    private void failed(Path file, Exception e) {
-        String reason = e.getMessage() == null || e.getMessage().isBlank() ? e.getClass().getSimpleName()
-                : e.getMessage();
+    /** Also for a file that exhausts memory or the stack: it must not take the editor down. */
+    private void failed(Path file, Throwable e) {
+        String reason = e instanceof Error ? "the file is too large or too deeply nested"
+                : e.getMessage() == null || e.getMessage().isBlank() ? e.getClass().getSimpleName() : e.getMessage();
         notices.show("Could not import " + file.getFileName() + ": " + reason);
     }
 

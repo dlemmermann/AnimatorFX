@@ -23,11 +23,24 @@ public final class SvgPathParser {
      * yields everything up to the error instead of failing.
      */
     public static PathData parse(String d) {
+        return parse(d, null);
+    }
+
+    /**
+     * A number that is not finite or absurdly large ends the path data like any other error.
+     *
+     * @param warnings told about such a number; may be {@code null}
+     */
+    static PathData parse(String d, Warnings warnings) {
         Builder builder = new Builder();
+        Scanner scanner = new Scanner(d == null ? "" : d);
         try {
-            new Scanner(d == null ? "" : d).run(builder);
+            scanner.run(builder);
         } catch (MalformedPath e) {
             // keep what was read
+        }
+        if (scanner.unusableNumber && warnings != null) {
+            warnings.add("Path data was cut off at a number that is not finite or too large", "path", "paths");
         }
         return builder.build();
     }
@@ -42,6 +55,7 @@ public final class SvgPathParser {
 
         private final String text;
         private int pos;
+        boolean unusableNumber;
 
         Scanner(String text) {
             this.text = text;
@@ -175,7 +189,12 @@ public final class SvgPathParser {
                     pos = mark;
                 }
             }
-            return Double.parseDouble(text.substring(start, pos));
+            double value = Double.parseDouble(text.substring(start, pos));
+            if (!Limits.usable(value)) {
+                unusableNumber = true;
+                throw new MalformedPath();
+            }
+            return value;
         }
 
         private int digits() {

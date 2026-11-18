@@ -61,6 +61,8 @@ final class LottieLayers {
         /** What stands for the layer among its siblings, bottom to top. */
         List<Layer> tops = List.of();
         boolean hiddenMatte;
+        /** The unit whose alpha this one takes as its track matte, once that is settled. */
+        Unit matteSource;
     }
 
     private final Warnings warnings;
@@ -68,6 +70,7 @@ final class LottieLayers {
     private final LottieTransforms transforms;
     private final LottieShapes shapes;
     private final LottieEffects effects;
+    private final Limits limits;
     private final double duration;
     private final Map<String, Object> lottieAssets;
     private final Map<String, Object> fonts;
@@ -85,7 +88,8 @@ final class LottieLayers {
         this.warnings = warnings;
         this.properties = properties;
         this.transforms = new LottieTransforms(properties, warnings);
-        this.shapes = new LottieShapes(properties, transforms, warnings, duration);
+        this.limits = new Limits(warnings);
+        this.shapes = new LottieShapes(properties, transforms, warnings, limits, duration);
         this.effects = new LottieEffects(properties, warnings);
         this.duration = duration;
         this.lottieAssets = lottieAssets;
@@ -145,6 +149,11 @@ final class LottieLayers {
         seen.add(unit);
         Unit current = unit;
         while (get(current.json, "parent") instanceof Number index) {
+            if (seen.size() > Limits.MAX_DEPTH) {
+                warnings.add("Parent chains longer than " + Limits.MAX_DEPTH + " layers are not supported; the"
+                        + " layers are treated as unparented", "layer", "layers");
+                return null;
+            }
             Unit next = byIndex.get(index.intValue());
             if (next == null || !seen.add(next)) {
                 warnings.add("Layers whose parent is missing or circular are treated as unparented", "layer",
@@ -158,6 +167,9 @@ final class LottieLayers {
 
     private void convert(Unit unit, double frameOffset) {
         Object json = unit.json;
+        if (!limits.layer()) {
+            return;
+        }
         if (LottieJson.flag(json, "ddd")) {
             warnings.add("3D layers are not supported; they are treated as 2D", "layer", "layers");
         }
@@ -180,7 +192,7 @@ final class LottieLayers {
                 effects.read(json, frameOffset), null);
         int type = (int) LottieJson.number(json, "ty", -1);
         unit.core = switch (type) {
-            case SHAPE -> new GroupLayer(base, shapes.content(list(json, "shapes"), frameOffset));
+            case SHAPE -> new GroupLayer(base, shapeContent(json, frameOffset));
             case NULL -> new GroupLayer(base, List.of());
             case SOLID -> solid(json, base);
             case IMAGE -> image(json, base);
@@ -203,11 +215,25 @@ final class LottieLayers {
         // A child follows the transform of its parent, but neither its opacity nor its time
         // range: a group with a copy of the parent's transform carries it, one per ancestor.
         for (Unit ancestor = unit.parent; ancestor != null; ancestor = ancestor.parent) {
+            if (!limits.layer()) {
+                return;
+            }
             LayerBase carrier = LayerBase.create(ancestor.name + " (parent transform)", duration)
                     .withTransform(ancestor.placement.transform());
             tops = new ArrayList<>(List.of(new GroupLayer(carrier, tops)));
         }
         unit.tops = tops;
+    }
+
+    private List<Layer> shapeContent(Object json, double frameOffset) {
+        if (!limits.enter()) {
+            return List.of();
+        }
+        try {
+            return shapes.content(list(json, "shapes"), frameOffset);
+        } finally {
+            limits.leave();
+        }
     }
 
     private double clamp(double time) {
@@ -269,7 +295,7 @@ final class LottieLayers {
         String style = LottieJson.string(font, "fStyle", "").toLowerCase(Locale.ROOT);
         String weight = LottieJson.string(font, "fWeight", "");
         boolean bold = style.contains("bold") || style.contains("black") || style.contains("heavy")
-                || SvgLength.fraction(weight, 400) >= 600;
+                || SvgLength.fraction(weight, 400, null) >= 600;
         TextLayer.Align align = switch ((int) LottieJson.number(document, "j", 0)) {
             case 1 -> TextLayer.Align.RIGHT;
             case 2 -> TextLayer.Align.CENTER;
@@ -310,6 +336,10 @@ final class LottieLayers {
         if (!openCompositions.add(reference)) {
             return ignored("Precompositions that contain themselves are ignored");
         }
+        if (!limits.enter()) {
+            openCompositions.remove(reference);
+            return new GroupLayer(base, List.of());
+        }
         try {
             if (LottieJson.has(json, "tm")) {
                 warnings.add("Time remapping is not supported", "layer", "layers");
@@ -322,6 +352,7 @@ final class LottieLayers {
             double start = LottieJson.number(json, "st", 0);
             return new GroupLayer(base, composition(list(asset, "layers"), frameOffset + start));
         } finally {
+            limits.leave();
             openCompositions.remove(reference);
         }
     }
@@ -347,7 +378,7 @@ final class LottieLayers {
             return;
         }
         Animatable<PathData> path = properties.path(get(chosen, "pt"), frameOffset);
-        Animatable<Double> opacity = properties.number(get(chosen, "o"), frameOffset, 100, 0.01);
+        Animatable<Double> opacity = transforms.opacity(get(chosen, "o"), frameOffset);
         boolean opaque = !opacity.isAnimated() && opacity.at(0) >= 1;
         LayerBase base = LayerBase.create(unit.name + " (mask)", duration)
                 .withTransform(unit.placement.transform()).withOpacity(opacity);
@@ -359,7 +390,9 @@ final class LottieLayers {
 
     /**
      * Track mattes: a layer with {@code tt} takes its alpha from the layer above it (or the one
-     * named by {@code tp}), which is not drawn itself.
+     * named by {@code tp}), which is not drawn itself. Masked layer and matte end up as two
+     * layers of the same list, which is what the model asks of a mask. A matte may be matted
+     * itself; mattes that lead back to their own layer are declined.
      */
     private void matte(List<Unit> units, Map<Integer, Unit> byIndex) {
         Set<Unit> used = new HashSet<>();
@@ -371,22 +404,40 @@ final class LottieLayers {
             }
             Unit source = get(unit.json, "tp") instanceof Number index ? byIndex.get(index.intValue())
                     : i > 0 ? units.get(i - 1) : null;
-            if (source != null && source != unit) {
-                source.hiddenMatte = true;
+            if (source == null || source == unit) {
+                continue;
             }
             if (mode != 1) {
+                source.hiddenMatte = true;
                 warnings.add("Inverted and luminance track mattes are not supported", "matte ignored",
                         "mattes ignored");
                 continue;
             }
-            if (source == null || source == unit || source.tops.isEmpty() || unit.tops.isEmpty()) {
+            if (source.tops.isEmpty() || unit.tops.isEmpty()) {
+                source.hiddenMatte = true;
+                continue;
+            }
+            boolean circular = false;
+            for (Unit matte = source; matte != null && !circular; matte = matte.matteSource) {
+                circular = matte == unit;
+            }
+            if (circular) {
+                warnings.add("Track mattes that refer to each other are not supported", "matte ignored",
+                        "mattes ignored");
                 continue;
             }
             single(source);
             single(unit);
             Layer masked = unit.tops.get(0);
+            if (masked.base().mask() != null) {
+                // cannot happen as units are built; a second mask would orphan the first
+                warnings.add("Layers that are masked already take no track matte", "matte ignored", "mattes ignored");
+                continue;
+            }
             unit.tops = List.of(masked.withBase(masked.base()
                     .withMask(new Mask(source.tops.get(0).id(), Mask.Mode.ALPHA))));
+            unit.matteSource = source;
+            source.hiddenMatte = true;
             used.add(source);
         }
         for (Unit unit : units) {
@@ -400,9 +451,12 @@ final class LottieLayers {
         }
     }
 
-    /** Makes one layer stand for the unit, without a mask of its own, so that it can mask or be masked. */
+    /**
+     * Makes one layer stand for the unit, so that it can mask or be masked. A unit that is two
+     * layers (the layer and its own mask) goes into a group; the mask inside stays beside its layer.
+     */
     private void single(Unit unit) {
-        if (unit.tops.size() > 1 || unit.tops.get(0).base().mask() != null) {
+        if (unit.tops.size() > 1) {
             unit.tops = List.of(new GroupLayer(LayerBase.create(unit.name, duration), unit.tops));
         }
     }

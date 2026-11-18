@@ -105,6 +105,11 @@ final class SvgTransforms {
         return result;
     }
 
+    /** Only the ASCII digits are digits of a number; {@code Double.parseDouble} knows no others. */
+    private static boolean isDigit(char c) {
+        return c >= '0' && c <= '9';
+    }
+
     /** The end of the number starting at {@code start}; {@code start} itself if there is none. */
     static int numberEnd(String text, int start) {
         int pos = start;
@@ -113,13 +118,13 @@ final class SvgTransforms {
             pos++;
         }
         int digits = 0;
-        while (pos < length && Character.isDigit(text.charAt(pos))) {
+        while (pos < length && isDigit(text.charAt(pos))) {
             pos++;
             digits++;
         }
         if (pos < length && text.charAt(pos) == '.') {
             pos++;
-            while (pos < length && Character.isDigit(text.charAt(pos))) {
+            while (pos < length && isDigit(text.charAt(pos))) {
                 pos++;
                 digits++;
             }
@@ -133,7 +138,7 @@ final class SvgTransforms {
                 pos++;
             }
             int exponent = 0;
-            while (pos < length && Character.isDigit(text.charAt(pos))) {
+            while (pos < length && isDigit(text.charAt(pos))) {
                 pos++;
                 exponent++;
             }

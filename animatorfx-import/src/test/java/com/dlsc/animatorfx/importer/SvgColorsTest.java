@@ -45,16 +45,16 @@ class SvgColorsTest {
 
     @Test
     void lengths() {
-        assertEquals(12, SvgLength.parse("12", 0, -1));
-        assertEquals(12, SvgLength.parse(" 12px ", 0, -1));
-        assertEquals(16, SvgLength.parse("12pt", 0, -1), 1e-12);
-        assertEquals(96, SvgLength.parse("1in", 0, -1));
-        assertEquals(96, SvgLength.parse("2.54cm", 0, -1), 1e-12);
-        assertEquals(96, SvgLength.parse("25.4mm", 0, -1), 1e-12);
-        assertEquals(50, SvgLength.parse("25%", 200, -1));
-        assertEquals(16, SvgLength.parse("1em", 0, -1));
-        assertEquals(1000, SvgLength.parse("1e3", 0, -1));
-        assertEquals(-1, SvgLength.parse("wide", 0, -1));
-        assertEquals(-1, SvgLength.parse(null, 0, -1));
+        assertEquals(12, SvgLength.parse("12", 0, -1, null));
+        assertEquals(12, SvgLength.parse(" 12px ", 0, -1, null));
+        assertEquals(16, SvgLength.parse("12pt", 0, -1, null), 1e-12);
+        assertEquals(96, SvgLength.parse("1in", 0, -1, null));
+        assertEquals(96, SvgLength.parse("2.54cm", 0, -1, null), 1e-12);
+        assertEquals(96, SvgLength.parse("25.4mm", 0, -1, null), 1e-12);
+        assertEquals(50, SvgLength.parse("25%", 200, -1, null));
+        assertEquals(16, SvgLength.parse("1em", 0, -1, null));
+        assertEquals(1000, SvgLength.parse("1e3", 0, -1, null));
+        assertEquals(-1, SvgLength.parse("wide", 0, -1, null));
+        assertEquals(-1, SvgLength.parse(null, 0, -1, null));
     }
 }

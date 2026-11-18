@@ -46,12 +46,17 @@ import java.util.regex.Pattern;
  * that are not available cannot be loaded and is reported as an {@link IOException}.
  * {@code %key} resource references resolve to the key itself; locations relative to the file
  * ({@code @style.css}) resolve as usual.
+ * <p>
+ * FXML is loaded as trusted input, like code: loading it instantiates the classes it names, runs
+ * their constructors and setters and follows {@code fx:include}. Import only files you would run.
  */
 public final class FxmlImporter {
 
     private static final double DURATION = 3;
     private static final double FALLBACK_WIDTH = 800;
     private static final double FALLBACK_HEIGHT = 600;
+    /** Pixels; a node wider or higher than this gets no preview picture. */
+    private static final double MAX_PREVIEW_SIZE = 4096;
 
     private static final Pattern CONTROLLER = Pattern.compile("\\s+fx:controller\\s*=\\s*(\"([^\"]*)\"|'([^']*)')");
     private static final Pattern HANDLER = Pattern.compile("\\s+on[A-Z]\\w*\\s*=\\s*(\"#[^\"]*\"|'#[^']*')");
@@ -146,17 +151,28 @@ public final class FxmlImporter {
             Transform transform = Transform.at(bounds.getMinX() - origin.getX(), bounds.getMinY() - origin.getY());
             layers.add(new SlotLayer(LayerBase.create(slotName, DURATION).withTransform(transform), slotName,
                     bounds.getWidth(), bounds.getHeight(), transform));
-            if (bounds.getWidth() >= 1 && bounds.getHeight() >= 1) {
+            if (bounds.getWidth() > MAX_PREVIEW_SIZE || bounds.getHeight() > MAX_PREVIEW_SIZE) {
+                noPreview(warnings);
+            } else if (bounds.getWidth() >= 1 && bounds.getHeight() >= 1) {
                 SnapshotParameters parameters = new SnapshotParameters();
                 parameters.setFill(Color.TRANSPARENT);
                 Bounds inParent = node.localToParent(node.getLayoutBounds());
                 parameters.setViewport(new Rectangle2D(inParent.getMinX(), inParent.getMinY(), inParent.getWidth(),
                         inParent.getHeight()));
-                WritableImage image = node.snapshot(parameters, null);
-                previews.add(new SlotPreview(slotName, PngWriter.encode(image)));
+                try {
+                    WritableImage image = node.snapshot(parameters, null);
+                    previews.add(new SlotPreview(slotName, PngWriter.encode(image)));
+                } catch (RuntimeException e) {
+                    noPreview(warnings);
+                }
             }
         }
-        return new Result(new AnimationFile(animation.withLayers(layers), Map.of()), previews, warnings.lines());
+        Animation checked = DocumentCheck.repair(animation.withLayers(layers), warnings);
+        return new Result(new AnimationFile(checked, Map.of()), previews, warnings.lines());
+    }
+
+    private static void noPreview(Warnings warnings) {
+        warnings.add("Nodes that are too large to be drawn have no preview", "slot", "slots");
     }
 
     /** Removes what only works with the controller. */

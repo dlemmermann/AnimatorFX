@@ -1,5 +1,7 @@
 package com.dlsc.animatorfx.importer;
 
+import java.util.Locale;
+
 /**
  * Parses SVG lengths to pixels at 96 dpi.
  */
@@ -10,9 +12,10 @@ final class SvgLength {
 
     /**
      * @param percentBase what 100 % stands for
-     * @return the length in pixels, or {@code fallback} if the text is missing or not a length
+     * @param warnings    told when the length is not finite or absurdly large; may be {@code null}
+     * @return the length in pixels, or {@code fallback} if the text is missing or not a usable length
      */
-    static double parse(String text, double percentBase, double fallback) {
+    static double parse(String text, double percentBase, double fallback, Warnings warnings) {
         if (text == null) {
             return fallback;
         }
@@ -22,7 +25,7 @@ final class SvgLength {
             return fallback;
         }
         double value = Double.parseDouble(trimmed.substring(0, end));
-        return switch (trimmed.substring(end).trim().toLowerCase()) {
+        double pixels = switch (trimmed.substring(end).trim().toLowerCase(Locale.ROOT)) {
             case "", "px" -> value;
             case "pt" -> value * 96 / 72;
             case "pc" -> value * 16;
@@ -32,8 +35,19 @@ final class SvgLength {
             case "em", "rem" -> value * 16;
             case "ex" -> value * 8;
             case "%" -> value / 100 * percentBase;
-            default -> fallback;
+            default -> Double.NaN;
         };
+        return Double.isNaN(pixels) ? fallback : usable(pixels, fallback, warnings);
+    }
+
+    private static double usable(double value, double fallback, Warnings warnings) {
+        if (Limits.usable(value)) {
+            return value;
+        }
+        if (warnings != null) {
+            warnings.add("Lengths that are not finite or too large use their default", "length", "lengths");
+        }
+        return fallback;
     }
 
     static boolean isPercentage(String text) {
@@ -41,7 +55,7 @@ final class SvgLength {
     }
 
     /** A plain number or a percentage as a fraction; {@code fallback} for anything else. */
-    static double fraction(String text, double fallback) {
+    static double fraction(String text, double fallback, Warnings warnings) {
         if (text == null) {
             return fallback;
         }
@@ -52,6 +66,7 @@ final class SvgLength {
         }
         double value = Double.parseDouble(trimmed.substring(0, end));
         String unit = trimmed.substring(end).trim();
-        return unit.equals("%") ? value / 100 : unit.isEmpty() ? value : fallback;
+        return unit.equals("%") ? usable(value / 100, fallback, warnings)
+                : unit.isEmpty() ? usable(value, fallback, warnings) : fallback;
     }
 }

@@ -56,6 +56,7 @@ final class SvgLayers {
     private final Map<String, byte[]> assetBytes = new LinkedHashMap<>();
     private final Map<String, String> assetIdsByHref = new HashMap<>();
     private final Set<Element> expanding = new HashSet<>();
+    private final Limits limits;
     private int clipDepth;
 
     SvgLayers(Map<String, Element> ids, Warnings warnings, double viewportWidth, double viewportHeight) {
@@ -65,6 +66,7 @@ final class SvgLayers {
         this.viewportHeight = viewportHeight;
         this.viewportDiagonal = Math.hypot(viewportWidth, viewportHeight) / Math.sqrt(2);
         this.gradients = new SvgGradients(ids, warnings, viewportWidth, viewportHeight);
+        this.limits = new Limits(warnings);
     }
 
     List<Asset> assets() {
@@ -75,12 +77,12 @@ final class SvgLayers {
         return assetBytes;
     }
 
-    static double opacity(SvgStyle style) {
-        return unit(style.get("opacity"));
+    static double opacity(SvgStyle style, Warnings warnings) {
+        return Math.clamp(SvgLength.fraction(style.get("opacity"), 1, warnings), 0.0, 1.0);
     }
 
-    private static double unit(String text) {
-        return Math.clamp(SvgLength.fraction(text, 1), 0.0, 1.0);
+    private double unit(String text) {
+        return Math.clamp(SvgLength.fraction(text, 1, warnings), 0.0, 1.0);
     }
 
     /**
@@ -124,6 +126,13 @@ final class SvgLayers {
             return;
         }
         double[] user = Matrix.multiply(pre, transform(element.getAttribute("transform")));
+        if (!Limits.usable(user)) {
+            warnings.add("Elements whose transform is not finite or too large were dropped", "element", "elements");
+            return;
+        }
+        if (!limits.layer()) {
+            return;
+        }
         boolean leaf = true;
         Layer layer;
         switch (kind) {
@@ -149,7 +158,7 @@ final class SvgLayers {
         }
         String visibility = style.get("visibility", "visible");
         boolean visible = displayed && !(leaf && (visibility.equals("hidden") || visibility.equals("collapse")));
-        LayerBase base = layer.base().withOpacity(Animatable.of(opacity(style))).withVisible(visible);
+        LayerBase base = layer.base().withOpacity(Animatable.of(opacity(style, warnings))).withVisible(visible);
         Layer mask = clip(style, user);
         if (mask != null) {
             out.add(mask);
@@ -186,11 +195,11 @@ final class SvgLayers {
     }
 
     private double x(Element element, String attribute) {
-        return SvgLength.parse(element.getAttribute(attribute), viewportWidth, 0);
+        return SvgLength.parse(element.getAttribute(attribute), viewportWidth, 0, warnings);
     }
 
     private double y(Element element, String attribute) {
-        return SvgLength.parse(element.getAttribute(attribute), viewportHeight, 0);
+        return SvgLength.parse(element.getAttribute(attribute), viewportHeight, 0, warnings);
     }
 
     private Layer group(Element element, String kind, SvgStyle style, double[] user) {
@@ -203,10 +212,16 @@ final class SvgLayers {
             }
         }
         List<Layer> content = new ArrayList<>();
-        for (Element child : elements(element)) {
-            convert(child, style, Matrix.identity(), content);
-            if (kind.equals("switch") && SvgImporter.isSvg(child)) {
-                break;
+        if (limits.enter()) {
+            try {
+                for (Element child : elements(element)) {
+                    convert(child, style, Matrix.identity(), content);
+                    if (kind.equals("switch") && SvgImporter.isSvg(child)) {
+                        break;
+                    }
+                }
+            } finally {
+                limits.leave();
             }
         }
         return new GroupLayer(base(name, matrix), content);
@@ -233,10 +248,19 @@ final class SvgLayers {
             String name = name(element);
             double[] matrix = Matrix.multiply(user, Matrix.translate(x(element, "x"), y(element, "y")));
             List<Layer> content = new ArrayList<>();
-            if ("symbol".equals(target.getLocalName()) && SvgImporter.isSvg(target)) {
-                content.add(group(target, "symbol", SvgStyle.of(target, style), Matrix.identity()));
-            } else {
-                convert(target, style, Matrix.identity(), content);
+            // a chain of references is as deep as the layers it makes: the depth limit ends it
+            if (limits.enter()) {
+                try {
+                    if ("symbol".equals(target.getLocalName()) && SvgImporter.isSvg(target)) {
+                        if (limits.layer()) {
+                            content.add(group(target, "symbol", SvgStyle.of(target, style), Matrix.identity()));
+                        }
+                    } else {
+                        convert(target, style, Matrix.identity(), content);
+                    }
+                } finally {
+                    limits.leave();
+                }
             }
             return new GroupLayer(base(name, matrix), content);
         } finally {
@@ -310,7 +334,8 @@ final class SvgLayers {
             }
             case "circle", "ellipse" -> {
                 boolean circle = kind.equals("circle");
-                double rx = circle ? SvgLength.parse(element.getAttribute("r"), viewportDiagonal, 0) : x(element, "rx");
+                double rx = circle ? SvgLength.parse(element.getAttribute("r"), viewportDiagonal, 0, warnings)
+                        : x(element, "rx");
                 double ry = circle ? rx : y(element, "ry");
                 if (!(rx > 0 && ry > 0)) {
                     return null;
@@ -328,7 +353,7 @@ final class SvgLayers {
                         Math.abs(end.x() - start.x()), Math.abs(end.y() - start.y())};
             }
             default -> {
-                PathData path = kind.equals("path") ? SvgPathParser.parse(element.getAttribute("d"))
+                PathData path = kind.equals("path") ? SvgPathParser.parse(element.getAttribute("d"), warnings)
                         : points(element.getAttribute("points"), kind.equals("polygon"));
                 box = PathBounds.of(path);
                 if (box == null) {
@@ -364,25 +389,33 @@ final class SvgLayers {
         return Math.min(rx, ry);
     }
 
-    private static boolean isLength(String text) {
-        return !Double.isNaN(SvgLength.parse(text, 0, Double.NaN));
+    private boolean isLength(String text) {
+        return !Double.isNaN(SvgLength.parse(text, 0, Double.NaN, warnings));
     }
 
-    private static PathData points(String text, boolean closed) {
+    /** The points of a polyline or polygon; like path data, the list ends at a number that is not usable. */
+    private PathData points(String text, boolean closed) {
         double[] numbers = SvgTransforms.numbers(text);
-        if (numbers == null || numbers.length < 4) {
+        if (numbers == null) {
             return PathData.EMPTY;
         }
         List<PathData.Vertex> vertices = new ArrayList<>();
         for (int i = 0; i + 1 < numbers.length; i += 2) {
+            if (!Limits.usable(numbers[i]) || !Limits.usable(numbers[i + 1])) {
+                warnings.add("Path data was cut off at a number that is not finite or too large", "path", "paths");
+                break;
+            }
             vertices.add(new PathData.Vertex(new Vec2(numbers[i], numbers[i + 1]), Vec2.ZERO, Vec2.ZERO));
+        }
+        if (vertices.size() < 2) {
+            return PathData.EMPTY;
         }
         return new PathData(List.of(new PathData.Contour(vertices, closed)));
     }
 
     private Stroke stroke(SvgStyle style, SvgGradients.Target target) {
         Paint paint = gradients.paint(style.get("stroke", "none"), unit(style.get("stroke-opacity")), style, target);
-        double width = SvgLength.parse(style.get("stroke-width"), viewportDiagonal, 1);
+        double width = SvgLength.parse(style.get("stroke-width"), viewportDiagonal, 1, warnings);
         if (paint instanceof Paint.None || !(width > 0)) {
             return null;
         }
@@ -396,8 +429,8 @@ final class SvgLayers {
             case "bevel" -> Stroke.Join.BEVEL;
             default -> Stroke.Join.MITER;
         };
-        double miterLimit = Math.max(1, SvgLength.fraction(style.get("stroke-miterlimit"), 4));
-        double dashOffset = SvgLength.parse(style.get("stroke-dashoffset"), viewportDiagonal, 0);
+        double miterLimit = Math.max(1, SvgLength.fraction(style.get("stroke-miterlimit"), 4, warnings));
+        double dashOffset = SvgLength.parse(style.get("stroke-dashoffset"), viewportDiagonal, 0, warnings);
         return new Stroke(Animatable.of(paint), Animatable.of(width), cap, join, miterLimit,
                 dashes(style.get("stroke-dasharray", "none")), Animatable.of(dashOffset));
     }
@@ -406,7 +439,7 @@ final class SvgLayers {
         List<Double> dashes = new ArrayList<>();
         double sum = 0;
         for (String part : text.trim().split("[\\s,]+")) {
-            double length = SvgLength.parse(part, viewportDiagonal, -1);
+            double length = SvgLength.parse(part, viewportDiagonal, -1, warnings);
             if (length < 0) {
                 return List.of();
             }
@@ -432,14 +465,14 @@ final class SvgLayers {
         Element[] firstSpan = new Element[1];
         collectText(element, collected, firstSpan);
         String content = collected.toString().replaceAll("\\s+", " ").trim();
-        double size = SvgLength.parse(style.get("font-size"), 16, 16);
+        double size = SvgLength.parse(style.get("font-size"), 16, 16, warnings);
         if (content.isEmpty() || !(size > 0)) {
             return null;
         }
         Element positioned = element.hasAttribute("x") || element.hasAttribute("y") || firstSpan[0] == null
                 ? element : firstSpan[0];
-        double x = SvgLength.parse(first(positioned.getAttribute("x")), viewportWidth, 0);
-        double y = SvgLength.parse(first(positioned.getAttribute("y")), viewportHeight, 0);
+        double x = SvgLength.parse(first(positioned.getAttribute("x")), viewportWidth, 0, warnings);
+        double y = SvgLength.parse(first(positioned.getAttribute("y")), viewportHeight, 0, warnings);
 
         double estimatedWidth = ADVANCE * size * content.length();
         TextLayer.Align align = switch (style.get("text-anchor", "start")) {
@@ -455,7 +488,7 @@ final class SvgLayers {
                 "text", "texts");
 
         String weight = style.get("font-weight", "normal");
-        boolean bold = weight.startsWith("bold") || SvgLength.fraction(weight, 400) >= 600;
+        boolean bold = weight.startsWith("bold") || SvgLength.fraction(weight, 400, null) >= 600;
         String posture = style.get("font-style", "normal");
         SvgGradients.Target target = new SvgGradients.Target(null, originX, originY);
         Paint fill = gradients.paint(style.get("fill", "black"), unit(style.get("fill-opacity")), style, target);

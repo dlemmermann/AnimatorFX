@@ -60,12 +60,15 @@ final class LottieShapes {
     private final LottieProperties properties;
     private final LottieTransforms transforms;
     private final Warnings warnings;
+    private final Limits limits;
     private final double duration;
 
-    LottieShapes(LottieProperties properties, LottieTransforms transforms, Warnings warnings, double duration) {
+    LottieShapes(LottieProperties properties, LottieTransforms transforms, Warnings warnings, Limits limits,
+                 double duration) {
         this.properties = properties;
         this.transforms = transforms;
         this.warnings = warnings;
+        this.limits = limits;
         this.duration = duration;
     }
 
@@ -120,7 +123,7 @@ final class LottieShapes {
             Style style = inherited.get(s);
             for (int g = count - 1; g >= 0; g--) {
                 if (geometries[g] != null) {
-                    out.add(layer(geometries[g], style.stroke() ? null : style, style.stroke() ? style : null,
+                    add(out, layer(geometries[g], style.stroke() ? null : style, style.stroke() ? style : null,
                             trimFor(g, trims, items, inheritedTrim), frameOffset));
                 }
             }
@@ -138,7 +141,7 @@ final class LottieShapes {
                 }
                 for (int g = above - 1; g >= 0; g--) {
                     if (geometries[g] != null) {
-                        out.add(layer(geometries[g], fill, stroke, trimFor(g, trims, items, inheritedTrim),
+                        add(out, layer(geometries[g], fill, stroke, trimFor(g, trims, items, inheritedTrim),
                                 frameOffset));
                     }
                 }
@@ -150,13 +153,16 @@ final class LottieShapes {
                     }
                 }
                 down.addAll(inherited);
-                Layer group = group(items.get(i), frameOffset, down, trimFor(i, trims, items, inheritedTrim));
-                if (group != null) {
-                    out.add(group);
-                }
+                add(out, group(items.get(i), frameOffset, down, trimFor(i, trims, items, inheritedTrim)));
             }
         }
         return out;
+    }
+
+    private static void add(List<Layer> out, Layer layer) {
+        if (layer != null) {
+            out.add(layer);
+        }
     }
 
     private void unsupported(String what) {
@@ -181,7 +187,15 @@ final class LottieShapes {
                 transformItem = child;
             }
         }
-        List<Layer> children = content(items, frameOffset, inherited, trim);
+        if (!limits.layer() || !limits.enter()) {
+            return null;
+        }
+        List<Layer> children;
+        try {
+            children = content(items, frameOffset, inherited, trim);
+        } finally {
+            limits.leave();
+        }
         if (children.isEmpty()) {
             return null;
         }
@@ -224,17 +238,23 @@ final class LottieShapes {
                 if (points.isAnimated()) {
                     warnings.add("Animated point counts of stars and polygons are not supported", "shape", "shapes");
                 }
-                int count = (int) Math.round(points.at(0));
+                boolean polygon = LottieJson.number(item, "sy", 1) == 2;
+                int least = polygon ? 3 : 2;
+                double wanted = Math.rint(points.at(0));
+                if (wanted > Limits.MAX_POINTS) {
+                    warnings.add("Stars and polygons have at most " + Limits.MAX_POINTS + " points", "shape",
+                            "shapes");
+                }
+                int count = (int) Math.clamp(wanted, least, Limits.MAX_POINTS);
                 Animatable<Double> outer = properties.number(get(item, "or"), frameOffset, 0, 1);
                 Animatable<Double> inner = properties.number(get(item, "ir"), frameOffset, 0, 1);
                 Animatable<Double> rotation = properties.number(get(item, "r"), frameOffset, 0, 1);
-                boolean polygon = LottieJson.number(item, "sy", 1) == 2;
                 if (rounded(get(item, "os"), frameOffset) || (!polygon && rounded(get(item, "is"), frameOffset))) {
                     warnings.add("Rounded stars and polygons are not supported; their corners are sharp", "shape",
                             "shapes");
                 }
-                Geometry geometry = polygon ? new Geometry.Polygon(Math.max(3, count), outer)
-                        : new Geometry.Star(Math.max(2, count), outer, inner);
+                Geometry geometry = polygon ? new Geometry.Polygon(count, outer)
+                        : new Geometry.Star(count, outer, inner);
                 Transform transform = Transform.IDENTITY.withPosition(position).withRotation(rotation)
                         .withAnchor(Keyframes.map(outer, r -> new Vec2(r, r)));
                 return new Geo(LottieJson.string(item, "nm", polygon ? "Polygon" : "Star"), geometry, transform,
@@ -281,6 +301,9 @@ final class LottieShapes {
     }
 
     private Layer layer(Geo geo, Style fill, Style stroke, Object trimItem, double frameOffset) {
+        if (!limits.layer()) {
+            return null;
+        }
         Geo placed = geo;
         boolean gradient = (fill != null && fill.gradient()) || (stroke != null && stroke.gradient());
         if (gradient && geo.gradientShift() == null) {

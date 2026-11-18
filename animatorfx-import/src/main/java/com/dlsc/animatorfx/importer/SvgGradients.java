@@ -207,15 +207,15 @@ final class SvgGradients {
         return fallback;
     }
 
-    private static double coordinate(List<Element> chain, String name, String fallback, boolean boxUnits,
-                                     double percentBase) {
+    private double coordinate(List<Element> chain, String name, String fallback, boolean boxUnits,
+                              double percentBase) {
         String text = attribute(chain, name, fallback);
-        return boxUnits ? SvgLength.fraction(text, SvgLength.fraction(fallback, 0))
-                : SvgLength.parse(text, percentBase, SvgLength.parse(fallback, percentBase, 0));
+        return boxUnits ? SvgLength.fraction(text, SvgLength.fraction(fallback, 0, null), warnings)
+                : SvgLength.parse(text, percentBase, SvgLength.parse(fallback, percentBase, 0, null), warnings);
     }
 
     /** The stops of the first gradient in the chain that has any. */
-    private static List<Paint.Stop> stops(List<Element> chain, double opacity, SvgStyle paintedStyle) {
+    private List<Paint.Stop> stops(List<Element> chain, double opacity, SvgStyle paintedStyle) {
         List<Paint.Stop> stops = new ArrayList<>();
         for (Element gradient : chain) {
             double previous = 0;
@@ -224,12 +224,12 @@ final class SvgGradients {
                     continue;
                 }
                 SvgStyle style = SvgStyle.of(stop, null);
-                double offset = Math.clamp(SvgLength.fraction(stop.getAttribute("offset"), 0), 0.0, 1.0);
+                double offset = Math.clamp(SvgLength.fraction(stop.getAttribute("offset"), 0, warnings), 0.0, 1.0);
                 previous = Math.max(previous, offset);
                 String colorText = style.get("stop-color", "black");
                 Rgba color = colorText.equalsIgnoreCase("currentColor") ? color(colorText, paintedStyle)
                         : SvgColors.parse(colorText);
-                double stopOpacity = Math.clamp(SvgLength.fraction(style.get("stop-opacity"), 1), 0.0, 1.0);
+                double stopOpacity = Math.clamp(SvgLength.fraction(style.get("stop-opacity"), 1, warnings), 0.0, 1.0);
                 stops.add(new Paint.Stop(previous, withOpacity(color == null ? Rgba.BLACK : color,
                         stopOpacity * opacity)));
             }

@@ -199,6 +199,15 @@ class FxmlImporterTest {
     }
 
     @Test
+    void aNodeThatIsTooLargeToDrawHasASlotButNoPreview() throws Exception {
+        FxmlImporter.Result result = read("huge");
+        assertEquals(List.of("huge", "small"), names(result.file().animation().layers()));
+        assertEquals(100000, slot(result.file().animation(), "huge").width());
+        assertEquals(List.of("small"), result.previews().stream().map(FxmlImporter.SlotPreview::slotName).toList());
+        assertEquals(List.of("Nodes that are too large to be drawn have no preview (1 slot)"), result.warnings());
+    }
+
+    @Test
     void mustBeCalledOnTheFxThread() {
         assertThrows(IllegalStateException.class, () -> FxmlImporter.read(fixture("three-slots")));
     }

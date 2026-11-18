@@ -21,6 +21,11 @@ final class Warnings {
         counts.merge(message, 1, Integer::sum);
     }
 
+    /** A problem that is reported once, without a count. */
+    void once(String message) {
+        counts.putIfAbsent(message, 1);
+    }
+
     /** A problem whose line always carries its count, for example "(3 elements ignored)". */
     void add(String message, String singular, String plural) {
         units.putIfAbsent(message, new Unit(singular, plural));

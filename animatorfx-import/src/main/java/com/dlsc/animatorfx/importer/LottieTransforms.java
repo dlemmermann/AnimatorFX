@@ -31,7 +31,7 @@ final class LottieTransforms {
         Animatable<Vec2> scale = properties.vec2(get(ks, "s"), frameOffset, new Vec2(100, 100), 0.01);
         Object rotationSource = LottieJson.has(ks, "r") ? get(ks, "r") : get(ks, "rz");
         Animatable<Double> rotation = properties.number(rotationSource, frameOffset, 0, 1);
-        Animatable<Double> opacity = properties.number(get(ks, "o"), frameOffset, 100, 0.01);
+        Animatable<Double> opacity = opacity(get(ks, "o"), frameOffset);
         Animatable<Double> skewAngle = properties.number(get(ks, "sk"), frameOffset, 0, -1);
         Animatable<Vec2> skew = Keyframes.map(skewAngle, angle -> new Vec2(angle + 0.0, 0));
         Animatable<Double> skewAxis = properties.number(get(ks, "sa"), frameOffset, 0, 1);
@@ -41,6 +41,12 @@ final class LottieTransforms {
         }
         return new Placement(new Transform(anchor, position(get(ks, "p"), frameOffset), scale, rotation, skew),
                 opacity);
+    }
+
+    /** An opacity in percent as 0..1; values outside that range are limited to it. */
+    Animatable<Double> opacity(Object property, double frameOffset) {
+        return Keyframes.map(properties.number(property, frameOffset, 100, 0.01),
+                value -> Math.clamp(value, 0.0, 1.0));
     }
 
     /** A position, also in its split form with separate x and y properties. */

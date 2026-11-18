@@ -588,11 +588,10 @@ class SvgImporterTest {
     private static void assertNoSecret(String svg) {
         try {
             ImportResult result = read(svg);
-            for (Layer layer : result.file().animation().layers()) {
-                if (layer instanceof TextLayer text) {
-                    assertFalse(text.text().contains("TOPSECRET"), text.text());
-                }
-            }
+            // the text itself must be there, so that a missing layer cannot pass for a safe one
+            String text = named(result.file().animation(), "t", TextLayer.class).text();
+            assertTrue(text.contains("safe"), text);
+            assertFalse(text.contains("TOPSECRET"), text);
         } catch (IOException e) {
             // rejecting the document is as good as leaving the entity out
             assertFalse(String.valueOf(e.getMessage()).contains("TOPSECRET"));
