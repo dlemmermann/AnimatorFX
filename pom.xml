@@ -33,6 +33,12 @@
         <testfx.version>4.0.18</testfx.version>
         <monocle.version>21.0.2</monocle.version>
 
+        <!-- Headless JavaFX tests (Monocle). Modules with JavaFX tests opt in with
+             <surefire.jvm.args>${javafx.headless.jvm.args}</surefire.jvm.args> and the test dependencies
+             testfx-junit5 + openjfx-monocle. -->
+        <javafx.headless.jvm.args>-Dtestfx.headless=true -Dglass.platform=Monocle -Dmonocle.platform=Headless -Dprism.order=sw -Djava.awt.headless=true --enable-native-access=javafx.graphics --add-exports javafx.graphics/com.sun.glass.ui=ALL-UNNAMED --add-opens javafx.graphics/com.sun.glass.ui=ALL-UNNAMED --add-exports javafx.graphics/com.sun.glass.ui.delegate=ALL-UNNAMED --add-exports javafx.graphics/com.sun.glass.events=ALL-UNNAMED --add-exports javafx.graphics/com.sun.glass.utils=ALL-UNNAMED --add-exports javafx.graphics/com.sun.javafx.util=ALL-UNNAMED --add-exports javafx.base/com.sun.javafx.logging=ALL-UNNAMED --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED --add-exports javafx.graphics/com.sun.javafx.application=ALL-UNNAMED</javafx.headless.jvm.args>
+        <surefire.jvm.args/>
+
         <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
         <maven-enforcer-plugin.version>3.7.0</maven-enforcer-plugin.version>
@@ -104,6 +110,9 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <argLine>${surefire.jvm.args}</argLine>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.openjfx</groupId>

@@ -15,6 +15,7 @@
 
     <properties>
         <maven.compiler.release>${runtime.java.release}</maven.compiler.release>
+        <surefire.jvm.args>${javafx.headless.jvm.args}</surefire.jvm.args>
     </properties>
 
     <dependencies>
@@ -26,6 +27,21 @@
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.runtime.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testfx</groupId>
+            <artifactId>testfx-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testfx</groupId>
+            <artifactId>openjfx-monocle</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
