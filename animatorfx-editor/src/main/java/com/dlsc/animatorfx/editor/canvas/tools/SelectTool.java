@@ -20,6 +20,7 @@ import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.MotionPath;
 import com.dlsc.animatorfx.model.PathData;
+import com.dlsc.animatorfx.model.PathMeasure;
 import com.dlsc.animatorfx.model.Vec2;
 import javafx.collections.ObservableList;
 import javafx.scene.Cursor;
@@ -101,6 +102,8 @@ public final class SelectTool implements Tool {
     /** Whether this scale drag has written a position, which from then on must be kept up to date. */
     private boolean positionWritten;
     private boolean onMotionPath;
+    /** The angle that an oriented motion path adds to the rotation of the layer being transformed. */
+    private double pathRotation;
 
     public SelectTool(CanvasView canvas) {
         this.canvas = canvas;
@@ -221,13 +224,23 @@ public final class SelectTool implements Tool {
         }
         layerId = id;
         startValues = Values.of(layer.base().transform(), canvas.getTime());
+        MotionPath motion = layer.base().motionPath();
+        onMotionPath = motion != null;
+        pathRotation = 0;
+        if (motion != null) {
+            // where the path puts the layer, and how it turns it: what the handles are drawn from
+            PathMeasure measure = new PathMeasure(motion.path());
+            double progress = motion.progress().at(canvas.getTime());
+            pathRotation = motion.orientToPath() ? measure.angleAt(progress) : 0;
+            startValues = new Values(startValues.anchor(), measure.pointAt(progress), startValues.scale(),
+                    startValues.rotation() + pathRotation, startValues.skew());
+        }
         local = geometry.localBox(layer);
         startQuad = quad;
         grabOffset = grabbed.minus(p.view());
         lastInParent = Matrices.apply(viewToParent, p.view());
         rotation = startValues.rotation();
         positionWritten = false;
-        onMotionPath = layer.base().motionPath() != null;
         targets = geometry.snapTargets(Set.of(id));
         return true;
     }
@@ -381,15 +394,17 @@ public final class SelectTool implements Tool {
         Vec2 now = Matrices.apply(viewToParent, p.view());
         rotation = TransformMath.rotation(rotation, startValues.position(), lastInParent, now);
         lastInParent = now;
-        double value = p.shift() ? TransformMath.snapAngle(rotation, 15) : rotation;
+        double value = (p.shift() ? TransformMath.snapAngle(rotation, 15) : rotation) - pathRotation;
         doc().executeCoalesced(gestureKey, Commands.all("Rotate", canvas.valueCommand(layerId, ROTATION, value)));
     }
 
     private void moveAnchor(Pointer p) {
         TransformMath.Anchored moved = TransformMath.moveAnchor(startValues,
                 Matrices.apply(viewToParent, p.view().plus(grabOffset)));
-        doc().executeCoalesced(gestureKey, Commands.all("Move Anchor",
-                canvas.valueCommand(layerId, ANCHOR, moved.anchor()),
+        // on a motion path the position stays the path's: the layer shifts under its anchor instead
+        doc().executeCoalesced(gestureKey, onMotionPath
+                ? Commands.all("Move Anchor", canvas.valueCommand(layerId, ANCHOR, moved.anchor()))
+                : Commands.all("Move Anchor", canvas.valueCommand(layerId, ANCHOR, moved.anchor()),
                 canvas.valueCommand(layerId, POSITION, moved.position())));
     }
 

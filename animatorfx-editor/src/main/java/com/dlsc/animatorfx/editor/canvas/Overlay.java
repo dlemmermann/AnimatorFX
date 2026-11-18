@@ -16,6 +16,7 @@ import javafx.geometry.VPos;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
@@ -71,6 +72,9 @@ public final class Overlay extends Pane {
     private final Group anchor = new Group();
     private final Map<Handle, Rectangle> handles = new EnumMap<>(Handle.class);
     private final Label readout = new Label();
+    private final Label modeTitle = new Label();
+    private final Label modeDetail = new Label();
+    private final HBox modeHint = new HBox(modeTitle, modeDetail);
     private final Path motionPath = new Path();
     private final Circle motionStart = new Circle(3);
     private final Polygon motionArrow = new Polygon(0.0, 0.0, -9.0, -4.0, -9.0, 4.0);
@@ -82,6 +86,7 @@ public final class Overlay extends Pane {
     private Quad previewQuad;
     private List<Snapper.Guide> guideList = List.of();
     private boolean handlesHidden;
+    private boolean selectionHidden;
 
     Overlay(CanvasView canvas) {
         this.canvas = canvas;
@@ -113,8 +118,12 @@ public final class Overlay extends Pane {
         motionArrow.getStyleClass().add("overlay-motion-arrow");
         motionArrow.getTransforms().add(motionArrowAngle);
         motion.setVisible(false);
+        modeHint.getStyleClass().add("overlay-mode-hint");
+        modeTitle.getStyleClass().add("overlay-mode-title");
+        modeDetail.getStyleClass().add("overlay-mode-detail");
+        modeHint.setVisible(false);
         getChildren().addAll(slots, groupOutline, hoverOutline, outlines, motion, selectionOutline, rotateStem,
-                handleNodes, rotateHandle, anchor, preview, guides, marquee, readout, decorations);
+                handleNodes, rotateHandle, anchor, preview, guides, marquee, readout, decorations, modeHint);
         refresh();
     }
 
@@ -166,6 +175,30 @@ public final class Overlay extends Pane {
     public void setHandlesHidden(boolean hidden) {
         handlesHidden = hidden;
         canvas.requestLayout();
+    }
+
+    /**
+     * Hides the box, the handles and the size read-out of the selection, for a mode that shows
+     * the selected layer in its own way, such as path editing.
+     */
+    public void setSelectionHidden(boolean hidden) {
+        selectionHidden = hidden;
+        canvas.requestLayout();
+    }
+
+    /**
+     * A line at the top of the canvas that says which mode the canvas is in and which keys it
+     * takes, such as "Path editing" and "Esc: done"; {@code null} for none.
+     */
+    public void setModeHint(String title, String detail) {
+        modeHint.setVisible(title != null);
+        modeTitle.setText(title == null ? "" : title);
+        modeDetail.setText(detail == null ? "" : detail);
+        canvas.requestLayout();
+    }
+
+    public String getModeHint() {
+        return modeHint.isVisible() ? modeTitle.getText() : null;
     }
 
     /** Removes hover, marquee, guides and preview. */
@@ -225,11 +258,18 @@ public final class Overlay extends Pane {
                 show(memberOutlines.get(i), quads.get(i));
             }
         }
-        show(selectionOutline, enclosing);
+        show(selectionOutline, selectionHidden ? null : enclosing);
         Layer only = selected.size() == 1 ? geometry.layer(selected.get(0)).orElse(null) : null;
-        refreshHandles(single, single == null ? null : only);
-        refreshReadout(enclosing);
-        refreshMotionPath(only);
+        refreshHandles(selectionHidden ? null : single, single == null ? null : only);
+        refreshReadout(selectionHidden ? null : enclosing);
+        refreshMotionPath(selectionHidden ? null : only);
+        if (modeHint.isVisible()) {
+            if (getScene() != null) {
+                modeHint.applyCss();
+            }
+            double width = modeHint.prefWidth(-1);
+            modeHint.resizeRelocate(Math.rint((getWidth() - width) / 2), 12, width, modeHint.prefHeight(-1));
+        }
 
         show(preview, previewQuad);
         marquee.setVisible(marqueeBox != null);

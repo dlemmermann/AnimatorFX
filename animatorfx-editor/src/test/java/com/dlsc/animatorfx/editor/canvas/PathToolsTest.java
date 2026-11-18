@@ -103,6 +103,7 @@ class PathToolsTest extends CanvasTestBase {
     @Test
     void threePenClicksAndEnterCreateAPathLayerWithThreeVertices() {
         tool(ToolKind.PEN);
+        assertEquals("Pen", fx(() -> canvas.getOverlay().getModeHint()));
         click(100, 100);
         assertEquals(1, layers().size(), "the layer exists from the first click");
         click(200, 100);
@@ -123,6 +124,7 @@ class PathToolsTest extends CanvasTestBase {
         assertEquals(2, shape.stroke().width().at(0));
         assertEquals(List.of(shape.id()), selection());
         assertEquals(ToolKind.SELECT, canvas.getActiveTool());
+        assertNull(fx(() -> canvas.getOverlay().getModeHint()));
 
         run(doc::undo);
         assertTrue(layers().isEmpty(), "drawing the whole path is one undo step");
@@ -287,9 +289,13 @@ class PathToolsTest extends CanvasTestBase {
         assertEquals(List.of("p"), selection());
         assertEquals(3, tool.getOverlay().getVertexCount());
         assertEquals(0, tool.getOverlay().getHandleCount());
+        assertEquals("Path editing", fx(() -> canvas.getOverlay().getModeHint()));
+        assertFalse(fx(() -> canvas.lookup(".overlay-readout").isVisible()), "the selection box makes way for the points");
         key(KeyCode.ESCAPE);
         assertNull(fx(canvas::getModalTool));
         assertEquals(List.of("p"), selection());
+        assertNull(fx(() -> canvas.getOverlay().getModeHint()));
+        assertTrue(fx(() -> canvas.lookup(".overlay-readout").isVisible()));
 
         key(KeyCode.ENTER);
         editor();
@@ -549,6 +555,7 @@ class PathToolsTest extends CanvasTestBase {
         add(rect("a", 100, 100, 50, 50));
         run(() -> canvas.drawMotionPath("a"));
         assertInstanceOf(MotionPathTool.class, fx(canvas::getModalTool));
+        assertEquals("Motion path", fx(() -> canvas.getOverlay().getModeHint()));
         click(160, 420);
         assertNull(motion("a"), "one point is not a path yet");
         press(500, 460);
@@ -605,6 +612,67 @@ class PathToolsTest extends CanvasTestBase {
         select("a");
         key(KeyCode.RIGHT, true);
         assertEquals(corner(170, 420), motion("a").path().contours().get(0).vertices().get(0));
+    }
+
+    @Test
+    void aLayerOnAnOrientedMotionPathScalesAndRotatesAboutWhereThePathPutsIt() {
+        Layer layer = rect("a", 100, 100, 50, 50);
+        // straight down: the path turns the layer by 90 degrees
+        MotionPath motion = new MotionPath(new PathData(List.of(new Contour(List.of(corner(300, 100), corner(300, 400)), false))),
+                Animatable.of(0.0), true);
+        add(layer.withBase(layer.base().withMotionPath(motion)));
+        select("a");
+        // the layer's bottom-right corner (50, 50) is drawn at the bottom-left
+        dragFromTo(275, 125, 250, 150, Keys.CONTROL);
+
+        Vec2 scale = layer("a").base().transform().scale().at(0);
+        assertVec(2, 2, scale);
+        assertVec(125, 125, position("a"));
+
+        run(doc::undo);
+        select("a");
+        // the rotate handle is above the top edge, which the path has turned to the right
+        Vec2 handle = fx(() -> canvas.getGeometry().quad("a").orElseThrow().rotateHandle(Handles.ROTATE_DISTANCE));
+        pressView(handle, Keys.NONE);
+        dragView(new Vec2(view(300, 100).x(), handle.y() + 40), Keys.NONE);
+        dragView(new Vec2(view(300, 147).x(), view(300, 147).y()), Keys.NONE);
+        releaseView(new Vec2(view(300, 147).x(), view(300, 147).y()), Keys.NONE);
+        assertEquals(90, layer("a").base().transform().rotation().at(0), 1e-6, "a quarter turn on top of the path's");
+    }
+
+    @Test
+    void aSecondaryClickShowsTheMenuOfTheToolInCharge() {
+        add(rect("r", 100, 100, 80, 60));
+        run(() -> {
+            javafx.geometry.Point2D scene = canvas.localToScene(view(140, 130).x(), view(140, 130).y());
+            javafx.geometry.Point2D screen = canvas.localToScreen(view(140, 130).x(), view(140, 130).y());
+            javafx.event.Event.fireEvent(canvas, new javafx.scene.input.ContextMenuEvent(
+                    javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, scene.getX(), scene.getY(),
+                    screen.getX(), screen.getY(), false, null));
+        });
+        layout();
+
+        assertEquals(List.of("r"), selection(), "the layer under the pointer is selected first");
+        assertTrue(fx(() -> canvas.getContextMenu().isShowing()));
+        MenuItem convert = fx(() -> canvas.getContextMenu().getItems().get(0));
+        assertEquals("Convert to Path", convert.getText());
+        run(convert::fire);
+        layout();
+        assertEquals(4, vertices("r").size());
+        run(() -> canvas.getContextMenu().hide());
+    }
+
+    @Test
+    void playbackEndsAGestureButNotThePenOrPathEditing() {
+        add(angle("p"));
+        editPath("p");
+        run(canvas::togglePlayback);
+        run(canvas::pausePlayback);
+        click(300, 200);
+        layout();
+        assertEquals(Set.of(new VertexRef(0, 1)), editor().getSelection());
+        assertEquals(3, editor().getOverlay().getVertexCount(), "the points show again");
+        assertEquals("Path editing", fx(() -> canvas.getOverlay().getModeHint()));
     }
 
     @Test

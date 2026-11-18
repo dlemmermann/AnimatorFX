@@ -478,6 +478,29 @@
     -fx-stroke-width: 1;
 }
 
+/* Which mode the canvas is in, with its keys: a pill at the top of the canvas. */
+
+.overlay-mode-hint {
+    -fx-background-color: -afx-line, -afx-panel;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 5, 4;
+    -fx-padding: 4 10 4 10;
+    -fx-spacing: 10;
+    -fx-alignment: center-left;
+    -fx-effect: dropshadow(gaussian, -afx-shadow, 10, 0, 0, 2);
+}
+
+.overlay-mode-title {
+    -fx-text-fill: -afx-accent;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.overlay-mode-detail {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 11px;
+}
+
 /* The motion path of the selected layer. */
 
 .overlay-motion-path {
@@ -499,6 +522,13 @@
 }
 
 /* Path editing and the pen: vertices are squares like the selection handles, tangent handles are round. */
+
+.path-outline-halo {
+    -fx-fill: transparent;
+    -fx-stroke: -afx-canvas;
+    -fx-stroke-width: 3;
+    -fx-opacity: 0.55;
+}
 
 .path-outline {
     -fx-fill: transparent;

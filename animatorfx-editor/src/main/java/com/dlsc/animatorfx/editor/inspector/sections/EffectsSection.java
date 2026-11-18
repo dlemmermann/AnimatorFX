@@ -143,7 +143,7 @@ public final class EffectsSection extends SectionBase {
             build(i, effects.get(i), effects.size());
         }
         hint.setText(kinds == null ? "The selected layers have different effects."
-                : "No effects. Blur, drop shadow and glow are applied in list order.");
+                : "No effects.");
         if (effects.isEmpty()) {
             add(hint);
         }

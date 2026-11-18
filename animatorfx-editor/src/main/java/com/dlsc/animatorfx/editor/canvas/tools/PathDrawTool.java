@@ -94,6 +94,9 @@ abstract class PathDrawTool implements Tool {
      */
     protected abstract void finished(boolean replaced);
 
+    /** The name of the mode for the hint at the top of the canvas. */
+    protected abstract String modeName();
+
     /** The path was dropped; nothing of it is left in the document. */
     protected void dropped(boolean replaced) {
     }
@@ -124,6 +127,9 @@ abstract class PathDrawTool implements Tool {
         if (!attached) {
             attached = true;
             canvas.getOverlay().addDecoration(overlay, this::refresh);
+            canvas.getOverlay().setModeHint(modeName(), "Click: corner \u00b7 Drag: curve \u00b7 "
+                    + (canClose() ? "Click the first point: close \u00b7 " : "") + "Enter: finish \u00b7 Esc: "
+                    + (canClose() ? "finish" : "cancel"));
         }
     }
 
@@ -138,6 +144,7 @@ abstract class PathDrawTool implements Tool {
         if (attached) {
             attached = false;
             canvas.getOverlay().removeDecoration(overlay);
+            canvas.getOverlay().setModeHint(null, null);
         }
     }
 
@@ -155,6 +162,8 @@ abstract class PathDrawTool implements Tool {
 
     @Override
     public void pressed(Pointer p) {
+        // playback ends what is in progress with finish(), and the tool stays the one in charge
+        activate();
         if (drawing && written && !exists()) {
             drawing = false;
         }

@@ -38,6 +38,11 @@ public final class PenTool extends PathDrawTool {
     }
 
     @Override
+    protected String modeName() {
+        return "Pen";
+    }
+
+    @Override
     protected boolean canClose() {
         return true;
     }

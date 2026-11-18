@@ -29,6 +29,7 @@ import java.util.Optional;
 import javafx.collections.ObservableList;
 import javafx.css.PseudoClass;
 import javafx.geometry.Bounds;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -584,6 +585,7 @@ public final class LayerTreeColumn extends Region {
             HBox.setHgrow(name, Priority.ALWAYS);
             badge.getStyleClass().addAll("layer-badge", "mono");
             badge.setMinWidth(Region.USE_PREF_SIZE);
+            HBox.setMargin(badge, new Insets(0, 4, 0, 0));
             getChildren().addAll(indent, disclosure, typeIcon, name, badge, eye, lock);
 
             disclosure.setOnAction(e -> {

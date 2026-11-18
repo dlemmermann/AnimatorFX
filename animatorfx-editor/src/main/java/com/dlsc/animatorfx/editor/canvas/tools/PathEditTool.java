@@ -124,8 +124,10 @@ public final class PathEditTool implements Tool {
         if (!active) {
             active = true;
             canvas.getOverlay().addDecoration(overlay, this::refresh);
-            canvas.getOverlay().setHandlesHidden(true);
+            canvas.getOverlay().setSelectionHidden(true);
             canvas.getOverlay().setHover(null);
+            canvas.getOverlay().setModeHint(target instanceof PathTarget.Motion ? "Motion path" : "Path editing",
+                    "Click a segment to add a point \u00b7 Alt-click: corner / smooth \u00b7 Esc: done");
         }
     }
 
@@ -140,7 +142,8 @@ public final class PathEditTool implements Tool {
         }
         reset();
         canvas.getOverlay().removeDecoration(overlay);
-        canvas.getOverlay().setHandlesHidden(false);
+        canvas.getOverlay().setSelectionHidden(false);
+        canvas.getOverlay().setModeHint(null, null);
     }
 
     private void leave() {
@@ -214,6 +217,8 @@ public final class PathEditTool implements Tool {
 
     @Override
     public void pressed(Pointer p) {
+        // playback ends what is in progress with finish(), and the tool stays the one in charge
+        activate();
         doc().endGesture();
         start = p;
         gestureKey = new Object();

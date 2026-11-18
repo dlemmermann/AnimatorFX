@@ -37,9 +37,8 @@ public final class MotionPathTool extends PathDrawTool {
     }
 
     @Override
-    public void activate() {
-        super.activate();
-        canvas.notice("Click to place the points of the motion path, drag to curve it. Enter finishes, Esc cancels.");
+    protected String modeName() {
+        return "Motion path";
     }
 
     @Override

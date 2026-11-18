@@ -22,6 +22,8 @@ import java.util.function.Supplier;
  * the lines that connect them. The pen tool also shows the segment that the next click would
  * add and a ring around the first vertex when a click there would close the path.
  *
+ * The outline has a dark halo, so that it also shows on a shape filled in the accent colour.
+ *
  * <p>A tool adds one to the canvas overlay with
  * {@link Overlay#addDecoration(Node, Runnable)} and calls {@link #show} from the update function.
  * The nodes are pooled; all styling is by style class ({@code path-outline}, {@code path-vertex},
@@ -36,6 +38,7 @@ public final class PathOverlay extends Group {
 
     private static final String SELECTED = "selected";
 
+    private final Path halo = new Path();
     private final Path outline = new Path();
     private final Path rubberBand = new Path();
     private final Group lines = new Group();
@@ -48,12 +51,13 @@ public final class PathOverlay extends Group {
     private final List<Circle> handlePool = new ArrayList<>();
 
     public PathOverlay() {
+        halo.getStyleClass().add("path-outline-halo");
         outline.getStyleClass().add("path-outline");
         rubberBand.getStyleClass().add("path-rubber-band");
         closeRing.getStyleClass().add("path-close-ring");
         insertPoint.getStyleClass().add("path-insert-point");
         setMouseTransparent(true);
-        getChildren().addAll(outline, rubberBand, lines, squares, handles, closeRing, insertPoint);
+        getChildren().addAll(halo, outline, rubberBand, lines, squares, handles, closeRing, insertPoint);
         clear();
     }
 
@@ -65,8 +69,10 @@ public final class PathOverlay extends Group {
      */
     public void show(PathData viewPath, Collection<VertexRef> selected, boolean withOutline) {
         outline.setVisible(withOutline);
+        halo.setVisible(withOutline);
         if (withOutline) {
             PathConverter.write(viewPath, outline.getElements());
+            PathConverter.write(viewPath, halo.getElements());
         }
         int squareCount = 0;
         int lineCount = 0;
@@ -124,6 +130,7 @@ public final class PathOverlay extends Group {
 
     public void clear() {
         outline.setVisible(false);
+        halo.setVisible(false);
         rubberBand.setVisible(false);
         closeRing.setVisible(false);
         insertPoint.setVisible(false);
