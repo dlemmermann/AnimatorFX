@@ -9,6 +9,8 @@ module com.dlsc.animatorfx.editor {
     requires org.kordamp.ikonli.material2;
 
     exports com.dlsc.animatorfx.editor;
+    exports com.dlsc.animatorfx.editor.canvas;
+    exports com.dlsc.animatorfx.editor.canvas.tools;
     exports com.dlsc.animatorfx.editor.doc;
     exports com.dlsc.animatorfx.editor.session;
     exports com.dlsc.animatorfx.editor.ui;

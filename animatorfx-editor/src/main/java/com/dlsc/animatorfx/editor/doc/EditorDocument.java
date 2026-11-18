@@ -78,6 +78,8 @@ public final class EditorDocument {
     /** The state at the last save or open; {@code null} when the content has never been saved as it is. */
     private State saved;
     private Object gestureKey;
+    /** The redo history as it was when the running gesture began; a new undo step clears the real one. */
+    private List<Step> redoBeforeGesture;
 
     private EditorDocument(String id, State state, Path path, boolean matchesFile) {
         this.id = Objects.requireNonNull(id, "id");
@@ -313,13 +315,78 @@ public final class EditorDocument {
     public void executeCoalesced(Object gestureKey, Command command) {
         Objects.requireNonNull(gestureKey, "gestureKey");
         boolean continues = gestureKey.equals(this.gestureKey) && !undoStack.isEmpty();
+        List<Step> redo = continues ? redoBeforeGesture : List.copyOf(redoStack);
         if (apply(command, continues)) {
             this.gestureKey = gestureKey;
+            redoBeforeGesture = redo;
         }
     }
 
+    /**
+     * Ends the running gesture. A gesture that left the document as it found it, such as a drag
+     * back to where it started, leaves no undo step and keeps the redo history.
+     */
     public void endGesture() {
+        if (gestureKey != null && !undoStack.isEmpty()) {
+            Step top = undoStack.peek();
+            if (top.before().assets() == top.after().assets()
+                    && top.before().animation().equals(top.after().animation())) {
+                dropGesture();
+            }
+        }
         gestureKey = null;
+        redoBeforeGesture = null;
+    }
+
+    /**
+     * Abandons the running gesture: the document returns to its state before the gesture, with
+     * no undo step and the redo history it had.
+     *
+     * @return whether there was a gesture to cancel
+     */
+    public boolean cancelGesture() {
+        boolean running = gestureKey != null && !undoStack.isEmpty();
+        if (running) {
+            dropGesture();
+        }
+        gestureKey = null;
+        redoBeforeGesture = null;
+        return running;
+    }
+
+    private void dropGesture() {
+        Step top = undoStack.pop();
+        redoStack.clear();
+        if (redoBeforeGesture != null) {
+            redoStack.addAll(redoBeforeGesture);
+        }
+        setState(top.before());
+    }
+
+    /**
+     * Applies the command together with the assets it needs, as one undo step. Assets whose id
+     * the document already has are not added again.
+     */
+    public void execute(Command command, Map<Asset, byte[]> newAssets) {
+        gestureKey = null;
+        Animation before = state.animation();
+        List<Asset> assets = new ArrayList<>(before.assets());
+        Map<String, byte[]> content = new HashMap<>(state.assets());
+        boolean added = false;
+        for (Map.Entry<Asset, byte[]> entry : newAssets.entrySet()) {
+            Asset asset = entry.getKey();
+            if (assets.stream().noneMatch(a -> a.id().equals(asset.id()))) {
+                assets.add(asset);
+                content.put(asset.id(), entry.getValue().clone());
+                added = true;
+            }
+        }
+        Animation withAssets = added ? before.withAssets(assets) : before;
+        Animation after = Objects.requireNonNull(command.apply(withAssets), "animation");
+        if (after == before) {
+            return;
+        }
+        push(command.name(), new State(after, added ? Map.copyOf(content) : assetsFor(after)), false);
     }
 
     public void undo() {

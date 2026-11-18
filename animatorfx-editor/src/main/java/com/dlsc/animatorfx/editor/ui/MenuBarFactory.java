@@ -1,5 +1,8 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.canvas.CanvasActions;
+import com.dlsc.animatorfx.editor.canvas.CanvasView;
+import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
@@ -11,6 +14,7 @@ import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
@@ -20,11 +24,16 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 /**
  * Builds the menu bar. Every item has an id ({@code menu-file-save}, {@code menu-edit-duplicate},
  * …) for {@link MainWindow#menuItem}. Items whose feature does not exist yet are present but
  * disabled and have no action.
+ *
+ * <p>With the system menu bar of macOS an accelerator fires before the focused control sees the
+ * key. The Edit items therefore look at the focus first: while a text input has it, Undo, Redo,
+ * Cut, Copy, Paste and Select All act on that text, and the other items do nothing.
  */
 final class MenuBarFactory {
 
@@ -59,7 +68,7 @@ final class MenuBarFactory {
                 later("menu-file-import-svg", "SVG…", null),
                 later("menu-file-import-lottie", "Lottie…", null),
                 later("menu-file-import-fxml", "FXML…", null),
-                later("menu-file-import-image", "Image…", null));
+                item("menu-file-import-image", "Image…", null, () -> window.getCanvasView().getActions().chooseImage()));
 
         // macOS has Quit in the application menu, where it ends the application the same way
         MenuItem quit = item("menu-file-quit", "Quit", shortcut(KeyCode.Q), Platform::exit);
@@ -113,9 +122,10 @@ final class MenuBarFactory {
     }
 
     private Menu editMenu() {
-        MenuItem undo = item("menu-edit-undo", "Undo", shortcut(KeyCode.Z), () -> workspace.getActiveDocument().undo());
-        MenuItem redo = item("menu-edit-redo", "Redo", shortcut(KeyCode.Z, KeyCombination.SHIFT_DOWN),
-                () -> workspace.getActiveDocument().redo());
+        MenuItem undo = textAware("menu-edit-undo", "Undo", shortcut(KeyCode.Z), TextInputControl::undo,
+                () -> workspace.getActiveDocument().undo());
+        MenuItem redo = textAware("menu-edit-redo", "Redo", shortcut(KeyCode.Z, KeyCombination.SHIFT_DOWN),
+                TextInputControl::redo, () -> workspace.getActiveDocument().redo());
         bindToDocument(doc -> {
             undo.textProperty().bind(named("Undo", doc.undoNameProperty()));
             undo.disableProperty().bind(doc.canUndoProperty().not());
@@ -130,23 +140,80 @@ final class MenuBarFactory {
             redo.setText("Redo");
         });
 
+        MenuItem cut = textAware("menu-edit-cut", "Cut", shortcut(KeyCode.X), TextInputControl::cut,
+                () -> actions().cut());
+        MenuItem copy = textAware("menu-edit-copy", "Copy", shortcut(KeyCode.C), TextInputControl::copy,
+                () -> actions().copy());
+        MenuItem paste = textAware("menu-edit-paste", "Paste", shortcut(KeyCode.V), TextInputControl::paste,
+                () -> actions().paste());
+        MenuItem selectAll = textAware("menu-edit-select-all", "Select All", shortcut(KeyCode.A),
+                TextInputControl::selectAll, () -> actions().selectAll());
+        MenuItem duplicate = onLayers("menu-edit-duplicate", "Duplicate", shortcut(KeyCode.D), CanvasActions::duplicate);
+        MenuItem delete = onLayers("menu-edit-delete", "Delete", null, CanvasActions::delete);
+        MenuItem group = onLayers("menu-edit-group", "Group", shortcut(KeyCode.G), CanvasActions::group);
+        MenuItem ungroup = onLayers("menu-edit-ungroup", "Ungroup", shortcut(KeyCode.G, KeyCombination.SHIFT_DOWN),
+                CanvasActions::ungroup);
+        MenuItem forward = onLayers("menu-edit-bring-forward", "Bring Forward", shortcut(KeyCode.CLOSE_BRACKET),
+                a -> a.reorder(Commands.Order.FORWARD));
+        MenuItem backward = onLayers("menu-edit-send-backward", "Send Backward", shortcut(KeyCode.OPEN_BRACKET),
+                a -> a.reorder(Commands.Order.BACKWARD));
+        MenuItem front = onLayers("menu-edit-bring-to-front", "Bring to Front",
+                shortcut(KeyCode.CLOSE_BRACKET, KeyCombination.SHIFT_DOWN), a -> a.reorder(Commands.Order.FRONT));
+        MenuItem back = onLayers("menu-edit-send-to-back", "Send to Back",
+                shortcut(KeyCode.OPEN_BRACKET, KeyCombination.SHIFT_DOWN), a -> a.reorder(Commands.Order.BACK));
+        // these need selected layers; cut and copy stay enabled because they also serve text inputs
+        List<MenuItem> needSelection = List.of(duplicate, delete, group, ungroup, forward, backward, front, back);
+        bindToDocument(doc -> needSelection.forEach(item ->
+                        item.disableProperty().bind(Bindings.isEmpty(doc.getSelection().layerIds()))),
+                () -> needSelection.forEach(MenuBarFactory::unbindDisabled));
+
         Menu menu = new Menu("Edit");
         menu.setId("menu-edit");
         menu.getItems().addAll(undo, redo, new SeparatorMenuItem(),
-                later("menu-edit-cut", "Cut", shortcut(KeyCode.X)),
-                later("menu-edit-copy", "Copy", shortcut(KeyCode.C)),
-                later("menu-edit-paste", "Paste", shortcut(KeyCode.V)),
-                later("menu-edit-duplicate", "Duplicate", shortcut(KeyCode.D)),
-                later("menu-edit-delete", "Delete", null),
+                cut, copy, paste, duplicate, delete,
                 new SeparatorMenuItem(),
-                later("menu-edit-select-all", "Select All", shortcut(KeyCode.A)),
+                selectAll,
                 new SeparatorMenuItem(),
-                later("menu-edit-group", "Group", shortcut(KeyCode.G)),
-                later("menu-edit-ungroup", "Ungroup", shortcut(KeyCode.G, KeyCombination.SHIFT_DOWN)));
+                group, ungroup,
+                new SeparatorMenuItem(),
+                forward, backward, front, back);
         return menu;
     }
 
+    private CanvasActions actions() {
+        return window.getCanvasView().getActions();
+    }
+
+    /** The text input that has the keyboard focus, or {@code null}. */
+    private TextInputControl focusedText() {
+        return window.getScene() != null && window.getScene().getFocusOwner() instanceof TextInputControl text
+                ? text : null;
+    }
+
+    /** An item that edits the focused text input when there is one, and the document otherwise. */
+    private MenuItem textAware(String id, String text, KeyCombination accelerator,
+                               Consumer<TextInputControl> onText, Runnable onDocument) {
+        return item(id, text, accelerator, () -> {
+            TextInputControl focused = focusedText();
+            if (focused != null) {
+                onText.accept(focused);
+            } else if (workspace.getActiveDocument() != null) {
+                onDocument.run();
+            }
+        });
+    }
+
+    /** An item for the selected layers; it does nothing while a text input has the focus. */
+    private MenuItem onLayers(String id, String text, KeyCombination accelerator, Consumer<CanvasActions> action) {
+        return item(id, text, accelerator, () -> {
+            if (focusedText() == null) {
+                action.accept(actions());
+            }
+        });
+    }
+
     private Menu viewMenu() {
+        CanvasView canvas = window.getCanvasView();
         Theme theme = window.getTheme();
         ToggleGroup group = new ToggleGroup();
         Menu themes = new Menu("Theme");
@@ -174,10 +241,10 @@ final class MenuBarFactory {
         Menu menu = new Menu("View");
         menu.setId("menu-view");
         menu.getItems().addAll(
-                later("menu-view-zoom-in", "Zoom In", shortcut(KeyCode.EQUALS)),
-                later("menu-view-zoom-out", "Zoom Out", shortcut(KeyCode.MINUS)),
-                later("menu-view-zoom-fit", "Zoom to Fit", shortcut(KeyCode.DIGIT0)),
-                later("menu-view-actual-size", "Actual Size", shortcut(KeyCode.DIGIT1)),
+                item("menu-view-zoom-in", "Zoom In", shortcut(KeyCode.EQUALS), canvas::zoomIn),
+                item("menu-view-zoom-out", "Zoom Out", shortcut(KeyCode.MINUS), canvas::zoomOut),
+                item("menu-view-zoom-fit", "Zoom to Fit", shortcut(KeyCode.DIGIT0), canvas::zoomToFit),
+                item("menu-view-actual-size", "Actual Size", shortcut(KeyCode.DIGIT1), canvas::zoomToActualSize),
                 new SeparatorMenuItem(), themes, new SeparatorMenuItem(), sidePanel, timeline);
         return menu;
     }

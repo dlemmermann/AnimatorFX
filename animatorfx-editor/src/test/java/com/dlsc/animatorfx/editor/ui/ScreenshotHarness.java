@@ -1,13 +1,28 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.canvas.CanvasView;
+import com.dlsc.animatorfx.editor.canvas.tools.SlotTool;
+import com.dlsc.animatorfx.editor.canvas.tools.TextTool;
+import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.session.RecoveryStore;
 import com.dlsc.animatorfx.editor.session.SessionStore;
+import com.dlsc.animatorfx.model.Animatable;
+import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.Layer;
-import com.dlsc.animatorfx.model.Layers;
+import com.dlsc.animatorfx.model.Paint;
+import com.dlsc.animatorfx.model.Rgba;
+import com.dlsc.animatorfx.model.ShapeLayer;
+import com.dlsc.animatorfx.model.Vec2;
+import javafx.event.ActionEvent;
+import javafx.event.Event;
+import javafx.event.EventType;
+import javafx.geometry.Point2D;
 import javafx.scene.SnapshotParameters;
-import javafx.scene.image.PixelFormat;
+import javafx.scene.control.TextField;
 import javafx.scene.image.WritableImage;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.transform.Transform;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
@@ -15,119 +30,195 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.testfx.api.FxToolkit;
 import org.testfx.util.WaitForAsyncUtils;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.zip.CRC32;
-import java.util.zip.DeflaterOutputStream;
+import java.util.List;
+import java.util.concurrent.Callable;
 
 /**
- * Not a test: renders the main window in both themes to PNG files, for looking at the result. It
- * is not picked up by a normal build. Run it in a real window (no Monocle flags) with
+ * Not a test: builds a small document with the canvas tools in a real window, as a user would
+ * with the mouse, and renders the main window in both themes to PNG files, for looking at the
+ * result. It is not picked up by a normal build. Run it without the Monocle flags:
  *
  * <pre>
  * mvn -pl animatorfx-editor test -Dtest=ScreenshotHarness -Dsurefire.failIfNoSpecifiedTests=false \
  *   -Dsurefire.jvm.args="--add-reads org.kordamp.ikonli.core=ALL-UNNAMED --enable-native-access=javafx.graphics
- *                        -Danimatorfx.screenshots=DIR [-Danimatorfx.screenshots.document=FILE.afx]"
+ *                        -Danimatorfx.screenshots=DIR [-Danimatorfx.screenshots.prefix=task-7]"
  * </pre>
  *
- * which writes {@code DIR/task-6-dark.png} and {@code DIR/task-6-light.png}.
+ * which writes {@code DIR/task-7-dark.png} and {@code DIR/task-7-light.png}.
  */
 class ScreenshotHarness {
 
     private static final String DIR_PROPERTY = "animatorfx.screenshots";
     private static final double SCALE = 2;
 
+    private MainWindow window;
+    private CanvasView canvas;
+    private EditorDocument doc;
+
     @Test
     @EnabledIfSystemProperty(named = DIR_PROPERTY, matches = ".+")
     void renderBothThemes() throws Exception {
         Path out = Path.of(System.getProperty(DIR_PROPERTY));
+        String prefix = System.getProperty(DIR_PROPERTY + ".prefix", "task-7");
         Files.createDirectories(out);
         Path config = Files.createTempDirectory(out, "config-");
-        String document = System.getProperty(DIR_PROPERTY + ".document");
 
         FxToolkit.registerPrimaryStage();
-        MainWindow window = WaitForAsyncUtils.asyncFx(() -> {
+        window = fx(() -> {
             MainWindow w = new MainWindow(new Stage(), new SessionStore(config),
                     new RecoveryStore(config.resolve("recovery")));
-            if (document != null) {
-                w.getFileActions().open(Path.of(document));
-            }
-            EditorDocument doc = w.getWorkspace().getActiveDocument();
-            doc.setPlayhead(1.14);
-            Layers.flatten(doc.getAnimation()).stream().map(Layer::id).skip(1).findFirst()
-                    .ifPresent(doc.getSelection().layerIds()::add);
+            w.getStage().setWidth(1280);
+            w.getStage().setHeight(820);
             w.show();
             return w;
-        }).get();
+        });
+        canvas = window.getCanvasView();
+        doc = window.getWorkspace().getActiveDocument();
         try {
+            settle();
+            buildScene();
             for (Theme.Mode mode : new Theme.Mode[]{Theme.Mode.DARK, Theme.Mode.LIGHT}) {
-                WaitForAsyncUtils.asyncFx(() -> window.getTheme().setMode(mode)).get();
+                fx(() -> {
+                    window.getTheme().setMode(mode);
+                    return null;
+                });
                 Thread.sleep(1200);
-                WaitForAsyncUtils.waitForFxEvents();
-                WritableImage image = WaitForAsyncUtils.asyncFx(() -> {
+                settle();
+                WritableImage image = fx(() -> {
                     SnapshotParameters parameters = new SnapshotParameters();
                     parameters.setTransform(Transform.scale(SCALE, SCALE));
                     return window.getScene().getRoot().snapshot(parameters, null);
-                }).get();
-                Path file = out.resolve("task-6-" + mode.name().toLowerCase() + ".png");
-                Files.write(file, png(image));
-                System.out.println("Wrote " + file + " layout " + WaitForAsyncUtils.asyncFx(window::getLayoutState).get());
+                });
+                Path file = out.resolve(prefix + "-" + mode.name().toLowerCase() + ".png");
+                Files.write(file, PngEncoder.encode(image));
+                System.out.println("Wrote " + file + " zoom " + canvas.getZoom());
             }
         } finally {
-            WaitForAsyncUtils.asyncFx(() -> {
+            fx(() -> {
                 window.shutdown();
                 window.getStage().hide();
                 return null;
-            }).get();
+            });
             try (var files = Files.walk(config)) {
                 files.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
             }
         }
     }
 
-    /** A minimal PNG encoder (8-bit RGBA), so the harness needs neither java.desktop nor javafx.swing. */
-    private static byte[] png(WritableImage image) throws IOException {
-        int width = (int) image.getWidth();
-        int height = (int) image.getHeight();
-        byte[] row = new byte[width * 4];
-        ByteArrayOutputStream raw = new ByteArrayOutputStream();
-        try (DeflaterOutputStream deflater = new DeflaterOutputStream(raw)) {
-            for (int y = 0; y < height; y++) {
-                image.getPixelReader().getPixels(0, y, width, 1, PixelFormat.getByteBgraInstance(), row, 0, width * 4);
-                for (int i = 0; i < row.length; i += 4) {
-                    byte blue = row[i];
-                    row[i] = row[i + 2];
-                    row[i + 2] = blue;
-                }
-                deflater.write(0);
-                deflater.write(row);
-            }
-        }
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        DataOutputStream data = new DataOutputStream(out);
-        data.write(new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'});
-        ByteArrayOutputStream header = new ByteArrayOutputStream();
-        DataOutputStream h = new DataOutputStream(header);
-        h.writeInt(width);
-        h.writeInt(height);
-        h.write(new byte[]{8, 6, 0, 0, 0});
-        chunk(data, "IHDR", header.toByteArray());
-        chunk(data, "IDAT", raw.toByteArray());
-        chunk(data, "IEND", new byte[0]);
-        return out.toByteArray();
+    /** A card with a badge, a title, decorations and a slot; the badge is selected and turned. */
+    private void buildScene() throws Exception {
+        drag(ToolKind.RECTANGLE, 80, 90, 720, 510);
+        recolor(0, "#1C232D");
+        fx(() -> {
+            doc.execute(Commands.setProperty(doc.getAnimation().layers().get(0).id(), "geometry.cornerRadius",
+                    Animatable.of(18.0)));
+            return null;
+        });
+        drag(ToolKind.ELLIPSE, 130, 190, 350, 410);
+        fx(() -> {
+            Layer badge = doc.getAnimation().layers().get(1);
+            doc.execute(Commands.setProperty(badge.id(), "fill", Animatable.of(new Paint.LinearGradient(
+                    new Vec2(0, 0), new Vec2(220, 220),
+                    List.of(new Paint.Stop(0, Rgba.parse("#4C9AFF")), new Paint.Stop(1, Rgba.parse("#A56BFF")))))));
+            return null;
+        });
+        drag(ToolKind.STAR, 190, 250, 290, 350);
+        recolor(2, "#FFFFFF");
+        drag(ToolKind.POLYGON, 600, 130, 660, 190);
+        recolor(3, "#FFB454");
+        drag(ToolKind.LINE, 400, 330, 660, 330);
+
+        click(ToolKind.TEXT, 400, 262);
+        settle();
+        fx(() -> {
+            TextField editor = (TextField) canvas.lookup("#" + TextTool.EDITOR_ID);
+            editor.setText("Payment complete");
+            Event.fireEvent(editor, new ActionEvent());
+            return null;
+        });
+
+        drag(ToolKind.SLOT, 400, 370, 580, 426);
+        settle();
+        fx(() -> {
+            TextField name = (TextField) canvas.lookup("#" + SlotTool.NAME_FIELD_ID);
+            name.setText("button");
+            Event.fireEvent(name, new ActionEvent());
+            return null;
+        });
+
+        // select the badge and turn it with the rotate handle, then hover the title
+        click(ToolKind.SELECT, 150, 300);
+        settle();
+        Vec2 handle = fx(() -> canvas.getGeometry().quad(doc.getSelection().layerIds().get(0)).orElseThrow()
+                .rotateHandle(22));
+        Vec2 centre = fx(() -> canvas.documentToView(new Vec2(240, 300)));
+        double angle = Math.toRadians(-90 + 15);
+        Vec2 target = new Vec2(centre.x() + 140 * Math.cos(angle), centre.y() + 140 * Math.sin(angle));
+        mouse(MouseEvent.MOUSE_PRESSED, handle);
+        mouse(MouseEvent.MOUSE_DRAGGED, target);
+        mouse(MouseEvent.MOUSE_RELEASED, target);
+        mouse(MouseEvent.MOUSE_MOVED, fx(() -> canvas.documentToView(new Vec2(470, 275))));
+        fx(() -> {
+            doc.setPlayhead(1.14);
+            return null;
+        });
+        settle();
     }
 
-    private static void chunk(DataOutputStream out, String type, byte[] content) throws IOException {
-        byte[] name = type.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
-        CRC32 crc = new CRC32();
-        crc.update(name);
-        crc.update(content);
-        out.writeInt(content.length);
-        out.write(name);
-        out.write(content);
-        out.writeInt((int) crc.getValue());
+    private void recolor(int index, String hex) throws Exception {
+        fx(() -> {
+            ShapeLayer shape = (ShapeLayer) doc.getAnimation().layers().get(index);
+            assert shape.geometry() instanceof Geometry;
+            doc.execute(Commands.setProperty(shape.id(), "fill", Animatable.of(new Paint.Solid(Rgba.parse(hex)))));
+            return null;
+        });
+    }
+
+    private void drag(ToolKind tool, double fromX, double fromY, double toX, double toY) throws Exception {
+        fx(() -> {
+            canvas.setActiveTool(tool);
+            return null;
+        });
+        Vec2 from = fx(() -> canvas.documentToView(new Vec2(fromX, fromY)));
+        Vec2 to = fx(() -> canvas.documentToView(new Vec2(toX, toY)));
+        mouse(MouseEvent.MOUSE_PRESSED, from);
+        for (int i = 1; i <= 4; i++) {
+            mouse(MouseEvent.MOUSE_DRAGGED, from.lerp(to, i / 4.0));
+        }
+        mouse(MouseEvent.MOUSE_RELEASED, to);
+        settle();
+    }
+
+    private void click(ToolKind tool, double x, double y) throws Exception {
+        fx(() -> {
+            canvas.setActiveTool(tool);
+            return null;
+        });
+        Vec2 at = fx(() -> canvas.documentToView(new Vec2(x, y)));
+        mouse(MouseEvent.MOUSE_PRESSED, at);
+        mouse(MouseEvent.MOUSE_RELEASED, at);
+    }
+
+    private void mouse(EventType<MouseEvent> type, Vec2 view) throws Exception {
+        fx(() -> {
+            Point2D scene = canvas.localToScene(view.x(), view.y());
+            boolean down = type == MouseEvent.MOUSE_PRESSED || type == MouseEvent.MOUSE_DRAGGED;
+            Event.fireEvent(canvas, new MouseEvent(type, scene.getX(), scene.getY(), scene.getX(), scene.getY(),
+                    type == MouseEvent.MOUSE_MOVED ? MouseButton.NONE : MouseButton.PRIMARY, 1,
+                    false, false, false, false, down, false, false, false, false, false, null));
+            return null;
+        });
+    }
+
+    private void settle() throws Exception {
+        WaitForAsyncUtils.waitForFxEvents();
+        Thread.sleep(150);
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    private static <T> T fx(Callable<T> action) throws Exception {
+        return WaitForAsyncUtils.asyncFx(action).get();
     }
 }

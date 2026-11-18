@@ -12,6 +12,8 @@ import com.dlsc.animatorfx.model.LayerProperties;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.Mask;
 import com.dlsc.animatorfx.model.PropertyRef;
+import com.dlsc.animatorfx.model.Transform;
+import com.dlsc.animatorfx.model.Vec2;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -22,8 +24,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
@@ -170,6 +174,186 @@ public final class Commands {
             Animation after = Objects.requireNonNull(fn.apply(before), "animation");
             return after.equals(before) ? before : after;
         });
+    }
+
+    /**
+     * Runs the commands one after the other as a single command.
+     */
+    public static Command all(String name, Command... commands) {
+        List<Command> copy = List.of(commands);
+        return command(name, before -> {
+            Animation after = before;
+            for (Command c : copy) {
+                after = c.apply(after);
+            }
+            return after;
+        });
+    }
+
+    /**
+     * Inserts the layers into the parent, the first one at the index and the others above it.
+     */
+    public static Command addLayers(String name, String parentIdOrNull, int index, List<Layer> layers) {
+        List<Layer> copy = List.copyOf(layers);
+        return command(name, before -> {
+            Animation after = before;
+            for (int i = 0; i < copy.size(); i++) {
+                after = Layers.insert(after, parentIdOrNull, index + i, copy.get(i));
+            }
+            return after;
+        });
+    }
+
+    /** How {@link #reorderLayers} moves layers among their siblings. */
+    public enum Order {
+        FORWARD("Bring Forward"), BACKWARD("Send Backward"), FRONT("Bring to Front"), BACK("Send to Back");
+
+        private final String label;
+
+        Order(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
+    }
+
+    /**
+     * Moves the layers within their own parent: one step up or down past the next layer that
+     * is not moved itself, or all the way to the top or bottom. Layers that move together keep
+     * their order.
+     */
+    public static Command reorderLayers(Collection<String> ids, Order order) {
+        Set<String> wanted = Set.copyOf(ids);
+        Objects.requireNonNull(order, "order");
+        return command(order.label(), before -> {
+            List<Layer> layers = reorder(before.layers(), wanted, order);
+            return layers == before.layers() ? before : before.withLayers(layers);
+        });
+    }
+
+    /**
+     * Wraps layers that share a parent into a new group with an identity transform, placed where
+     * the top-most of them was, so nothing moves on screen. Does nothing when the layers do not
+     * share a parent, or when the group would separate a layer from its mask.
+     */
+    public static Command groupLayers(Collection<String> ids, String groupId, String groupName) {
+        Set<String> wanted = Set.copyOf(ids);
+        Objects.requireNonNull(groupId, "groupId");
+        Objects.requireNonNull(groupName, "groupName");
+        return command("Group", before -> {
+            if (wanted.isEmpty()) {
+                return before;
+            }
+            String first = wanted.iterator().next();
+            if (Layers.find(before, first).isEmpty()) {
+                return before;
+            }
+            String parentId = Layers.parentOf(before, first).map(Layer::id).orElse(null);
+            List<Layer> siblings = childrenOf(before, parentId);
+            List<Layer> members = siblings.stream().filter(l -> wanted.contains(l.id())).toList();
+            if (members.size() != wanted.size()) {
+                return before;
+            }
+            for (Layer sibling : siblings) {
+                Mask mask = sibling.base().mask();
+                if (mask != null && wanted.contains(sibling.id()) != wanted.contains(mask.layerId())
+                        && siblings.stream().anyMatch(l -> l.id().equals(mask.layerId()))) {
+                    return before;
+                }
+            }
+            int top = indexOf(siblings, members.get(members.size() - 1).id());
+            GroupLayer group = new GroupLayer(LayerBase.create(groupName, before.duration()).withId(groupId), members);
+            Animation after = before;
+            for (Layer member : members) {
+                after = Layers.remove(after, member.id());
+            }
+            return Layers.insert(after, parentId, top - (members.size() - 1), group);
+        });
+    }
+
+    /**
+     * Why {@link #ungroupLayers} would leave one of the groups alone, as a sentence for the
+     * user; empty when every group can be dissolved. Ids that are not groups are ignored.
+     */
+    public static Optional<String> ungroupObstacle(Animation animation, Collection<String> groupIds) {
+        for (String id : groupIds) {
+            if (Layers.find(animation, id).orElse(null) instanceof GroupLayer group) {
+                String obstacle = obstacle(group);
+                if (obstacle != null) {
+                    return Optional.of("Cannot ungroup \u201c" + group.name() + "\u201d: " + obstacle + ".");
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Dissolves groups: the children take the place of their group. A static group transform
+     * and a static group opacity are folded into the children, and the children are limited to
+     * the group's in/out range, so the picture stays the same. Groups with an
+     * {@link #ungroupObstacle obstacle} are left alone. Masks that pointed to a dissolved group
+     * are cleared.
+     */
+    public static Command ungroupLayers(Collection<String> groupIds) {
+        List<String> copy = List.copyOf(groupIds);
+        return command("Ungroup", before -> {
+            Animation after = before;
+            Set<String> dissolved = new HashSet<>();
+            for (String id : copy) {
+                if (!(Layers.find(after, id).orElse(null) instanceof GroupLayer group) || obstacle(group) != null) {
+                    continue;
+                }
+                String parentId = Layers.parentOf(after, id).map(Layer::id).orElse(null);
+                int index = indexOf(childrenOf(after, parentId), id);
+                after = Layers.remove(after, id);
+                for (Layer child : group.children()) {
+                    after = Layers.insert(after, parentId, index++, baked(group, child));
+                }
+                dissolved.add(id);
+            }
+            if (dissolved.isEmpty()) {
+                return before;
+            }
+            return after.withLayers(mapLayers(after.layers(), layer -> {
+                Mask mask = layer.base().mask();
+                return mask != null && dissolved.contains(mask.layerId())
+                        ? layer.withBase(layer.base().withMask(null)) : layer;
+            }));
+        });
+    }
+
+    /**
+     * Deep copies with fresh layer and keyframe ids, for pasting. Masks point to the copy of
+     * their mask layer when that is among the copies, and are dropped otherwise.
+     */
+    public static List<Layer> freshCopies(List<Layer> layers) {
+        Map<String, String> newIds = new HashMap<>();
+        for (Layer layer : layers) {
+            for (Layer member : subtree(layer)) {
+                newIds.put(member.id(), UUID.randomUUID().toString());
+            }
+        }
+        Set<String> fresh = new HashSet<>(newIds.values());
+        List<Layer> copies = new ArrayList<>();
+        for (Layer layer : layers) {
+            copies.add(copy(layer, newIds));
+        }
+        return mapLayers(copies, layer -> {
+            Mask mask = layer.base().mask();
+            return mask != null && !fresh.contains(mask.layerId())
+                    ? layer.withBase(layer.base().withMask(null)) : layer;
+        });
+    }
+
+    /**
+     * A copy of the layer with its position, and every position keyframe, shifted.
+     */
+    public static Layer translated(Layer layer, Vec2 delta) {
+        Transform transform = layer.base().transform();
+        return layer.withBase(layer.base().withTransform(
+                transform.withPosition(mapValues(transform.position(), p -> p.plus(delta)))));
     }
 
     private static Command command(String name, UnaryOperator<Animation> fn) {
@@ -377,6 +561,127 @@ public final class Commands {
             out.add(result);
         }
         return changed ? List.copyOf(out) : layers;
+    }
+
+    private static List<Layer> childrenOf(Animation animation, String parentIdOrNull) {
+        return parentIdOrNull == null ? animation.layers()
+                : ((GroupLayer) Layers.find(animation, parentIdOrNull).orElseThrow()).children();
+    }
+
+    private static <T> Animatable<T> mapValues(Animatable<T> value, UnaryOperator<T> fn) {
+        if (!value.isAnimated()) {
+            return Animatable.of(fn.apply(value.at(0)));
+        }
+        List<Keyframe<T>> list = new ArrayList<>();
+        for (Keyframe<T> keyframe : value.keyframes()) {
+            list.add(new Keyframe<>(keyframe.id(), keyframe.time(), fn.apply(keyframe.value()), keyframe.easing()));
+        }
+        return Animatable.keyframed(list);
+    }
+
+    private static List<Layer> reorder(List<Layer> layers, Set<String> wanted, Order order) {
+        List<Layer> result = new ArrayList<>(layers.size());
+        boolean changed = false;
+        for (Layer layer : layers) {
+            Layer mapped = layer;
+            if (layer instanceof GroupLayer group) {
+                List<Layer> children = reorder(group.children(), wanted, order);
+                if (children != group.children()) {
+                    mapped = group.withChildren(children);
+                    changed = true;
+                }
+            }
+            result.add(mapped);
+        }
+        Predicate<Layer> moves = layer -> wanted.contains(layer.id());
+        List<Layer> ordered = new ArrayList<>(result);
+        switch (order) {
+            case FRONT -> {
+                ordered.removeIf(moves);
+                result.stream().filter(moves).forEach(ordered::add);
+            }
+            case BACK -> {
+                ordered.removeIf(moves);
+                ordered.addAll(0, result.stream().filter(moves).toList());
+            }
+            case FORWARD -> {
+                for (int i = ordered.size() - 2; i >= 0; i--) {
+                    if (moves.test(ordered.get(i)) && !moves.test(ordered.get(i + 1))) {
+                        ordered.set(i, ordered.set(i + 1, ordered.get(i)));
+                    }
+                }
+            }
+            case BACKWARD -> {
+                for (int i = 1; i < ordered.size(); i++) {
+                    if (moves.test(ordered.get(i)) && !moves.test(ordered.get(i - 1))) {
+                        ordered.set(i, ordered.set(i - 1, ordered.get(i)));
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < ordered.size() && !changed; i++) {
+            changed = ordered.get(i) != layers.get(i);
+        }
+        return changed ? List.copyOf(ordered) : layers;
+    }
+
+    /** What keeps a group from being dissolved, or {@code null}. */
+    private static String obstacle(GroupLayer group) {
+        LayerBase base = base(group);
+        if (base.mask() != null || !base.effects().isEmpty() || base.motionPath() != null) {
+            return "it has a mask, effects or a motion path";
+        }
+        if (base.opacity().isAnimated()) {
+            return "its opacity is animated";
+        }
+        if (isIdentity(base.transform())) {
+            return null;
+        }
+        if (isAnimated(base.transform())) {
+            return "its transform is animated";
+        }
+        for (Layer child : group.children()) {
+            if (isAnimated(child.base().transform()) || child.base().motionPath() != null) {
+                return "it is transformed and the layer \u201c" + child.name() + "\u201d is animated";
+            }
+        }
+        return null;
+    }
+
+    private static LayerBase base(Layer layer) {
+        return layer.base();
+    }
+
+    private static boolean isAnimated(Transform t) {
+        return t.anchor().isAnimated() || t.position().isAnimated() || t.scale().isAnimated()
+                || t.rotation().isAnimated() || t.skew().isAnimated();
+    }
+
+    private static boolean isIdentity(Transform t) {
+        return !isAnimated(t) && Matrices.isIdentity(t.matrixAt(0));
+    }
+
+    /** The child as it has to be outside its group to look the same; see {@link #obstacle}. */
+    private static Layer baked(GroupLayer group, Layer child) {
+        LayerBase base = child.base();
+        LayerBase groupBase = group.base();
+        if (!isIdentity(groupBase.transform())) {
+            Transform t = base.transform();
+            Matrices.Decomposed d = Matrices.decompose(
+                    Matrices.multiply(groupBase.transform().matrixAt(0), t.matrixAt(0)), t.anchor().at(0));
+            base = base.withTransform(new Transform(t.anchor(), Animatable.of(d.position()), Animatable.of(d.scale()),
+                    Animatable.of(d.rotation()), Animatable.of(d.skew())));
+        }
+        double groupOpacity = groupBase.opacity().at(0);
+        if (groupOpacity != 1) {
+            base = base.withOpacity(mapValues(base.opacity(), o -> o * groupOpacity));
+        }
+        double in = Math.max(base.inPoint(), groupBase.inPoint());
+        double out = Math.max(in, Math.min(base.outPoint(), groupBase.outPoint()));
+        if (in != base.inPoint() || out != base.outPoint()) {
+            base = base.withInPoint(in).withOutPoint(out);
+        }
+        return base == child.base() ? child : child.withBase(base);
     }
 
     /** "transform.position" gives "Position", "stroke.dashOffset" gives "Stroke Dash Offset". */

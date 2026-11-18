@@ -175,7 +175,7 @@ class MainWindowTest {
             EditorDocument document = window.getWorkspace().getActiveDocument();
             assertEquals("Untitled", document.getTitle());
             assertFalse(document.isDirty());
-            assertSame(document, window.getCanvasPane().getDocument());
+            assertSame(document, window.getCanvasView().getDocument());
             assertSame(document, window.getSidePanel().getDocument());
             assertSame(document, window.getTimelinePane().getDocument());
             assertEquals("800 × 600", text(window, "#status-size"));
@@ -184,7 +184,8 @@ class MainWindowTest {
             assertEquals("Saved", text(window, "#status-autosave"));
             assertEquals("00:00.000 / 00:03.000", text(window, "#timecode"));
             assertEquals("60 fps", text(window, "#fps"));
-            assertEquals("100%", text(window, "#zoom"));
+            // an untouched document is zoomed to fit the canvas, at most to 100 %
+            assertEquals(Formats.zoom(document.getViewState().getCanvasZoom()), text(window, "#zoom"));
         });
     }
 
@@ -477,11 +478,18 @@ class MainWindowTest {
         MainWindow window = start();
 
         run(() -> {
-            for (String id : List.of("menu-file-import-svg", "menu-file-import-lottie", "menu-file-import-fxml",
-                    "menu-file-import-image", "menu-edit-cut", "menu-edit-copy", "menu-edit-paste",
-                    "menu-edit-duplicate", "menu-edit-delete", "menu-edit-select-all", "menu-edit-group",
-                    "menu-edit-ungroup", "menu-view-zoom-in", "menu-view-zoom-out", "menu-view-zoom-fit",
+            for (String id : List.of("menu-file-import-svg", "menu-file-import-lottie", "menu-file-import-fxml")) {
+                assertTrue(window.menuItem(id).isDisable(), id);
+            }
+            // the canvas commands are live; those that need selected layers wait for a selection
+            for (String id : List.of("menu-file-import-image", "menu-edit-cut", "menu-edit-copy", "menu-edit-paste",
+                    "menu-edit-select-all", "menu-view-zoom-in", "menu-view-zoom-out", "menu-view-zoom-fit",
                     "menu-view-actual-size")) {
+                assertFalse(window.menuItem(id).isDisable(), id);
+            }
+            for (String id : List.of("menu-edit-duplicate", "menu-edit-delete", "menu-edit-group",
+                    "menu-edit-ungroup", "menu-edit-bring-forward", "menu-edit-send-backward",
+                    "menu-edit-bring-to-front", "menu-edit-send-to-back")) {
                 assertTrue(window.menuItem(id).isDisable(), id);
             }
             for (String id : List.of("menu-file-new", "menu-file-open", "menu-file-open-recent", "menu-file-save",

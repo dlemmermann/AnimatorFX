@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.session.RecoveryStore;
 import com.dlsc.animatorfx.editor.session.SessionState.Layout;
@@ -35,7 +36,7 @@ import java.util.List;
  * the status bar below it.
  *
  * <p>Canvas, side panel and timeline each sit in their own slot. Their current content
- * ({@link CanvasPane}, {@link SidePanel}, {@link TimelinePane}) follows the active document
+ * ({@link CanvasView}, {@link SidePanel}, {@link TimelinePane}) follows the active document
  * through a {@code documentProperty()}; {@link #setCanvasContent}, {@link #setSidePanelContent}
  * and {@link #setTimelineContent} swap in another node, which then follows
  * {@code getWorkspace().activeDocumentProperty()} itself.
@@ -53,10 +54,10 @@ public final class MainWindow {
     private final ToolBarView toolBar;
     private final ToolRail toolRail = new ToolRail();
     private final StatusBar statusBar = new StatusBar();
-    private final CanvasPane canvasPane = new CanvasPane();
+    private final CanvasView canvasView = new CanvasView();
     private final SidePanel sidePanel = new SidePanel();
     private final TimelinePane timelinePane = new TimelinePane();
-    private final StackPane canvasSlot = new StackPane(canvasPane);
+    private final StackPane canvasSlot = new StackPane(canvasView);
     private final StackPane sideSlot = new StackPane(sidePanel);
     private final StackPane timelineSlot = new StackPane(timelinePane);
     private final SplitPane upperSplit = new SplitPane(canvasSlot, sideSlot);
@@ -120,11 +121,12 @@ public final class MainWindow {
         theme.install(scene);
 
         for (var view : List.of(toolBar.documentProperty(), statusBar.documentProperty(),
-                canvasPane.documentProperty(), sidePanel.documentProperty(), timelinePane.documentProperty())) {
+                canvasView.documentProperty(), sidePanel.documentProperty(), timelinePane.documentProperty())) {
             view.bind(workspace.activeDocumentProperty());
         }
         workspace.activeDocumentProperty().addListener((obs, oldDoc, newDoc) -> bindTitle(newDoc));
         bindTitle(null);
+        installCanvas();
         installPanelToggles();
         installToolShortcuts();
         installFileDrop();
@@ -214,8 +216,11 @@ public final class MainWindow {
         return noticeBar;
     }
 
-    public CanvasPane getCanvasPane() {
-        return canvasPane;
+    /**
+     * The interactive canvas with its tools, overlay and playback.
+     */
+    public CanvasView getCanvasView() {
+        return canvasView;
     }
 
     public SidePanel getSidePanel() {
@@ -330,6 +335,15 @@ public final class MainWindow {
 
     private static double clamp(double position, double fallback) {
         return position > 0.05 && position < 0.95 ? position : fallback;
+    }
+
+    /** Connects the canvas to the tool rail, the transport of the toolbar and the notice bar. */
+    private void installCanvas() {
+        canvasView.activeToolProperty().bindBidirectional(toolRail.activeToolProperty());
+        canvasView.loopProperty().bind(toolBar.loopProperty());
+        toolBar.playingProperty().bind(canvasView.playingProperty());
+        toolBar.setOnPlayPause(canvasView::togglePlayback);
+        canvasView.setNotifier(noticeBar::show);
     }
 
     private void installPanelToggles() {

@@ -54,7 +54,7 @@ public final class Formats {
     }
 
     /** At most two decimals, none when the number is whole. */
-    static String number(double value) {
+    public static String number(double value) {
         return new DecimalFormat("0.##", DecimalFormatSymbols.getInstance(Locale.ROOT)).format(value);
     }
 }
