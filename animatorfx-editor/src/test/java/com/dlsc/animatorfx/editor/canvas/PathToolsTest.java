@@ -104,10 +104,10 @@ class PathToolsTest extends CanvasTestBase {
     void threePenClicksAndEnterCreateAPathLayerWithThreeVertices() {
         tool(ToolKind.PEN);
         assertEquals("Pen", fx(() -> canvas.getOverlay().getModeHint()));
-        click(100, 100);
+        click(200, 220);
         assertEquals(1, layers().size(), "the layer exists from the first click");
         click(200, 100);
-        click(200, 220);
+        click(100, 100);
         key(KeyCode.ENTER);
 
         assertEquals(1, layers().size());
@@ -115,7 +115,8 @@ class PathToolsTest extends CanvasTestBase {
         assertEquals("Path 1", shape.name());
         Contour contour = path(shape.id()).contours().get(0);
         assertFalse(contour.closed());
-        assertEquals(List.of(corner(0, 0), corner(100, 0), corner(100, 120)), contour.vertices());
+        // the coordinates of the finished path start at the top-left of its box, not at its first point
+        assertEquals(List.of(corner(100, 120), corner(100, 0), corner(0, 0)), contour.vertices());
         // the anchor is in the middle of the box and the points are where they were clicked
         assertVec(50, 60, shape.base().transform().anchor().at(0));
         assertVec(150, 160, shape.base().transform().position().at(0));
@@ -525,6 +526,27 @@ class PathToolsTest extends CanvasTestBase {
         layout();
         doubleClick(140, 130);
         editor();
+        assertEquals(4, editor().getOverlay().getVertexCount());
+    }
+
+    @Test
+    void theEditMenuConvertsToAPathAndStartsPathEditing() {
+        List<String> notices = new ArrayList<>();
+        add(rect("r", 100, 100, 80, 60));
+        assertTrue(fx(() -> window.menuItem("menu-edit-convert-to-path").isDisable()), "nothing is selected");
+        select("r");
+        run(() -> {
+            canvas.setNotifier(notices::add);
+            window.menuItem("menu-edit-edit-path").fire();
+        });
+        assertNull(fx(canvas::getModalTool));
+        assertEquals(1, notices.size(), "a rectangle has no points to edit yet");
+
+        run(() -> window.menuItem("menu-edit-convert-to-path").fire());
+        layout();
+        assertEquals(4, vertices("r").size());
+        run(() -> window.menuItem("menu-edit-edit-path").fire());
+        layout();
         assertEquals(4, editor().getOverlay().getVertexCount());
     }
 

@@ -169,7 +169,8 @@ final class MenuBarFactory {
         MenuItem back = onLayers("menu-edit-send-to-back", "Send to Back",
                 shortcut(KeyCode.OPEN_BRACKET, KeyCombination.SHIFT_DOWN), a -> a.reorder(Commands.Order.BACK));
         MenuItem editPath = onLayers("menu-edit-edit-path", "Edit Path", null, a -> {
-            List<String> ids = workspace.getActiveDocument().getSelection().layerIds();
+            List<String> ids = workspace.getActiveDocument() == null ? List.of()
+                    : workspace.getActiveDocument().getSelection().layerIds();
             if (ids.size() == 1 && !window.getCanvasView().editPath(ids.get(0))) {
                 window.getCanvasView().notice("Only a path layer can be edited point by point."
                         + " Convert the shape to a path first.");
