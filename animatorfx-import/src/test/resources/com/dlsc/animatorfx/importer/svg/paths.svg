@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+  <path id="everything" d="M10 10 L20 10 l0 10 H40 h10 V40 v10 C60 60 70 60 80 50 c5 -5 5 -10 0 -15 S70 20 60 30
+           s-10 10 -20 0 Q30 20 20 30 q-5 5 0 10 T20 60 t10 10 A10 10 0 0 1 50 70 a5 8 30 1 0 10 10 Z
+           m80 80 h10 v10 z" fill="none" stroke="black"/>
+  <path id="empty" d="" fill="red"/>
+  <path id="broken" d="M0 0 L10 10 nonsense" stroke="red"/>
+</svg>

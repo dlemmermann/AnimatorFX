@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">
+  <title>Basic shapes</title>
+  <desc>One of each</desc>
+  <rect id="box" x="10" y="20" width="30" height="40" rx="5" fill="red"/>
+  <rect id="uneven" x="50" y="20" width="30" height="40" rx="10" ry="4" fill="none" stroke="black"/>
+  <circle id="dot" cx="100" cy="50" r="20" fill="#00f" stroke="black" stroke-width="2"/>
+  <ellipse cx="150" cy="50" rx="30" ry="10" fill="rgb(0, 128, 0)"/>
+  <line x1="0" y1="90" x2="200" y2="95" stroke="rgba(100%, 0%, 0%, 0.5)" stroke-width="3" stroke-linecap="round"
+        stroke-dasharray="4 2 1" stroke-dashoffset="1.5"/>
+  <polyline points="0,0 10,10 20,0" fill="none" stroke="#123" stroke-linejoin="bevel" stroke-miterlimit="7"/>
+  <polygon aria-label="Triangle" points="100,0 110,10 90,10 5" fill="#11223380"/>
+</svg>

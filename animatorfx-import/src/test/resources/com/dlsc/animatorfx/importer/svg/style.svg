@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="green" color="#ff8000">
+  <g id="group" stroke="blue" stroke-width="4" fill-opacity="0.5" opacity="0.8" style="stroke-opacity: 0.25">
+    <rect id="inherits" width="10" height="10"/>
+    <rect id="overrides" width="10" height="10" fill="red" style="fill: yellow; stroke: none" fill-opacity="1"/>
+    <rect id="current" width="10" height="10" fill="currentColor" stroke="currentColor" color="#000080"/>
+    <rect id="hidden" width="10" height="10" display="none"/>
+    <g id="invisible" visibility="hidden">
+      <rect id="ghost" width="10" height="10"/>
+      <rect id="shown" width="10" height="10" visibility="visible"/>
+    </g>
+    <rect id="explicit" width="10" height="10" fill="inherit" stroke-width="inherit" opacity="inherit"/>
+  </g>
+  <rect id="defaults" width="10" height="10" fill-rule="evenodd"/>
+  <path id="evenodd" d="M0 0h10v10h-10z" style="fill-rule:evenodd"/>
+  <path id="evenodd2" d="M0 0h10v10h-10z" fill-rule="evenodd"/>
+</svg>

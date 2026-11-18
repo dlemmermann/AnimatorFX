@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100">
+  <image id="embedded" x="10" y="20" width="40" height="40" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAYAAAB/qH1jAAAAFUlEQVR4nGP438DwH4QZGv5DMLoAAE0pE/FEFpk+AAAAAElFTkSuQmCC"/>
+  <image id="stretched" x="50" y="0" width="40" height="40" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAYAAAB/qH1jAAAAFUlEQVR4nGP438DwH4QZGv5DMLoAAE0pE/FEFpk+AAAAAElFTkSuQmCC"/>
+  <image id="natural" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAYAAAB/qH1jAAAAFUlEQVR4nGP438DwH4QZGv5DMLoAAE0pE/FEFpk+AAAAAElFTkSuQmCC" transform="translate(5 80)" opacity="0.5"/>
+  <image id="external" width="10" height="10" href="photo.png"/>
+  <image id="gif" width="10" height="10" href="data:image/gif;base64,R0lGODlhAQABAAAAACw="/>
+</svg>

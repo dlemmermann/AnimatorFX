@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200">
+  <defs>
+    <rect id="tile" width="10" height="10"/>
+    <g id="pair">
+      <use xlink:href="#tile"/>
+      <use href="#tile" x="20" fill="red"/>
+    </g>
+    <symbol id="icon">
+      <circle cx="5" cy="5" r="5"/>
+    </symbol>
+    <use id="loop" href="#loop2"/>
+    <use id="loop2" href="#loop"/>
+  </defs>
+  <use id="first" xlink:href="#tile" x="30" y="40" fill="blue"/>
+  <use href="#pair" transform="scale(2)" x="5" y="5"/>
+  <use id="symbolic" href="#icon" x="100"/>
+  <use href="other.svg#thing"/>
+  <use href="#nothing"/>
+  <use href="#loop"/>
+</svg>

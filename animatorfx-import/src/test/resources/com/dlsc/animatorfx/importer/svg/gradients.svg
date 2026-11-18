@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300" height="200">
+  <defs>
+    <linearGradient id="base">
+      <stop offset="0" stop-color="white"/>
+      <stop offset="0.25" style="stop-color: #ff0000; stop-opacity: 0.5"/>
+      <stop offset="20%" stop-color="black"/>
+      <stop offset="1" stop-color="black" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="user" xlink:href="#base" gradientUnits="userSpaceOnUse" x1="20" y1="30" x2="120" y2="30"/>
+    <linearGradient id="vertical" href="#user" x1="0" y1="0" x2="0" y2="100" gradientTransform="translate(5 10)"/>
+    <linearGradient id="diagonal" xlink:href="#base" x1="0" y1="0" x2="1" y2="1"/>
+    <radialGradient id="glow" xlink:href="#base"/>
+    <radialGradient id="spot" href="#base" gradientUnits="userSpaceOnUse" cx="150" cy="100" r="40" fx="140" fy="100"
+                    gradientTransform="scale(2)" spreadMethod="reflect"/>
+    <radialGradient id="squashed" xlink:href="#base"/>
+    <linearGradient id="single">
+      <stop offset="0.5" stop-color="lime"/>
+    </linearGradient>
+    <linearGradient id="nothing"/>
+  </defs>
+  <rect id="boxed" x="10" y="20" width="100" height="50" fill="url(#base)"/>
+  <rect id="userSpace" x="10" y="20" width="100" height="50" fill="url(#user)" fill-opacity="0.5"/>
+  <rect id="inherited" x="10" y="20" width="100" height="50" stroke="url(#vertical)" fill="none"/>
+  <rect id="skewed" x="0" y="0" width="200" height="100" fill="url(#diagonal)"/>
+  <circle id="round" cx="50" cy="60" r="20" fill="url(#glow)"/>
+  <path id="spotted" d="M0 0 h300 v200 h-300 z" fill="url(#spot)"/>
+  <rect id="oval" x="0" y="0" width="200" height="100" fill="url(#squashed)"/>
+  <rect id="solid" width="10" height="10" fill="url(#single)"/>
+  <rect id="unpainted" width="10" height="10" fill="url(#nothing)"/>
+  <rect id="fallback" width="10" height="10" fill="url(#missing) blue"/>
+  <line id="flat" x1="0" y1="5" x2="10" y2="5" stroke="url(#base)"/>
+</svg>

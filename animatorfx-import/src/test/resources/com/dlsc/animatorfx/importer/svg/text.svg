@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200">
+  <text id="plain" x="10" y="40" font-family="'Helvetica Neue', Arial, sans-serif" font-size="20" fill="navy">Hello
+    <tspan font-weight="bold">big</tspan>   world</text>
+  <text id="styled" x="150 160" y="100" style="font-family: serif; font-size: 12pt; font-weight: 700; font-style: italic"
+        text-anchor="middle" stroke="red" stroke-width="0.5">Centred</text>
+  <g font-size="10" text-anchor="end">
+    <text id="right" transform="translate(200 50)">End</text>
+  </g>
+  <text id="blank" x="0" y="0">   </text>
+</svg>

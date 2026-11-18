@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" width="100" height="100"
+     preserveAspectRatio="xMinYMin slice" viewBox="0 0 50 50">
+  <sodipodi:namedview pagecolor="#ffffff"/>
+  <style>.a { fill: red }</style>
+  <defs>
+    <filter id="f1"><feGaussianBlur stdDeviation="1"/></filter>
+    <filter id="f2"><feOffset dx="1"/></filter>
+    <filter id="f3"/>
+    <pattern id="dots" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1"/></pattern>
+    <mask id="fade"><rect width="10" height="10" fill="white"/></mask>
+    <marker id="arrow"><path d="M0 0 L4 2 L0 4z"/></marker>
+  </defs>
+  <rect id="animated" class="a" width="10" height="10" fill="url(#dots)" mask="url(#fade)" filter="url(#f1)">
+    <animate attributeName="x" from="0" to="10" dur="1s"/>
+    <animateTransform attributeName="transform" type="rotate" from="0" to="90" dur="1s"/>
+    <set attributeName="fill" to="red"/>
+  </rect>
+  <circle r="5">
+    <animateMotion path="M0 0 L10 10" dur="1s"/>
+  </circle>
+  <use xlink:href="library.svg#star"/>
+  <foreignObject width="10" height="10"><div xmlns="http://www.w3.org/1999/xhtml">html</div></foreignObject>
+  <text x="0" y="10">On <textPath href="#p">a path</textPath></text>
+  <blink>old</blink>
+  <blink>older</blink>
+  <hatch/>
+  <rect width="10" height="10" transform="rotate(oops)"/>
+  <switch id="choice">
+    <rect id="chosen" width="5" height="5"/>
+    <rect id="rejected" width="6" height="6"/>
+  </switch>
+</svg>
