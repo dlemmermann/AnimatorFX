@@ -58,6 +58,7 @@ animations it creates inside JavaFX applications.
 - Auto-key, undo/redo, copy/paste of layers and keyframes, groups.
 - Import of SVG, Lottie JSON and FXML.
 - Dark and light theme, or follow the system.
+- Dialogs that show inside the window (GemsFX `DialogPane`) instead of opening windows of their own.
 - Session restore and crash recovery.
 
 ## Modules
@@ -67,7 +68,7 @@ animations it creates inside JavaFX applications.
 | `animatorfx-model` | `com.dlsc.animatorfx.model` | Immutable document model, interpolation, easing, `.afx` reader and writer | `java.base` |
 | `animatorfx-player` | `com.dlsc.animatorfx.player` | Evaluator, renderer, `AnimationPlayer`, `AnimationView`, slot binding | model, `javafx.controls` |
 | `animatorfx-import` | `com.dlsc.animatorfx.importer` | SVG, Lottie and FXML importers | model, `javafx.fxml` |
-| `animatorfx-editor` | `com.dlsc.animatorfx.editor` | The authoring tool | model, player, import, AtlantaFX, Ikonli |
+| `animatorfx-editor` | `com.dlsc.animatorfx.editor` | The authoring tool | model, player, import, AtlantaFX, Ikonli, GemsFX |
 | `animatorfx-sample-app` | `com.dlsc.animatorfx.sample` | Sample application (in `samples/`) | player |
 
 Group id `com.dlsc.animatorfx`, version `1.0-SNAPSHOT`.
@@ -79,7 +80,7 @@ Group id `com.dlsc.animatorfx`, version `1.0-SNAPSHOT`.
 | | Java | JavaFX | Other dependencies |
 |---|---|---|---|
 | Runtime (`model`, `player`) | 21 or later | 21 or later | none |
-| Editor and importers | JDK 26 | 25 | AtlantaFX 3.0.0, Ikonli 12.4.0 |
+| Editor and importers | JDK 26 | 25 | AtlantaFX 3.0.0, Ikonli 12.4.0, GemsFX 4.16.0 (editor only) |
 
 Building the whole project needs **JDK 26** and Maven 3.9. The runtime modules are compiled with
 `--release 21` against JavaFX 21.0.13.
@@ -152,8 +153,9 @@ mvn -pl samples/animatorfx-sample-app test -Dtest=SampleFilesTest -Danimatorfx.s
 it runs on in `animatorfx-editor/target/dist` (`AnimatorFX.app` on macOS). Add `-DskipTests` if
 the tests have already run. The profile
 
-1. copies the editor and its runtime dependencies, all of them explicit JPMS modules, to
-   `target/package/modules`,
+1. copies the editor and its runtime dependencies, all of them explicit JPMS modules (GemsFX and
+   what its module descriptor requires included: ValidatorFX, PickerFX, JSVG, three Ikonli packs
+   and `javafx.swing`, which brings `java.desktop` into the runtime), to `target/package/modules`,
 2. links a trimmed Java runtime that contains them with `jlink` (`target/package/runtime`),
 3. wraps that runtime with `jpackage --type app-image` (name AnimatorFX, version 1.0.0, bundle
    identifier `com.dlsc.animatorfx.editor`, and on macOS the icon `src/package/macos/AnimatorFX.icns`).
@@ -168,8 +170,8 @@ animatorfx-editor/target/dist/AnimatorFX.app/Contents/MacOS/AnimatorFX "$PWD/sam
 The image is not signed or notarized, there is no installer, and `.afx` files are not associated
 with the application. Only the macOS (Apple Silicon) image has been built and started; on Windows
 and Linux the profile uses the default icon and has not been tried. The icon is drawn by
-`animatorfx-editor/src/package/IconGenerator.java`; `make-icons.sh` next to it rebuilds the PNG and
-the `.icns`.
+`animatorfx-editor/src/package/IconGenerator.java`; `make-icons.sh` next to it rebuilds the PNG,
+the `.icns` and the small copy that the About dialog shows.
 
 ## Embedding animations
 
@@ -294,6 +296,19 @@ The editor writes this code for a document: *Document* tab ▸ *Copy Java Snippe
   the playhead on the right.
 - **Status bar**: document size, layer count, selection, autosave state.
 
+### Dialogs
+
+![The question of closing a document with unsaved changes, inside the window](docs/images/editor-dialog.png)
+
+The questions and messages of the editor — closing a document with unsaved changes, *Revert*,
+*About*, the warnings of an import — show inside the main window, in a GemsFX `DialogPane` above
+the content, in the colours of the theme. No second window opens. While a dialog is showing the
+window behind it is dimmed and takes neither clicks nor keys, shortcuts and menu items included;
+Tab stays within the dialog, Enter presses its default button, Escape cancels it, and the focus
+returns to where it was afterwards. One dialog shows at a time: a request made meanwhile, such
+as a second *Close*, is ignored. Only *Open*, *Save As* and the import choosers are the file
+dialogs of the operating system.
+
 ### Tools and shortcuts
 
 | Tool | Key | Notes |
@@ -372,7 +387,8 @@ All in the inspector:
 
 *File ▸ Import* reads SVG, Lottie JSON and FXML into a new document, an SVG also into the current
 one, and images onto the canvas. Files can be dropped onto the window as well. Anything an
-importer skipped is listed behind the *Show warnings* action of the notice. See
+importer skipped is listed behind the *Show warnings* action of the notice, which stays until it
+is dismissed, so the list can be opened again and copied. See
 [Importers](#importers).
 
 ### Themes
@@ -579,7 +595,8 @@ mvn -pl animatorfx-editor test -Dtest=MainWindowTest   # one test class
   (`javafx.headless.jvm.args`).
 - The build needs JDK 26 as `JAVA_HOME`, also for the Java 21 modules (they are compiled with
   `--release 21`). `model` and `player` are checked by Maven Enforcer to have no third-party
-  runtime dependencies, the sample application to have no tooling dependencies.
+  runtime dependencies, the sample application to have no tooling dependencies (editor, importer,
+  AtlantaFX, Ikonli, GemsFX).
 - The model is immutable records; every editor change is a command from one document to the next,
   which is what makes undo, autosave and tests simple.
 - Editor tests never touch the real session directory; they pass a temporary one.
