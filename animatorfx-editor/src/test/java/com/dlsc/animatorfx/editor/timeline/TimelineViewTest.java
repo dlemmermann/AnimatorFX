@@ -569,6 +569,24 @@ class TimelineViewTest extends EditorUiTest {
         assertEquals(1.5, doc.getViewState().getTimelineZoom(), 1e-9);
     }
 
+    @Test
+    void theViewFollowsThePlayheadWhenItLeavesTheVisiblePart() {
+        fire("#" + LayerTreeColumn.ZOOM_IN_ID);
+        fire("#" + LayerTreeColumn.ZOOM_IN_ID);
+        run(() -> doc.getViewState().setTimelineScroll(0));
+        layout();
+        double width = fx(() -> tracks.getWidth());
+        assertTrue(x(2.5) > width, "2.5 s is out of view");
+        playhead(2.5);
+        assertTrue(x(2.5) >= 0 && x(2.5) <= width, "the view moved to the playhead");
+        playhead(0.1);
+        assertTrue(x(0.1) >= 0 && x(0.1) <= width);
+        // a playhead that stays in view does not move the view
+        double scroll = doc.getViewState().getTimelineScroll();
+        playhead(0.2);
+        assertEquals(scroll, doc.getViewState().getTimelineScroll(), 1e-9);
+    }
+
     private void scroll(Node node, double x, double y, double dx, double dy, Keys keys) {
         run(() -> {
             var scene = node.localToScene(x, y);

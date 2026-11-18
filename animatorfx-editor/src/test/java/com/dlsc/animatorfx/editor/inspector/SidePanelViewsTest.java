@@ -170,6 +170,8 @@ class SidePanelViewsTest extends EditorUiTest {
         assertEquals("60 fps", fx(frameRate::getText));
         type(frameRate, "30");
         assertEquals(30, doc.getAnimation().frameRate(), 1e-9);
+        type(frameRate, "24fps");
+        assertEquals(24, doc.getAnimation().frameRate(), 1e-9);
 
         ColorField background = lookup("#" + DocumentView.BACKGROUND_ID);
         assertEquals("#00000000", fx(() -> background.getHexField().getText()), "transparent");

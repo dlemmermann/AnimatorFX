@@ -110,6 +110,9 @@ public final class PropertyRows {
             field.setOnAdjustEnd(() -> context().endGesture());
             build(label, field);
             field.installScrubbing(row().getLabel());
+            if (linkable) {
+                row().setAccessory(field.getLinkToggle());
+            }
         }
 
         public Vec2Field field() {
@@ -137,6 +140,8 @@ public final class PropertyRows {
             field.setOnChange(this::write);
             field.setOnAdjustEnd(() -> context().endGesture());
             build(label, field);
+            // the gradient editor runs under the label and diamond columns, with rows of its own
+            field.setOutdent(FieldRow.LABEL_WIDTH, FieldRow.SPACING, FieldRow.DIAMOND_WIDTH + FieldRow.SPACING);
         }
 
         public PaintField field() {

@@ -268,12 +268,14 @@ public final class TrackPane extends Region {
         for (Keyframe<?> keyframe : keyframes) {
             double x = Math.round(scale.toX(keyframe.time())) + 0.5;
             boolean isSelected = selected.contains(new KeyframeRef(row.layerId(), row.key(), keyframe.id()));
+            // selected keyframes are a little larger
+            double grow = isSelected ? 1 : 0;
             if (keyframe.easing() instanceof Easing.Hold) {
                 g.beginPath();
-                g.rect(x - 3.5, cy - 3.5, 7, 7);
+                g.rect(x - 3.5 - grow, cy - 3.5 - grow, 7 + 2 * grow, 7 + 2 * grow);
                 g.closePath();
             } else {
-                diamond(g, x, cy, KEY_SIZE);
+                diamond(g, x, cy, KEY_SIZE + grow);
             }
             if (isSelected) {
                 g.setFill(palette.get(Tone.ON_ACCENT));

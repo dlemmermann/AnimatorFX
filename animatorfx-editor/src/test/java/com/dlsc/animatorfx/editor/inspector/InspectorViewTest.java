@@ -375,6 +375,20 @@ class InspectorViewTest extends EditorUiTest {
         assertFalse(value("b", OPACITY).isAnimated());
     }
 
+    @Test
+    void deleteInTheSidePanelNeverDeletesTheLayer() {
+        ComboBox<String> type = inspector.section(FillSection.class).orElseThrow().fill().field().getTypeBox();
+        run(type::requestFocus);
+        assertSame(type, focusOwner());
+        key(KeyCode.DELETE);
+        key(KeyCode.BACK_SPACE);
+        assertEquals(2, layerIds().size());
+        // with the focus on the canvas it does
+        run(() -> canvas.requestFocus());
+        key(KeyCode.DELETE);
+        assertEquals(List.of("b"), layerIds());
+    }
+
     // ------------------------------------------------------------------ layer section
 
     @Test

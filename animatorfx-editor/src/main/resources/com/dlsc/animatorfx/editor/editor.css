@@ -611,12 +611,15 @@
     -fx-spacing: 6;
 }
 
-.field-label {
-    -fx-text-fill: -afx-muted;
-    -fx-font-size: 11px;
+.field-label-box {
     -fx-min-width: 62;
     -fx-pref-width: 62;
     -fx-max-width: 62;
+}
+
+.field-label {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 11px;
     -fx-min-height: 22;
     -fx-alignment: center-left;
 }
@@ -635,11 +638,20 @@
 .vec2-field,
 .color-field,
 .paint-head,
-.paint-row,
 .easing-choice,
 .marker-row {
     -fx-spacing: 4;
     -fx-alignment: center-left;
+}
+
+.paint-row {
+    -fx-spacing: 4;
+    -fx-alignment: center-left;
+}
+
+.paint-row > .vec2-field,
+.paint-row > .color-field {
+    -fx-spacing: 4;
 }
 
 .number-field,
@@ -846,10 +858,6 @@
 .gradient-editor,
 .easing-editor {
     -fx-spacing: 4;
-}
-
-.gradient-editor {
-    -fx-padding: 2 0 0 0;
 }
 
 .sub-label {

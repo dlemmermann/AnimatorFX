@@ -46,7 +46,7 @@ public final class EasingEditor extends VBox {
     public static final String HOLD_ID = "easing-hold";
     public static final String HINT_ID = "easing-hint";
 
-    private static final double VIEW_HEIGHT = 168;
+    private static final double VIEW_HEIGHT = 152;
     private static final double PADDING = 12;
     private static final int SAMPLES = 64;
 

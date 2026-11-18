@@ -118,8 +118,9 @@ public final class NumberField extends TextField {
 
     private Double parse() {
         String text = getText() == null ? "" : getText().strip();
-        if (!units.suffix().isEmpty() && text.endsWith(units.suffix())) {
-            text = text.substring(0, text.length() - units.suffix().length()).strip();
+        String suffix = units.suffix().strip();
+        if (!suffix.isEmpty() && text.endsWith(suffix)) {
+            text = text.substring(0, text.length() - suffix.length()).strip();
         }
         try {
             double number = Double.parseDouble(text.replace(',', '.'));

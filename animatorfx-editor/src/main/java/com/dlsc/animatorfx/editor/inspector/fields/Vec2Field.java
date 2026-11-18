@@ -13,8 +13,8 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.material2.Material2AL;
 
 /**
- * Two {@link NumberField}s for a vector: X and Y, or width and height. With the link toggle
- * (offered for scale) a change of one component changes the other in proportion.
+ * Two {@link NumberField}s for a vector: X and Y, or width and height. While the link toggle
+ * (used for scale) is selected, a change of one component changes the other in proportion.
  *
  * <p>A change is reported as an operator on the vector rather than as a vector, because with
  * several layers selected an edit of X must keep every layer's own Y.
@@ -28,7 +28,8 @@ public final class Vec2Field extends HBox {
     };
 
     /**
-     * @param linkable whether to offer the link-proportions toggle
+     * @param linkable whether the components change in proportion; the owner then places
+     *                 {@link #getLinkToggle()} somewhere, so that the user can switch it off
      */
     public Vec2Field(PropertyUnits units, String firstName, String secondName, boolean linkable) {
         getStyleClass().add("vec2-field");
@@ -53,10 +54,7 @@ public final class Vec2Field extends HBox {
         link.setFocusTraversable(false);
         link.setTooltip(new Tooltip("Keep the proportions"));
         getChildren().addAll(first, second);
-        if (linkable) {
-            link.setSelected(true);
-            getChildren().add(link);
-        }
+        link.setSelected(linkable);
     }
 
     /** The other component after this one went from {@code before} to {@code after}. */

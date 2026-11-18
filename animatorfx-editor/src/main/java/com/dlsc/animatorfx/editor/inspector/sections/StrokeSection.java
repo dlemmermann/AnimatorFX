@@ -16,6 +16,7 @@ import com.dlsc.animatorfx.model.Stroke;
 import com.dlsc.animatorfx.model.TextLayer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -24,6 +25,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.util.StringConverter;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.material2.Material2AL;
 
@@ -62,6 +64,8 @@ public final class StrokeSection extends SectionBase {
         cap.getItems().addAll(Stroke.Cap.values());
         join.setId(JOIN_ID);
         join.getItems().addAll(Stroke.Join.values());
+        cap.setConverter(names());
+        join.setConverter(names());
         for (ComboBox<?> box : List.of(cap, join)) {
             box.getStyleClass().add("compact-combo");
             box.setPromptText("Mixed");
@@ -114,6 +118,21 @@ public final class StrokeSection extends SectionBase {
         remove.setTooltip(new Tooltip("Remove the stroke"));
         remove.setOnAction(e -> setStroke("Remove Stroke", false));
         actions().getChildren().add(remove);
+    }
+
+    /** Shows enum constants as words: "Round" for {@code ROUND}. */
+    private static <E extends Enum<E>> StringConverter<E> names() {
+        return new StringConverter<>() {
+            @Override
+            public String toString(E value) {
+                return value == null ? "" : value.name().charAt(0) + value.name().substring(1).toLowerCase(Locale.ROOT);
+            }
+
+            @Override
+            public E fromString(String text) {
+                return null;
+            }
+        };
     }
 
     public PropertyRows.PaintRow paint() {

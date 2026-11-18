@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.BiConsumer;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.ComboBox;
@@ -45,6 +46,7 @@ public final class PaintField extends VBox {
     private final Vec2Field center = new Vec2Field(PropertyUnits.NONE, "Centre X", "Centre Y", false);
     private final NumberField radius = new NumberField(PropertyUnits.NONE);
     private final VBox gradientBox = new VBox();
+    private final HBox stopRow = row("Stop", stopColor);
     private final HBox startRow = row("Start", start);
     private final HBox endRow = row("End", end);
     private final HBox centerRow = row("Centre", center);
@@ -77,13 +79,13 @@ public final class PaintField extends VBox {
 
         stopOffset.setRange(0, 1);
         stopOffset.setDecimals(0);
-        stopOffset.setMaxWidth(58);
-        stopOffset.setMinWidth(58);
+        stopOffset.setMaxWidth(52);
+        stopOffset.setMinWidth(52);
         HBox.setHgrow(stopColor, Priority.ALWAYS);
-        HBox stopRow = row("Stop", stopColor);
         stopRow.getChildren().add(stopOffset);
         radius.setRange(0, Double.MAX_VALUE);
         gradientBox.getStyleClass().add("gradient-editor");
+        gradientBox.setPadding(new Insets(2, 0, 0, 0));
         gradientBox.getChildren().addAll(stopBar, stopRow, startRow, endRow, centerRow, radiusRow);
         getChildren().addAll(head, gradientBox);
 
@@ -131,6 +133,30 @@ public final class PaintField extends VBox {
         row.getStyleClass().add("paint-row");
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
+    }
+
+    /**
+     * Lets the gradient editor reach further left and right than the field itself, by the widths
+     * of the columns next to it in a row, so that its own labelled rows line up with the rows
+     * around it.
+     *
+     * @param labelWidth the width of the label column at the left
+     * @param gap        the gap between the columns
+     * @param right      the width at the right, gap included
+     */
+    public void setOutdent(double labelWidth, double gap, double right) {
+        double left = labelWidth + gap;
+        VBox.setMargin(gradientBox, new Insets(0, -right, 0, -left));
+        gradientBox.setPadding(new Insets(2, right, 0, 0));
+        VBox.setMargin(stopBar, new Insets(0, 0, 0, left));
+        for (HBox row : List.of(stopRow, startRow, endRow, centerRow, radiusRow)) {
+            row.setSpacing(gap);
+            Label label = (Label) row.getChildren().get(0);
+            label.getStyleClass().setAll("label", "field-label");
+            label.setMinWidth(labelWidth);
+            label.setPrefWidth(labelWidth);
+            label.setMaxWidth(labelWidth);
+        }
     }
 
     public Paint getValue() {

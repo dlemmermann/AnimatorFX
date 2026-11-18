@@ -80,8 +80,12 @@ public final class TimeRuler extends Region {
             g.setStroke(palette.get(major ? Tone.MUTED : Tone.LINE));
             g.strokeLine(x, height - (major ? 8 : 4), x, height - 1);
             if (major) {
-                g.setFill(palette.get(Tone.MUTED));
-                g.fillText(ticks.label(time, animation.frameRate()), x + 4, height / 2 - 2);
+                String label = ticks.label(time, animation.frameRate());
+                // a label that would be cut off at the right edge is left out
+                if (x + 4 + label.length() * g.getFont().getSize() * 0.62 <= width) {
+                    g.setFill(palette.get(Tone.MUTED));
+                    g.fillText(label, x + 4, height / 2 - 2);
+                }
             }
         }
         double end = scale.toX(animation.duration());

@@ -9,6 +9,8 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.scene.Node;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.StackPane;
 
 /**
@@ -34,6 +36,13 @@ public final class SidePanel extends StackPane {
         tabs.getTabs().addAll(tab(INSPECTOR, "Inspector", inspector), tab(ASSETS, "Assets", assets),
                 tab(DOCUMENT, "Document", documentView));
         getChildren().add(tabs);
+        // Delete and Backspace that a control of the panel did not use must not reach the canvas,
+        // where they would delete the selected layers
+        addEventHandler(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.DELETE || event.getCode() == KeyCode.BACK_SPACE) {
+                event.consume();
+            }
+        });
         inspector.documentProperty().bind(document);
         assets.documentProperty().bind(document);
         documentView.documentProperty().bind(document);

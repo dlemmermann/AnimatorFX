@@ -408,8 +408,25 @@ public final class TimelineView extends Region {
     }
 
     private void playheadMoved() {
+        followPlayhead();
         positionPlayhead();
         column.updateValues();
+    }
+
+    /** When the playhead leaves the visible part of a zoomed-in timeline, the view pages after it. */
+    private void followPlayhead() {
+        EditorDocument doc = getDocument();
+        if (doc == null || trackWidth <= 0) {
+            return;
+        }
+        TimeScale scale = getScale();
+        double x = scale.toX(getTime());
+        if (x < 0 || x > trackWidth) {
+            Animation animation = doc.getAnimation();
+            doc.getViewState().setTimelineScroll(TimeScale.of(doc.getViewState().getTimelineZoom(),
+                    getTime() - scale.toDuration(x < 0 ? trackWidth * 0.25 : 0), trackWidth, animation.duration(),
+                    animation.frameRate()).scroll());
+        }
     }
 
     // ------------------------------------------------------------------ layout
