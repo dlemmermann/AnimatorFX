@@ -7,6 +7,7 @@ import com.dlsc.animatorfx.editor.canvas.tools.PathEditTool;
 import com.dlsc.animatorfx.editor.canvas.tools.PenTool;
 import com.dlsc.animatorfx.editor.canvas.tools.Pointer;
 import com.dlsc.animatorfx.editor.doc.Commands;
+import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.ui.ToolKind;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Geometry;
@@ -279,6 +280,44 @@ class PathToolsTest extends CanvasTestBase {
     }
 
     // ------------------------------------------------------------------ path editing
+
+    @Test
+    void switchingTheDocumentWhileDrawingFinishesThePathInTheDocumentItWasDrawnIn() {
+        EditorDocument first = doc;
+        tool(ToolKind.PEN);
+        click(200, 220);
+        click(300, 100);
+
+        EditorDocument second = fx(() -> window.getFileActions().newDocument());
+        layout();
+
+        assertEquals(second, canvas.getDocument());
+        ShapeLayer path = (ShapeLayer) first.getAnimation().layers().get(0);
+        // finished as Enter would: the anchor is in the middle of the box, and the path is selected
+        assertVec(50, 60, path.base().transform().anchor().at(0));
+        assertVec(250, 160, path.base().transform().position().at(0));
+        assertEquals(List.of(path.id()), List.copyOf(first.getSelection().layerIds()));
+        assertEquals(List.of(), second.getAnimation().layers());
+        assertEquals(List.of(), List.copyOf(second.getSelection().layerIds()));
+        assertFalse(second.isCanUndo());
+    }
+
+    @Test
+    void switchingTheDocumentWhileDrawingAMotionPathLeavesTheOtherDocumentAlone() {
+        EditorDocument first = doc;
+        add(rect("a", 100, 100, 100, 100));
+        run(() -> canvas.drawMotionPath("a"));
+        click(200, 220);
+        click(300, 100);
+
+        EditorDocument second = fx(() -> window.getFileActions().newDocument());
+        layout();
+
+        assertEquals(2, first.getAnimation().layers().get(0).base().motionPath().path().contours().get(0).vertices().size());
+        assertEquals("Add Motion Path", first.getUndoName());
+        assertFalse(second.isCanUndo());
+        assertNull(fx(canvas::getModalTool));
+    }
 
     @Test
     void aDoubleClickOnAPathLayerEntersPathEditingAndEscapeLeavesIt() {

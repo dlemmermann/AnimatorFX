@@ -6,6 +6,7 @@ import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.ui.ToolKind;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.PathData.Vertex;
 import com.dlsc.animatorfx.model.ShapeLayer;
 
@@ -49,7 +50,7 @@ public final class PenTool extends PathDrawTool {
 
     @Override
     protected Command command(List<Vertex> vertices, boolean closed, boolean finished) {
-        Animation animation = canvas.getDocument().getAnimation();
+        Animation animation = doc().getAnimation();
         if (layerId == null) {
             layerId = UUID.randomUUID().toString();
             name = LayerNames.next(animation, "Path");
@@ -62,12 +63,12 @@ public final class PenTool extends PathDrawTool {
 
     @Override
     protected boolean exists() {
-        return canvas.getGeometry().layer(layerId).isPresent();
+        return Layers.find(doc().getAnimation(), layerId).isPresent();
     }
 
     @Override
     protected void finished(boolean replaced) {
-        canvas.getDocument().getSelection().layerIds().setAll(layerId);
+        doc().getSelection().layerIds().setAll(layerId);
         if (!replaced) {
             canvas.setActiveTool(ToolKind.SELECT);
         }

@@ -142,10 +142,13 @@ public final class InspectorView extends StackPane {
         boolean selection = context != null && !context.layers().isEmpty();
         empty.setVisible(!selection);
         scroll.setVisible(selection);
+        // a locked layer is unlocked before it is edited; the Layer section keeps its lock toggle usable
+        boolean locked = selection && context.layers().stream().anyMatch(layer -> layer.base().locked());
         for (InspectorSection section : sections) {
             boolean applies = selection && section.appliesTo(context);
             section.node().setVisible(applies);
             section.node().setManaged(applies);
+            section.node().setDisable(locked && !(section instanceof LayerSection));
             if (applies) {
                 section.update(context);
             }

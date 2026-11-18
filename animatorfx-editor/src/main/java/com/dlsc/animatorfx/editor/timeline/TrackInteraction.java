@@ -78,7 +78,8 @@ final class TrackInteraction {
         tracks.setOnMouseDragged(this::dragged);
         tracks.setOnMouseReleased(this::released);
         tracks.setOnMouseMoved(e -> tracks.setCursor(tracks.hitAt(e.getX(), e.getY()) instanceof Hit.Bar b
-                && b.part() != BarPart.BODY ? Cursor.H_RESIZE : Cursor.DEFAULT));
+                && b.part() != BarPart.BODY && !timeline.getKeyframeActions().isLocked(b.layerId())
+                ? Cursor.H_RESIZE : Cursor.DEFAULT));
         tracks.setOnContextMenuRequested(e -> {
             // on a keyframe: the menu is about the selected keyframes, this one included
             if (doc() != null && tracks.hitAt(e.getX(), e.getY()) instanceof Hit.Key key) {
@@ -140,8 +141,11 @@ final class TrackInteraction {
                     layers.setAll(barHit.layerId());
                 }
                 doc.getSelection().keyframes().clear();
-                bar = barHit;
-                mode = Mode.BAR;
+                // a locked layer can be selected here, but its range stays as it is
+                if (!timeline.getKeyframeActions().isLocked(barHit.layerId())) {
+                    bar = barHit;
+                    mode = Mode.BAR;
+                }
             }
             case Hit.Empty empty -> pressedEmpty(empty, event, add);
         }
@@ -163,9 +167,13 @@ final class TrackInteraction {
         } else {
             selectKeys(List.of(key.ref()), false);
         }
+        // the keyframes of locked layers can be selected, but they stay where they are
+        if (timeline.getKeyframeActions().isLocked(key.ref().layerId())) {
+            return;
+        }
         pressedKey = key.ref();
         grabTime = key.time();
-        movingKeys = List.copyOf(selection);
+        movingKeys = timeline.getKeyframeActions().editable(selection);
         earliest = Double.MAX_VALUE;
         latest = 0;
         for (KeyframeRef ref : movingKeys) {
@@ -180,6 +188,9 @@ final class TrackInteraction {
         EditorDocument doc = doc();
         TimelineRow row = empty.row() < 0 ? null : timeline.getRows().get(empty.row());
         if (event.getClickCount() == 2 && row instanceof PropertyRow property) {
+            if (timeline.getKeyframeActions().isLocked(property.layerId())) {
+                return;
+            }
             double time = timeline.snapTime(timeline.getScale().toTime(event.getX()), event.isAltDown());
             doc.execute(Commands.addKeyframe(property.layerId(), property.key(), time));
             Layers.find(doc.getAnimation(), property.layerId())

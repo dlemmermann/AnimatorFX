@@ -12,6 +12,7 @@ import com.dlsc.animatorfx.editor.timeline.TimelineRow.PropertyRow;
 import com.dlsc.animatorfx.editor.ui.EditorUiTest;
 import com.dlsc.animatorfx.editor.ui.Palette;
 import com.dlsc.animatorfx.model.Animatable;
+import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Keyframe;
@@ -412,6 +413,66 @@ class TimelineViewTest extends EditorUiTest {
         assertSame(column, focusOwner());
         key(KeyCode.DELETE);
         assertEquals(List.of("a", "c"), layerIds());
+    }
+
+    @Test
+    void deleteRemovesSelectedKeyframesAlsoWhileTheLayerColumnHasTheFocus() {
+        expand("a");
+        click(tracks, x(0.5), y("a", POSITION));
+        run(column::requestFocus);
+        assertSame(column, focusOwner());
+
+        key(KeyCode.DELETE);
+
+        assertEquals(1, keyframes("a", POSITION).size());
+        assertEquals("Delete Keyframe", doc.getUndoName());
+        assertEquals(3, layerIds().size());
+
+        // the Edit menu follows the same rule
+        click(tracks, x(1.5), y("a", POSITION));
+        run(column::requestFocus);
+        run(() -> window.menuItem("menu-edit-delete").fire());
+        assertFalse(layer("a").base().transform().position().isAnimated());
+        assertEquals(3, layerIds().size());
+    }
+
+    @Test
+    void aLockedLayerCannotBeTrimmedOrKeyedInTheTimeline() {
+        expand("a");
+        execute(Commands.updateLayer("Lock", "a", l -> l.withBase(l.base().withLocked(true))));
+        Animation locked = doc.getAnimation();
+        double row = y("a", POSITION);
+
+        // keyframes can still be selected, but neither moved nor deleted
+        drag(tracks, x(0.5), row, x(1.0), row);
+        assertEquals(Set.of(ref("a", POSITION, "p1")), selectedKeys());
+        key(KeyCode.DELETE);
+        run(() -> window.menuItem("menu-edit-cut").fire());
+        // no new keyframes by double-click or with the navigator
+        doubleClick(tracks, x(2.5), row);
+        playhead(2.0);
+        layout();
+        run(() -> ((ButtonBase) propertyCell("a", POSITION).lookup(".keyframe-toggle")).fire());
+        // the in/out bar stays as it is
+        double bar = y("a", null);
+        drag(tracks, x(0) + 1, bar, x(0.5), bar);
+        drag(tracks, x(1.0), bar, x(1.5), bar);
+        assertSame(locked, doc.getAnimation());
+
+        // a selection that includes an unlocked layer moves only that layer's keyframes
+        execute(Commands.setProperty("b", OPACITY, Animatable.keyframed(List.of(
+                new Keyframe<>("b1", 1.0, 0.5, Easing.LINEAR)))));
+        expand("a", "b");
+        click(tracks, x(0.5), y("a", POSITION));
+        click(tracks, x(1.0), y("b", OPACITY), Keys.SHIFT);
+        drag(tracks, x(1.0), y("b", OPACITY), x(2.0), y("b", OPACITY));
+        assertEquals(0.5, time("a", POSITION, "p1"), 1e-9);
+        assertEquals(2.0, time("b", OPACITY, "b1"), 1e-9);
+
+        // unlocked again, the layer is edited as before
+        execute(Commands.updateLayer("Unlock", "a", l -> l.withBase(l.base().withLocked(false))));
+        drag(tracks, x(0.5), y("a", POSITION), x(1.0), y("a", POSITION));
+        assertEquals(1.0, time("a", POSITION, "p1"), 1e-9);
     }
 
     @Test

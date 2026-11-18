@@ -29,8 +29,10 @@ import com.dlsc.animatorfx.editor.inspector.sections.TextSection;
 import com.dlsc.animatorfx.editor.inspector.sections.TransformSection;
 import com.dlsc.animatorfx.editor.ui.EditorUiTest;
 import com.dlsc.animatorfx.model.Animatable;
+import com.dlsc.animatorfx.model.Asset;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Geometry;
+import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.Keyframe;
 import com.dlsc.animatorfx.model.Paint;
 import com.dlsc.animatorfx.model.Rgba;
@@ -515,6 +517,32 @@ class InspectorViewTest extends EditorUiTest {
         assertFalse(fx(() -> ((ToggleButton) window.getScene().lookup("#" + LayerSection.LOCKED_ID)).isSelected()));
     }
 
+    @Test
+    void aLockedLayerCanOnlyBeUnlockedInTheInspector() {
+        fire(lookup("#" + LayerSection.LOCKED_ID));
+        layout();
+        assertTrue(layer("a").base().locked());
+
+        for (InspectorSection section : fx(inspector::getVisibleSections)) {
+            if (!(section instanceof LayerSection)) {
+                assertTrue(fx(() -> section.node().isDisabled()), section.getClass().getSimpleName());
+            }
+        }
+        assertTrue(fx(() -> lookup("#" + LayerSection.NAME_ID).isDisabled()));
+        assertTrue(fx(() -> lookup("#" + LayerSection.IN_ID).isDisabled()));
+        assertTrue(fx(() -> lookup("#" + LayerSection.OUT_ID).isDisabled()));
+        ToggleButton lock = lookup("#" + LayerSection.LOCKED_ID);
+        assertFalse(fx(lock::isDisabled));
+
+        fire(lock);
+        layout();
+        assertFalse(layer("a").base().locked());
+        for (InspectorSection section : fx(inspector::getVisibleSections)) {
+            assertFalse(fx(() -> section.node().isDisabled()), section.getClass().getSimpleName());
+        }
+        assertFalse(fx(() -> lookup("#" + LayerSection.IN_ID).isDisabled()));
+    }
+
     // ------------------------------------------------------------------ geometry
 
     @Test
@@ -904,5 +932,22 @@ class InspectorViewTest extends EditorUiTest {
         assertEquals("Easing", visibleSections().get(0));
         assertTrue(inspector.section(EasingSection.class).isPresent());
         assertTrue(inspector.section(ImageSection.class).isPresent());
+    }
+
+    @Test
+    void anImageCannotBeGivenASizeOfZero() {
+        Asset asset = new Asset("img", Asset.Kind.IMAGE, "assets/img.png", "img.png");
+        run(() -> doc.addAsset(asset, com.dlsc.animatorfx.editor.ui.PngEncoder.solid(40, 20, 0xFFFF0000)));
+        add(NewLayers.image(doc.getAnimation(), "img", new Vec2(100, 100), new Vec2(40, 20)).withBase(
+                NewLayers.image(doc.getAnimation(), "img", new Vec2(100, 100), new Vec2(40, 20)).base().withId("i")));
+        select("i");
+
+        type(lookup("#" + ImageSection.WIDTH_ID), "0");
+        type(lookup("#" + ImageSection.HEIGHT_ID), "-3");
+
+        ImageLayer image = (ImageLayer) layer("i");
+        assertEquals(1, image.width(), 1e-9);
+        assertEquals(1, image.height(), 1e-9);
+        assertEquals(1, fx(() -> canvas.getAnimationView().getLayerNode("i").getBoundsInLocal().getWidth()), 1e-9);
     }
 }

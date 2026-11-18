@@ -680,6 +680,9 @@ public final class LayerTreeColumn extends Region {
             next.setOnAction(e -> TimelineRows.nextKeyTime(row.property().value(), doc().getPlayhead())
                     .ifPresent(doc()::setPlayhead));
             toggle.setOnAction(e -> {
+                if (timeline.getKeyframeActions().isLocked(row.layerId())) {
+                    return;
+                }
                 double time = timeline.getTime();
                 Optional<Keyframe<?>> keyframe = TimelineRows.keyframeAt(row.property().value(), time);
                 if (keyframe.isPresent()) {

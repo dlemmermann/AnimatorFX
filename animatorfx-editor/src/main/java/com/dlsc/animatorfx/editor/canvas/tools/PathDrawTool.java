@@ -56,6 +56,8 @@ abstract class PathDrawTool implements Tool {
     private boolean dragging;
     private boolean written;
     private String parentId;
+    /** The document the path in progress belongs to; the canvas may show another one by the time it is finished. */
+    private EditorDocument document;
     private Object gestureKey;
     private Vec2 pressedAt;
     private Vec2 keptIn = Vec2.ZERO;
@@ -118,8 +120,9 @@ abstract class PathDrawTool implements Tool {
         return overlay;
     }
 
-    private EditorDocument doc() {
-        return canvas.getDocument();
+    /** The document of the path in progress, or that of the canvas when none is drawn. */
+    protected final EditorDocument doc() {
+        return document != null ? document : canvas.getDocument();
     }
 
     @Override
@@ -138,6 +141,7 @@ abstract class PathDrawTool implements Tool {
             end(false, true);
         }
         drawing = false;
+        document = null;
         hover = null;
         canvas.getOverlay().setGuides(List.of());
         if (attached) {
@@ -148,6 +152,7 @@ abstract class PathDrawTool implements Tool {
     }
 
     private void begin() {
+        document = canvas.getDocument();
         doc().endGesture();
         gestureKey = new Object();
         vertices.clear();
@@ -342,6 +347,7 @@ abstract class PathDrawTool implements Tool {
         canvas.getOverlay().setGuides(List.of());
         canvas.requestLayout();
         finished(replaced);
+        document = null;
     }
 
     private void drop(boolean replaced) {
@@ -354,6 +360,7 @@ abstract class PathDrawTool implements Tool {
         canvas.getOverlay().setGuides(List.of());
         canvas.requestLayout();
         dropped(replaced);
+        document = null;
     }
 
     // ------------------------------------------------------------------ drawing

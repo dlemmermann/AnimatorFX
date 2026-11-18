@@ -10,6 +10,7 @@ import javafx.stage.Window;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -38,8 +39,16 @@ public final class SystemDialogs implements Dialogs {
     public Optional<Path> chooseSaveFile(Window owner, String suggestedName) {
         FileChooser chooser = chooser("Save As");
         chooser.setInitialFileName(suggestedName.endsWith(EXTENSION) ? suggestedName : suggestedName + EXTENSION);
-        return remember(chooser.showSaveDialog(owner)).map(path -> path.getFileName().toString().contains(".")
-                ? path : path.resolveSibling(path.getFileName() + EXTENSION));
+        return remember(chooser.showSaveDialog(owner)).map(SystemDialogs::withExtension);
+    }
+
+    /**
+     * The file with {@code .afx} added to its name, unless the name ends with it already, in
+     * upper or lower case: a name with another dot in it is not a name with an extension.
+     */
+    static Path withExtension(Path path) {
+        String name = path.getFileName().toString();
+        return name.toLowerCase(Locale.ROOT).endsWith(EXTENSION) ? path : path.resolveSibling(name + EXTENSION);
     }
 
     @Override

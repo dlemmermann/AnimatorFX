@@ -24,6 +24,8 @@ public final class ImageSection extends SectionBase {
     public static final String HEIGHT_ID = "inspector-image-height";
 
     private final ComboBox<Asset> asset = new ComboBox<>();
+    private static final double MIN_SIZE = 1;
+
     private final NumberField width = new NumberField(PropertyUnits.NONE);
     private final NumberField height = new NumberField(PropertyUnits.NONE);
     private List<Asset> listedAssets;
@@ -57,7 +59,8 @@ public final class ImageSection extends SectionBase {
         width.setId(WIDTH_ID);
         height.setId(HEIGHT_ID);
         for (NumberField field : new NumberField[]{width, height}) {
-            field.setRange(0, Double.MAX_VALUE);
+            // an image without width or height shows nothing, which looks like a lost layer
+            field.setRange(MIN_SIZE, Double.MAX_VALUE);
             field.setMaxWidth(Double.MAX_VALUE);
             field.setMinWidth(0);
             HBox.setHgrow(field, Priority.ALWAYS);

@@ -157,7 +157,7 @@ final class MenuBarFactory {
                 TextInputControl::selectAll, () -> actions().selectAll());
         MenuItem duplicate = onLayers("menu-edit-duplicate", "Duplicate", shortcut(KeyCode.D), CanvasActions::duplicate);
         MenuItem delete = onLayers("menu-edit-delete", "Delete", null, a -> {
-            if (window.getTimelineView().hasTrackFocus()) {
+            if (window.getTimelineView().deletesHere()) {
                 window.getTimelineView().deleteSelection();
             } else {
                 a.delete();

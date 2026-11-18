@@ -11,6 +11,7 @@ import com.dlsc.animatorfx.model.PathData.Contour;
 import com.dlsc.animatorfx.model.PathData.Vertex;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Draws the motion path of a layer, a modal tool with the gestures of the pen (see
@@ -41,10 +42,14 @@ public final class MotionPathTool extends PathDrawTool {
         return "Motion path";
     }
 
+    private Optional<Layer> layer() {
+        return Layers.find(doc().getAnimation(), layerId);
+    }
+
     @Override
     protected String parentId() {
         added = false;
-        return Layers.parentOf(canvas.getDocument().getAnimation(), layerId).map(Layer::id).orElse(null);
+        return Layers.parentOf(doc().getAnimation(), layerId).map(Layer::id).orElse(null);
     }
 
     @Override
@@ -59,7 +64,7 @@ public final class MotionPathTool extends PathDrawTool {
             return added ? Commands.setMotionPath(layerId, null) : null;
         }
         PathData path = new PathData(List.of(new Contour(vertices, false)));
-        if (!added || canvas.getGeometry().layer(layerId).map(l -> l.base().motionPath()).isEmpty()) {
+        if (!added || layer().map(l -> l.base().motionPath()).isEmpty()) {
             added = true;
             return Commands.addMotionPath(layerId, path);
         }
@@ -71,13 +76,12 @@ public final class MotionPathTool extends PathDrawTool {
 
     @Override
     protected boolean exists() {
-        return canvas.getGeometry().layer(layerId).isPresent();
+        return layer().isPresent();
     }
 
     @Override
     protected void finished(boolean replaced) {
-        boolean keyed = canvas.getGeometry().layer(layerId)
-                .map(layer -> layer.base().transform().position().isAnimated()).orElse(false);
+        boolean keyed = layer().map(layer -> layer.base().transform().position().isAnimated()).orElse(false);
         if (keyed) {
             canvas.notice("The layer now follows its motion path; its position keyframes have no effect.");
         }

@@ -68,7 +68,7 @@ public final class LayerSection extends SectionBase {
         visible.setId(VISIBLE_ID);
         locked.setId(LOCKED_ID);
         visible.setTooltip(new Tooltip("Visible"));
-        locked.setTooltip(new Tooltip("Locked: cannot be selected on the canvas"));
+        locked.setTooltip(new Tooltip("Locked: cannot be selected on the canvas or edited"));
         for (ToggleButton button : new ToggleButton[]{visible, locked}) {
             button.getStyleClass().setAll("icon-button", "section-toggle");
             button.setFocusTraversable(false);
@@ -102,6 +102,10 @@ public final class LayerSection extends SectionBase {
         name.setValue(context.common(Layer.class, Layer::name));
         in.setValue(context.common(Layer.class, l -> l.base().inPoint()));
         out.setValue(context.common(Layer.class, l -> l.base().outPoint()));
+        boolean anyLocked = context.layers().stream().anyMatch(l -> l.base().locked());
+        name.setDisable(anyLocked);
+        in.setDisable(anyLocked);
+        out.setDisable(anyLocked);
         updating = true;
         try {
             // with a mixed selection the toggles show what a click would turn off

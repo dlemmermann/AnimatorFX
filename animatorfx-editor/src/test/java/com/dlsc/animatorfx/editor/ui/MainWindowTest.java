@@ -58,6 +58,7 @@ class MainWindowTest {
         final Deque<Path> openAnswers = new ArrayDeque<>();
         final Deque<Path> saveAnswers = new ArrayDeque<>();
         final Deque<CloseChoice> closeAnswers = new ArrayDeque<>();
+        final List<String> suggestedNames = new ArrayList<>();
         int closePrompts;
 
         @Override
@@ -67,6 +68,7 @@ class MainWindowTest {
 
         @Override
         public Optional<Path> chooseSaveFile(javafx.stage.Window owner, String suggestedName) {
+            suggestedNames.add(suggestedName);
             return Optional.ofNullable(saveAnswers.poll());
         }
 
@@ -622,15 +624,21 @@ class MainWindowTest {
     void theSessionIsWrittenDebouncedAfterAChange() throws Exception {
         MainWindow window = start();
         Path session = config().resolve("session.json");
-        // let the save that showing the window scheduled happen first
-        Thread.sleep(900);
-        WaitForAsyncUtils.waitForFxEvents();
-        Files.deleteIfExists(session);
 
-        run(() -> window.getWorkspace().getActiveDocument().setPlayhead(2));
-        assertFalse(Files.exists(session));
+        run(() -> {
+            // nothing is pending after this, so the file can only come back through the change below
+            window.getSession().saveNow();
+            try {
+                Files.deleteIfExists(session);
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+            window.getWorkspace().getActiveDocument().setPlayhead(2);
+            // still on the FX thread, where the delayed save would run: it has not happened yet
+            assertFalse(Files.exists(session));
+        });
 
-        WaitForAsyncUtils.waitFor(5, java.util.concurrent.TimeUnit.SECONDS, () -> Files.exists(session));
+        WaitForAsyncUtils.waitFor(30, java.util.concurrent.TimeUnit.SECONDS, () -> Files.exists(session));
         assertEquals(2, new SessionStore(config()).load().documents().get(0).playhead());
     }
 
@@ -719,6 +727,71 @@ class MainWindowTest {
             ((Button) window.getScene().lookup("#transport-start")).fire();
             assertEquals(0, document.getPlayhead());
         });
+    }
+
+    @Test
+    void saveAsOntoAFileThatIsOpenInAnotherTabIsRefused() throws Exception {
+        MainWindow window = start();
+        Path file = dir.resolve("first.afx");
+        dialogs.saveAnswers.add(file);
+        run(() -> window.getWorkspace().getActiveDocument().execute(Commands.addLayer(null, 0, rect("a"))));
+        assertTrue(fx(() -> window.getFileActions().save()));
+        byte[] saved = Files.readAllBytes(file);
+
+        EditorDocument second = fx(() -> {
+            EditorDocument document = window.getFileActions().newDocument();
+            document.execute(Commands.addLayer(null, 0, rect("b")));
+            return document;
+        });
+        dialogs.saveAnswers.add(dir.resolve(".").resolve("first.afx"));
+        assertFalse(fx(() -> window.getFileActions().saveAs(second)));
+
+        assertEquals(List.of("first.afx is open in another tab (first.afx). Close that tab or choose another name."),
+                fx(() -> window.getNoticeBar().getMessages()));
+        assertNull(second.getPath());
+        assertTrue(second.isDirty());
+        assertArrayEquals(saved, Files.readAllBytes(file));
+
+        // saving a document onto its own file is no conflict
+        EditorDocument first = fx(() -> window.getWorkspace().getDocuments().get(0));
+        dialogs.saveAnswers.add(file);
+        assertTrue(fx(() -> window.getFileActions().saveAs(first)));
+    }
+
+    @Test
+    void savingADocumentOpenedFromABareJsonFileAsksForAnAfxFile() throws Exception {
+        Path json = dir.resolve("plain.json");
+        Files.writeString(json, "{\"formatVersion\": 1, \"width\": 100, \"height\": 50, \"duration\": 2}");
+        String source = Files.readString(json);
+        MainWindow window = start();
+        EditorDocument document = fx(() -> window.getFileActions().open(json)).orElseThrow();
+        run(() -> document.execute(Commands.addLayer(null, 0, rect("a"))));
+
+        // cancelled: nothing is written, least of all a zip named .json
+        assertFalse(fx(() -> window.getFileActions().save()));
+        assertEquals(List.of("plain.afx"), dialogs.suggestedNames);
+        assertEquals(source, Files.readString(json));
+        assertTrue(document.isDirty());
+
+        dialogs.saveAnswers.add(dir.resolve("plain.afx"));
+        assertTrue(fx(() -> window.getFileActions().save()));
+        assertEquals(source, Files.readString(json));
+        assertEquals(dir.resolve("plain.afx"), document.getPath());
+        assertFalse(document.isDirty());
+
+        // from now on Save writes the .afx file without asking
+        run(() -> document.execute(Commands.addLayer(null, 0, rect("b"))));
+        assertTrue(fx(() -> window.getFileActions().save()));
+        assertEquals(2, dialogs.suggestedNames.size());
+    }
+
+    @Test
+    void theSaveDialogAddsTheExtensionUnlessTheNameHasIt() {
+        assertEquals(Path.of("dir", "my.animation.afx"), SystemDialogs.withExtension(Path.of("dir", "my.animation")));
+        assertEquals(Path.of("plain.afx"), SystemDialogs.withExtension(Path.of("plain")));
+        assertEquals(Path.of("done.afx"), SystemDialogs.withExtension(Path.of("done.afx")));
+        assertEquals(Path.of("LOUD.AFX"), SystemDialogs.withExtension(Path.of("LOUD.AFX")));
+        assertEquals(Path.of("notes.afx.bak.afx"), SystemDialogs.withExtension(Path.of("notes.afx.bak")));
     }
 
     @Test

@@ -338,13 +338,23 @@ public final class TimelineView extends Region {
 
     private void keyPressed(KeyEvent event) {
         EditorDocument doc = getDocument();
-        if (doc == null || getScene().getFocusOwner() instanceof TextInputControl || !hasTrackFocus()) {
+        if (doc == null || getScene().getFocusOwner() instanceof TextInputControl || !deletesHere()) {
             return;
         }
         if ((event.getCode() == KeyCode.DELETE || event.getCode() == KeyCode.BACK_SPACE) && !event.isShortcutDown()) {
             deleteSelection();
             event.consume();
         }
+    }
+
+    /**
+     * Whether Delete is about keyframes and markers rather than layers: while the tracks, the
+     * ruler or the marker lane have the focus, and anywhere in the timeline, the layer column
+     * included, while keyframes are selected.
+     */
+    public boolean deletesHere() {
+        EditorDocument doc = getDocument();
+        return hasTrackFocus() || (isFocusWithin() && doc != null && !doc.getSelection().keyframes().isEmpty());
     }
 
     /** Removes the selected keyframes, or else the selected marker. */

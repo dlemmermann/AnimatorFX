@@ -12,6 +12,7 @@ import com.dlsc.animatorfx.model.LayerProperties;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.PropertyRef;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -51,8 +52,20 @@ public final class KeyframeActions {
         return !selected().isEmpty();
     }
 
+    /** Whether the layer is locked: the timeline then leaves its range and its keyframes alone. */
+    public boolean isLocked(String layerId) {
+        return doc() != null && Layers.find(doc().getAnimation(), layerId)
+                .map(layer -> layer.base().locked()).orElse(false);
+    }
+
+    /** The keyframes among them that may be edited: those of layers that are not locked. */
+    public List<KeyframeRef> editable(Collection<KeyframeRef> refs) {
+        return refs.stream().filter(ref -> !isLocked(ref.layerId())).toList();
+    }
+
+    /** Removes the selected keyframes, except those of locked layers. */
     public void delete() {
-        List<KeyframeRef> refs = selected();
+        List<KeyframeRef> refs = editable(selected());
         if (!refs.isEmpty()) {
             doc().execute(Commands.removeKeyframes(refs));
         }
@@ -70,7 +83,7 @@ public final class KeyframeActions {
 
     /**
      * Pastes the copied keyframes onto the properties they came from, the earliest one at the
-     * playhead, and selects them.
+     * playhead, and selects them. Locked layers get none.
      */
     public void paste() {
         EditorDocument doc = doc();
@@ -78,10 +91,11 @@ public final class KeyframeActions {
             return;
         }
         double time = timeline.getTime();
-        doc.execute(Commands.pasteKeyframes(clipboard.get(), time));
+        List<KeyframeCopy> copies = clipboard.get().stream().filter(copy -> !isLocked(copy.layerId())).toList();
+        doc.execute(Commands.pasteKeyframes(copies, time));
         Set<String> layers = new LinkedHashSet<>(doc.getSelection().layerIds());
         List<KeyframeRef> pasted = new ArrayList<>();
-        for (KeyframeCopy copy : clipboard.get()) {
+        for (KeyframeCopy copy : copies) {
             Layer layer = Layers.find(doc.getAnimation(), copy.layerId()).orElse(null);
             if (layer == null) {
                 continue;
@@ -103,7 +117,7 @@ public final class KeyframeActions {
     }
 
     public void setEasing(Easing easing) {
-        List<KeyframeRef> refs = selected();
+        List<KeyframeRef> refs = editable(selected());
         if (!refs.isEmpty()) {
             doc().execute(Commands.setEasing(refs, easing));
         }

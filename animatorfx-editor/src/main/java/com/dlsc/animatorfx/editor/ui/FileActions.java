@@ -5,6 +5,7 @@ import javafx.stage.Window;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -77,12 +78,14 @@ public final class FileActions {
     }
 
     /**
-     * Saves the document to its file, asking for one when it is untitled.
+     * Saves the document to its file, asking for one when it is untitled. A document that was
+     * opened from a file that is no {@code .afx}, such as a bare {@code animation.json}, asks
+     * too: what is saved is an archive, which must not replace the source under its name.
      *
      * @return whether the document was saved; {@code false} when cancelled or failed
      */
     public boolean save(EditorDocument document) {
-        if (document.getPath() == null) {
+        if (document.getPath() == null || !isAfx(document.getPath())) {
             return saveAs(document);
         }
         try {
@@ -99,9 +102,21 @@ public final class FileActions {
         return document != null && saveAs(document);
     }
 
+    /**
+     * Asks for a file and saves the document to it. A file that another tab shows is refused
+     * with a notice: two documents with one file would overwrite each other.
+     *
+     * @return whether the document was saved; {@code false} when cancelled, refused or failed
+     */
     public boolean saveAs(EditorDocument document) {
-        Optional<Path> target = dialogs.chooseSaveFile(owner.get(), document.getTitle());
+        Optional<Path> target = dialogs.chooseSaveFile(owner.get(), suggestedName(document));
         if (target.isEmpty()) {
+            return false;
+        }
+        Optional<EditorDocument> other = workspace.findByPath(target.get()).filter(d -> d != document);
+        if (other.isPresent()) {
+            notices.show(target.get().getFileName() + " is open in another tab (" + other.get().getTitle()
+                    + "). Close that tab or choose another name.");
             return false;
         }
         try {
@@ -168,6 +183,20 @@ public final class FileActions {
         if (workspace.getDocuments().isEmpty()) {
             newDocument();
         }
+    }
+
+    private static boolean isAfx(Path file) {
+        return file.getFileName() != null && file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".afx");
+    }
+
+    /** The title, with the extension of a source file that is no {@code .afx} replaced. */
+    private static String suggestedName(EditorDocument document) {
+        String title = document.getTitle();
+        if (document.getPath() == null || isAfx(document.getPath())) {
+            return title;
+        }
+        int dot = title.lastIndexOf('.');
+        return (dot > 0 ? title.substring(0, dot) : title) + ".afx";
     }
 
     static boolean isUntouched(EditorDocument document) {
