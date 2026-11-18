@@ -4,6 +4,9 @@ import com.dlsc.animatorfx.editor.doc.Selection.KeyframeRef;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Easing;
+import com.dlsc.animatorfx.model.Effect;
+import com.dlsc.animatorfx.model.Geometries;
+import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Keyframe;
 import com.dlsc.animatorfx.model.Layer;
@@ -11,8 +14,12 @@ import com.dlsc.animatorfx.model.LayerBase;
 import com.dlsc.animatorfx.model.LayerProperties;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.Mask;
+import com.dlsc.animatorfx.model.MotionPath;
+import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.PropertyRef;
+import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.Transform;
+import com.dlsc.animatorfx.model.Trim;
 import com.dlsc.animatorfx.model.Vec2;
 
 import java.util.ArrayList;
@@ -28,6 +35,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
@@ -157,16 +165,166 @@ public final class Commands {
 
     /**
      * Moves the layer as {@link Layers#move} does: the index counts in the target list after the
-     * layer has been taken out.
+     * layer has been taken out. A mask needs its layer in the same parent: when the layer changes
+     * its parent, its own mask is cleared and so are the masks that pointed to it.
      */
     public static Command moveLayer(String id, String newParentIdOrNull, int index) {
         return command("Move Layer", before -> {
             if (Layers.find(before, id).isEmpty()) {
                 return before;
             }
-            Animation after = Layers.move(before, id, newParentIdOrNull, index);
+            Animation moved = Layers.move(before, id, newParentIdOrNull, index);
+            Animation after = moved.withLayers(mapLayers(moved.layers(), layer -> {
+                Mask mask = layer.base().mask();
+                boolean concerned = mask != null && (layer.id().equals(id) || mask.layerId().equals(id));
+                return concerned && !areSiblings(moved, layer.id(), mask.layerId())
+                        ? layer.withBase(layer.base().withMask(null)) : layer;
+            }));
             return after.layers().equals(before.layers()) ? before : after;
         });
+    }
+
+    // ------------------------------------------------------------------ masks, effects, trim, motion paths
+
+    /**
+     * Masks a layer with another layer of the same parent, or removes its mask with {@code null}.
+     * Does nothing when the mask layer is not a sibling of the layer.
+     */
+    public static Command setMask(String id, Mask maskOrNull) {
+        return command(maskOrNull == null ? "Remove Mask" : "Set Mask", before -> {
+            if (maskOrNull != null && !areSiblings(before, id, maskOrNull.layerId())) {
+                return before;
+            }
+            return editLayer(before, id, layer -> layer.withBase(layer.base().withMask(maskOrNull)));
+        });
+    }
+
+    /** Adds an effect after the effects the layer has. */
+    public static Command addEffect(String id, Effect effect) {
+        Objects.requireNonNull(effect, "effect");
+        return command("Add Effect", a -> editEffects(a, id, effects -> effects.add(effect)));
+    }
+
+    public static Command removeEffect(String id, int index) {
+        return command("Remove Effect", a -> editEffects(a, id, effects -> {
+            if (index >= 0 && index < effects.size()) {
+                effects.remove(index);
+            }
+        }));
+    }
+
+    /**
+     * Moves an effect to another place in the list. The effect moves as a whole, so its
+     * keyframes stay with it although the property keys of the effects change.
+     */
+    public static Command moveEffect(String id, int from, int to) {
+        return command("Reorder Effects", a -> editEffects(a, id, effects -> {
+            if (from >= 0 && from < effects.size() && to >= 0 && to < effects.size()) {
+                effects.add(to, effects.remove(from));
+            }
+        }));
+    }
+
+    private static Animation editEffects(Animation animation, String id, Consumer<List<Effect>> edit) {
+        return editLayer(animation, id, layer -> {
+            List<Effect> effects = new ArrayList<>(layer.base().effects());
+            edit.accept(effects);
+            return layer.withBase(layer.base().withEffects(effects));
+        });
+    }
+
+    /**
+     * Gives a shape layer a trim that shows the whole stroke (start 0, end 1, offset 0), or takes
+     * its trim away with all its keyframes. A layer that already has a trim keeps it.
+     */
+    public static Command setTrimEnabled(String id, boolean enabled) {
+        return command(enabled ? "Enable Trim" : "Remove Trim", a -> editLayer(a, id, layer -> {
+            if (!(layer instanceof ShapeLayer shape) || (shape.trim() != null) == enabled) {
+                return layer;
+            }
+            return shape.withTrim(enabled ? new Trim(Animatable.of(0.0), Animatable.of(1.0), Animatable.of(0.0)) : null);
+        }));
+    }
+
+    /** Sets or replaces the motion path of a layer, or removes it with {@code null}. */
+    public static Command setMotionPath(String id, MotionPath motionPathOrNull) {
+        return command(motionPathOrNull == null ? "Remove Motion Path" : "Set Motion Path",
+                a -> editLayer(a, id, layer -> layer.withBase(layer.base().withMotionPath(motionPathOrNull))));
+    }
+
+    /**
+     * Puts a layer on a motion path, in the coordinates of its parent, and makes it travel: the
+     * progress gets a keyframe of 0 at the layer's in-point and one of 1 at its out-point (both
+     * limited to the document), easing in and out. A layer without a time range gets a static 0.
+     */
+    public static Command addMotionPath(String id, PathData path) {
+        Objects.requireNonNull(path, "path");
+        return command("Add Motion Path", a -> editLayer(a, id, layer -> {
+            double from = Math.clamp(layer.base().inPoint(), 0, Math.max(0, a.duration()));
+            double to = Math.clamp(layer.base().outPoint(), 0, Math.max(0, a.duration()));
+            Animatable<Double> progress = Animatable.of(0.0);
+            if (to - from > Animatable.TIME_EPSILON) {
+                progress = progress.withKeyframe(from, 0.0, Easing.presets().get("Ease In Out"))
+                        .withKeyframe(to, 1.0, Easing.LINEAR);
+            }
+            return layer.withBase(layer.base().withMotionPath(new MotionPath(path, progress, false)));
+        }));
+    }
+
+    /**
+     * Replaces the rectangle, ellipse, line, polygon or star of shape layers with the Bezier path
+     * of its outline at the given time. Other layers, paths, and shapes with an
+     * {@link #convertObstacle obstacle} are left alone.
+     */
+    public static Command convertToPath(Collection<String> ids, double time) {
+        List<String> copy = List.copyOf(ids);
+        return command("Convert to Path", before -> {
+            Animation after = before;
+            for (String id : copy) {
+                after = editLayer(after, id, layer -> {
+                    if (!(layer instanceof ShapeLayer shape) || shape.geometry() instanceof Geometry.PathGeometry
+                            || hasAnimatedGeometry(shape)) {
+                        return layer;
+                    }
+                    return shape.withGeometry(new Geometry.PathGeometry(
+                            Animatable.of(Geometries.toPath(shape.geometry(), time))));
+                });
+            }
+            return after;
+        });
+    }
+
+    /**
+     * Why {@link #convertToPath} would leave one of the layers alone, as a sentence for the user:
+     * a path has one outline per keyframe, so the keyframes of a size or a radius would be lost.
+     */
+    public static Optional<String> convertObstacle(Animation animation, Collection<String> ids) {
+        for (String id : ids) {
+            Layer layer = Layers.find(animation, id).orElse(null);
+            if (layer instanceof ShapeLayer shape && hasAnimatedGeometry(shape)) {
+                return Optional.of("\u201c" + layer.name() + "\u201d has geometry keyframes, which a path cannot keep."
+                        + " Remove them before converting.");
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean hasAnimatedGeometry(ShapeLayer shape) {
+        for (PropertyRef ref : LayerProperties.list(shape)) {
+            if (ref.key().startsWith("geometry.") && ref.value().isAnimated()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether the two layers are different children of the same parent. */
+    private static boolean areSiblings(Animation animation, String id, String otherId) {
+        if (id.equals(otherId) || Layers.find(animation, id).isEmpty() || Layers.find(animation, otherId).isEmpty()) {
+            return false;
+        }
+        return Objects.equals(Layers.parentOf(animation, id).map(Layer::id).orElse(null),
+                Layers.parentOf(animation, otherId).map(Layer::id).orElse(null));
     }
 
     public static Command setDocument(String name, UnaryOperator<Animation> fn) {
@@ -428,12 +586,22 @@ public final class Commands {
     }
 
     /**
-     * A copy of the layer with its position, and every position keyframe, shifted.
+     * A copy of the layer with its position, every position keyframe, and its motion path shifted.
      */
     public static Layer translated(Layer layer, Vec2 delta) {
         Transform transform = layer.base().transform();
-        return layer.withBase(layer.base().withTransform(
-                transform.withPosition(mapValues(transform.position(), p -> p.plus(delta)))));
+        LayerBase base = layer.base().withTransform(
+                transform.withPosition(mapValues(transform.position(), p -> p.plus(delta))));
+        MotionPath motion = base.motionPath();
+        if (motion != null) {
+            List<PathData.Contour> contours = new ArrayList<>();
+            for (PathData.Contour contour : motion.path().contours()) {
+                contours.add(new PathData.Contour(contour.vertices().stream()
+                        .map(v -> new PathData.Vertex(v.point().plus(delta), v.in(), v.out())).toList(), contour.closed()));
+            }
+            base = base.withMotionPath(motion.withPath(new PathData(contours)));
+        }
+        return layer.withBase(base);
     }
 
     private static Command command(String name, UnaryOperator<Animation> fn) {
