@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "generator": "written by hand",
+  "name": "Bouncing dot",
+  "width": 200,
+  "height": 120,
+  "duration": 2,
+  "markers": [
+    {"name": "bounce", "start": 0, "end": 2, "colour": "red"}
+  ],
+  "layers": [
+    {
+      "type": "shape",
+      "name": "dot",
+      "geometry": {"type": "ellipse", "size": [20, 20]},
+      "fill": {"type": "solid", "color": "#ff8800"},
+      "transform": {
+        "anchor": [10, 10],
+        "position": {
+          "keyframes": [
+            {"t": 0, "v": [20, 20], "e": [0.5, 0, 1, 1]},
+            {"t": 1, "v": [20, 100], "e": "hold"},
+            {"t": 2, "v": [20, 20]}
+          ]
+        }
+      },
+      "futureFeature": {"anything": [1, 2, 3]}
+    },
+    {
+      "type": "group",
+      "children": [
+        {"type": "slot", "slotName": "button", "width": 80, "height": 24}
+      ]
+    }
+  ]
+}
