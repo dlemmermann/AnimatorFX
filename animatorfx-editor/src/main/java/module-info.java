@@ -4,6 +4,7 @@ module com.dlsc.animatorfx.editor {
     requires com.dlsc.animatorfx.importer;
     requires javafx.controls;
     requires atlantafx.base;
+    requires com.dlsc.gemsfx;
     requires org.kordamp.ikonli.core;
     requires org.kordamp.ikonli.javafx;
     requires org.kordamp.ikonli.material2;

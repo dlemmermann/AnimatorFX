@@ -19,12 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The sample application runs on the runtime alone: no editor, no importers, no AtlantaFX, no Ikonli.
+ * The sample application runs on the runtime alone: no editor, no importers, no AtlantaFX, no Ikonli, no GemsFX.
  */
 class IndependenceTest {
 
     private static final List<String> TOOLING = List.of("com.dlsc.animatorfx.editor", "com.dlsc.animatorfx.importer",
-            "atlantafx", "org.kordamp.ikonli");
+            "atlantafx", "org.kordamp.ikonli", "com.dlsc.gemsfx");
 
     private static final Module APPLICATION = SampleApp.class.getModule();
 
@@ -75,7 +75,8 @@ class IndependenceTest {
             "com.dlsc.animatorfx.importer.LottieImporter",
             "atlantafx.base.theme.PrimerDark",
             "org.kordamp.ikonli.javafx.FontIcon",
-            "org.kordamp.ikonli.Ikon"})
+            "org.kordamp.ikonli.Ikon",
+            "com.dlsc.gemsfx.DialogPane"})
     void toolingClassesCannotBeLoaded(String className) {
         assertThrows(ClassNotFoundException.class, () -> Class.forName(className));
         assertThrows(ClassNotFoundException.class,
@@ -85,7 +86,7 @@ class IndependenceTest {
     @Test
     void theClassPathCarriesNoToolingEither() {
         String classPath = System.getProperty("java.class.path", "") + System.getProperty("jdk.module.path", "");
-        for (String artifact : List.of("animatorfx-editor", "animatorfx-import", "atlantafx", "ikonli")) {
+        for (String artifact : List.of("animatorfx-editor", "animatorfx-import", "atlantafx", "ikonli", "gemsfx")) {
             assertFalse(classPath.contains(artifact), artifact + " in " + classPath);
         }
     }

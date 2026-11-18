@@ -90,8 +90,9 @@
                                         <exclude>com.dlsc.animatorfx:animatorfx-import</exclude>
                                         <exclude>io.github.mkpaz:*</exclude>
                                         <exclude>org.kordamp.ikonli:*</exclude>
+                                        <exclude>com.dlsc.gemsfx:*</exclude>
                                     </excludes>
-                                    <message>The sample application must depend on the runtime only: no editor, importer, AtlantaFX or Ikonli.</message>
+                                    <message>The sample application must depend on the runtime only: no editor, importer, AtlantaFX, Ikonli or GemsFX.</message>
                                 </bannedDependencies>
                             </rules>
                         </configuration>
