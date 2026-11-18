@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /**
  * The committed files of {@code samples/animations}: up to date with the generator, loadable,
@@ -43,9 +44,11 @@ class SampleFilesTest {
 
     private static final Path DIRECTORY = Path.of(System.getProperty("animatorfx.samples.dir", "../animations"));
 
+    private static final boolean WRITE = Boolean.getBoolean("animatorfx.samples.write");
+
     @BeforeAll
     static void writeWhenAsked() throws IOException {
-        if (Boolean.getBoolean("animatorfx.samples.write")) {
+        if (WRITE) {
             SampleGenerator.writeAll(DIRECTORY);
         }
     }
@@ -68,6 +71,8 @@ class SampleFilesTest {
     @ParameterizedTest
     @MethodSource("names")
     void theApplicationCarriesTheSampleAsAResource(String name) throws IOException {
+        // the resources were copied before this run rewrote the files
+        assumeFalse(WRITE, "the samples are being regenerated");
         AnimationFile resource = Samples.load(name);
         assertEquals(committed(name), resource.animation());
         assertTrue(resource.assets().isEmpty());

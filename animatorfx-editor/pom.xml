@@ -118,7 +118,8 @@
       Native packaging: mvn -Ppackage -pl animatorfx-editor -am package
       (add -DskipTests when the tests have already run). Needs the jlink and jpackage tools of the JDK that runs Maven.
 
-      1. copy-dependencies: the editor's runtime dependencies go to target/package/modules. All of them are explicit
+      1. antrun (prepare-package) empties target/package/modules; copy-dependencies: the editor's runtime
+         dependencies go there. All of them are explicit
          JPMS modules (AnimatorFX, AtlantaFX, Ikonli and the platform JavaFX jars).
       2. antrun: adds the editor jar and removes the empty, classifier-less JavaFX jars, which would otherwise be
          automatic modules that clash with the real ones.
@@ -173,6 +174,20 @@
                         <artifactId>maven-antrun-plugin</artifactId>
                         <version>${maven-antrun-plugin.version}</version>
                         <executions>
+                            <!-- before the dependencies are copied: a left-over jar of another version would be a second
+                                 copy of its module, which jlink rejects -->
+                            <execution>
+                                <id>package-clean</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <delete dir="${package.work}/modules"/>
+                                    </target>
+                                </configuration>
+                            </execution>
                             <execution>
                                 <id>package-prepare</id>
                                 <phase>package</phase>

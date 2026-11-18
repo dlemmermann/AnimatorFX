@@ -15,8 +15,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.file.Path;
+import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -29,6 +31,9 @@ class SampleRenderTest {
     private static final int FRAMES = 6;
     private static final Color DARK = Color.web("#0f172a");
     private static final Color LIGHT = Color.web("#f8fafc");
+
+    /** Samples whose content scales or fades in from nothing. */
+    private static final Set<String> BUILDS_UP_FROM_NOTHING = Set.of("success", "card");
 
     static Stream<String> names() {
         return Samples.SHOWCASE.stream();
@@ -54,7 +59,18 @@ class SampleRenderTest {
             rows.layout();
             return Fx.snapshot(rows, Color.TRANSPARENT);
         });
-        assertTrue(painted(sheet) > 500, "something is drawn");
+        double width = file.animation().width();
+        double height = file.animation().height();
+        for (int row = 0; row < 2; row++) {
+            for (int i = 0; i < FRAMES; i++) {
+                int painted = painted(sheet, (int) (i * width), (int) (row * height), (int) width, (int) height);
+                if (i == 0 && BUILDS_UP_FROM_NOTHING.contains(name)) {
+                    assertEquals(0, painted, "the first frame is empty");
+                } else {
+                    assertTrue(painted > 100, "frame " + i + " of row " + row + " draws, painted: " + painted);
+                }
+            }
+        }
 
         Path directory = Fx.screenshots();
         if (directory != null) {
@@ -88,12 +104,12 @@ class SampleRenderTest {
         return pane;
     }
 
-    /** The number of pixels that differ from the row's background. */
-    private static int painted(WritableImage image) {
+    /** The number of pixels of a cell (every second one is looked at) that differ from its corner. */
+    private static int painted(WritableImage image, int left, int top, int width, int height) {
+        int background = image.getPixelReader().getArgb(left, top);
         int count = 0;
-        for (int y = 0; y < image.getHeight(); y += 2) {
-            int background = image.getPixelReader().getArgb(0, y);
-            for (int x = 0; x < image.getWidth(); x += 2) {
+        for (int y = top; y < top + height; y += 2) {
+            for (int x = left; x < left + width; x += 2) {
                 if (image.getPixelReader().getArgb(x, y) != background) {
                     count++;
                 }

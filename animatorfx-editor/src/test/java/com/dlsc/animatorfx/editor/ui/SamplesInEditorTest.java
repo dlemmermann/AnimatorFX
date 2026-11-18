@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.editor.ui;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.Selection;
 import com.dlsc.animatorfx.model.Keyframe;
+import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.io.AnimationIO;
@@ -19,6 +20,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -51,6 +54,27 @@ class SamplesInEditorTest extends EditorUiTest {
         assertEquals(List.of(), fx(() -> window.getNoticeBar().getMessages()));
         // one timeline row per top-level layer while nothing is expanded
         assertEquals(opened.getAnimation().layers().size(), fx(() -> timeline.getRows().size()));
+    }
+
+    /** What a file argument does (AnimatorApp hands every argument to FileActions.open). */
+    @Test
+    void theBareJsonExampleOfTheReadmeOpensAsADocument() throws IOException {
+        Matcher json = Pattern.compile("```json\\R(.*?)```", Pattern.DOTALL)
+                .matcher(Files.readString(Path.of("..", "README.md")));
+        assertTrue(json.find());
+        Path file = dir.resolve("pulse.json");
+        Files.writeString(file, json.group(1));
+
+        EditorDocument opened = fx(() -> window.getFileActions().open(file)).orElseThrow();
+        WaitForAsyncUtils.waitForFxEvents();
+        layout();
+        assertEquals("pulse", opened.getAnimation().name());
+        assertEquals(List.of("Dot"), opened.getAnimation().layers().stream().map(Layer::name).toList());
+        assertEquals(file, opened.getPath());
+        assertFalse(opened.isDirty());
+        assertEquals(opened, fx(() -> window.getWorkspace().getActiveDocument()));
+        assertEquals(List.of(), fx(() -> window.getNoticeBar().getMessages()));
+        assertEquals(1, fx(() -> timeline.getRows().size()));
     }
 
     @Test

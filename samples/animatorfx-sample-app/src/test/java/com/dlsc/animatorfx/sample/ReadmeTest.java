@@ -1,6 +1,11 @@
 package com.dlsc.animatorfx.sample;
 
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Easing;
+import com.dlsc.animatorfx.model.Geometry;
+import com.dlsc.animatorfx.model.Paint;
+import com.dlsc.animatorfx.model.Rgba;
+import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.Vec2;
 import com.dlsc.animatorfx.model.io.AnimationFile;
 import com.dlsc.animatorfx.model.io.AnimationIO;
@@ -33,6 +38,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -66,10 +72,20 @@ class ReadmeTest {
         Animation animation = file.animation();
         assertEquals("pulse", animation.name());
         assertEquals(1, animation.layers().size());
-        String dot = animation.layers().get(0).id();
+        ShapeLayer shape = assertInstanceOf(ShapeLayer.class, animation.layers().get(0));
+        Geometry.Ellipse ellipse = assertInstanceOf(Geometry.Ellipse.class, shape.geometry());
+        assertEquals(new Vec2(60, 60), ellipse.size().at(0));
+        assertEquals(new Paint.Solid(Rgba.parse("#6366F1")), shape.fill().at(0));
+        assertEquals(new Vec2(30, 30), shape.base().transform().anchor().at(0));
+        assertEquals(new Vec2(60, 60), shape.base().transform().position().at(0));
+        String dot = shape.id();
         assertEquals(Vec2.ONE, Evaluator.sample(animation, 0).get(dot).scale());
         assertEquals(new Vec2(1.5, 1.5), Evaluator.sample(animation, 0.5).get(dot).scale());
         assertEquals(Vec2.ONE, Evaluator.sample(animation, 1).get(dot).scale());
+        // a quarter into the first segment the easing is well behind linear (1.125)
+        double eased = 1 + 0.5 * new Easing.CubicBezier(0.37, 0, 0.63, 1).apply(0.25);
+        assertEquals(eased, Evaluator.sample(animation, 0.125).get(dot).scale().x(), 1e-9);
+        assertTrue(eased < 1.08, "eased: " + eased);
     }
 
     @Test

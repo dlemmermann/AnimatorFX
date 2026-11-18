@@ -133,8 +133,10 @@ the files of `samples/animations`:
 | `orbit.afx` | Two shapes following motion paths, oriented to the path, with trimmed trails and a blurred glow |
 | `attention.afx` | A single slot that wiggles; used to animate an ordinary button in place |
 
+![Frames of loader.afx](docs/images/sample-loader.png)
 ![Frames of success.afx](docs/images/sample-success.png)
 ![Frames of morph.afx](docs/images/sample-morph.png)
+![Frames of card.afx](docs/images/sample-card.png)
 ![Frames of orbit.afx](docs/images/sample-orbit.png)
 
 The files are generated with the model API by `SampleGenerator` (test scope of the sample
@@ -160,7 +162,7 @@ the tests have already run. The profile
 # macOS: start the packaged application
 open animatorfx-editor/target/dist/AnimatorFX.app
 # or, with a console and files to open
-animatorfx-editor/target/dist/AnimatorFX.app/Contents/MacOS/AnimatorFX samples/animations/success.afx
+animatorfx-editor/target/dist/AnimatorFX.app/Contents/MacOS/AnimatorFX "$PWD/samples/animations/success.afx"
 ```
 
 The image is not signed or notarized, there is no installer, and `.afx` files are not associated
@@ -191,7 +193,8 @@ module com.example.app {
 ### Loading and playing
 
 `AnimationIO.read` accepts a `Path`, a `URL` or an `InputStream` and returns an `AnimationFile`:
-the document plus the bytes of its assets.
+the document plus the bytes of its assets. It throws `IOException` — an `AnimationFormatException`
+when the content is not a valid document — which the snippets below leave to the caller.
 
 ```java
 AnimationFile file = AnimationIO.read(getClass().getResource("success.afx"));
@@ -250,8 +253,8 @@ card.bind("action", actionButton);
 ```
 
 **In place** — the node stays where your layout puts it. The player drives its `translateX/Y`,
-`scaleX/Y`, `rotate`, `opacity` and `effect` relative to the slot's rest transform. No view is
-needed:
+`scaleX/Y`, `rotate`, `opacity`, `visible` and `effect` relative to the slot's rest transform. No
+view is needed:
 
 ```java
 AnimationPlayer player = new AnimationPlayer(AnimationIO.read(getClass().getResource("attention.afx")));
@@ -449,7 +452,8 @@ A complete document, a dot that swells and shrinks:
 }
 ```
 
-Save it as `pulse.json` and load it with `AnimationIO.read`, or open it in the editor. Documents
+Save it as `pulse.json` and load it with `AnimationIO.read`, or pass it to the editor as a file
+argument (the Open dialog lists `.afx` files only). Documents
 can also be built in code with the records of `com.dlsc.animatorfx.model` and written with
 `AnimationIO.write(file, path)`; `SampleGenerator` does exactly that.
 
@@ -457,6 +461,11 @@ can also be built in code with the records of `com.dlsc.animatorfx.model` and wr
 
 Importers never fail on unsupported features; they skip them and report a warning. They fail only
 on unreadable input.
+
+Input is bounded rather than trusted: an import stops at 20,000 layers and at 64 levels of
+nesting, numbers that are not finite or larger than 1e9 are replaced by defaults or end the
+affected path or layer, and Lottie track mattes that refer to each other are declined — each
+with a warning. Every imported document is checked to be saveable before it is handed over.
 
 **SVG → static layers.** Supported: `g`, `path` (all commands including arcs), `rect`, `circle`,
 `ellipse`, `line`, `polyline`, `polygon`, `text`, `image` (embedded PNG/JPEG data URIs), `use` and
