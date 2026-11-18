@@ -422,6 +422,72 @@ class PathToolsTest extends CanvasTestBase {
         assertEquals(3, vertices("p").size(), "inserting and dragging is one step");
     }
 
+    private void keyWith(KeyCode code, boolean alt) {
+        run(() -> javafx.event.Event.fireEvent(canvas, new javafx.scene.input.KeyEvent(
+                javafx.scene.input.KeyEvent.KEY_PRESSED, "", "", code, false, false, alt, false)));
+        layout();
+    }
+
+    @Test
+    void deleteNeverRemovesTheLayerWhileItsPathIsEdited() {
+        add(angle("p"));
+        editPath("p");
+        click(300, 200);
+        keyWith(KeyCode.DELETE, true);
+        assertEquals(1, layers().size(), "Alt held");
+
+        press(300, 300);
+        drag(320, 330);
+        keyWith(KeyCode.BACK_SPACE, false);
+        assertEquals(1, layers().size(), "in the middle of a drag");
+        release(320, 330);
+        assertEquals(1, layers().size());
+        editor();
+    }
+
+    @Test
+    void toolShortcutLettersAreIgnoredWhileAPathIsDrawnOrEdited() {
+        tool(ToolKind.PEN);
+        click(100, 100);
+        click(200, 150);
+        key(KeyCode.R);
+        assertEquals(ToolKind.PEN, canvas.getActiveTool());
+        assertTrue(pen().isDrawing());
+        key(KeyCode.ENTER);
+        assertEquals(ToolKind.SELECT, canvas.getActiveTool());
+
+        String id = layers().get(0).id();
+        editPath(id);
+        key(KeyCode.P);
+        key(KeyCode.S);
+        editor();
+        assertEquals(ToolKind.SELECT, canvas.getActiveTool());
+        key(KeyCode.ESCAPE);
+        key(KeyCode.R);
+        assertEquals(ToolKind.RECTANGLE, canvas.getActiveTool(), "outside those modes the letters select tools");
+
+        // the pen without a path in progress gives way as well
+        tool(ToolKind.PEN);
+        key(KeyCode.V);
+        assertEquals(ToolKind.SELECT, canvas.getActiveTool());
+    }
+
+    @Test
+    void backspaceAfterADoubleClickThatStartedNothingDoesNotThrow() {
+        tool(ToolKind.PEN);
+        pressView(view(100, 100), Keys.NONE);
+        releaseView(view(100, 100), Keys.NONE);
+        key(KeyCode.BACK_SPACE);
+        assertTrue(layers().isEmpty());
+
+        tool(ToolKind.PEN);
+        run(() -> pen().pressed(new Pointer(view(300, 300), false, false, false, 2)));
+        key(KeyCode.BACK_SPACE);
+        key(KeyCode.ENTER);
+        assertFalse(pen().isDrawing());
+        assertTrue(layers().isEmpty());
+    }
+
     @Test
     void theLastTwoPointsOfAPathCannotBeDeleted() {
         List<String> notices = new ArrayList<>();

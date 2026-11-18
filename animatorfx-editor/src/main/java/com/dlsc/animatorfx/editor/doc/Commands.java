@@ -169,34 +169,80 @@ public final class Commands {
      * its parent, its own mask is cleared and so are the masks that pointed to it.
      */
     public static Command moveLayer(String id, String newParentIdOrNull, int index) {
-        return command("Move Layer", before -> {
-            if (Layers.find(before, id).isEmpty()) {
-                return before;
+        return command("Move Layer", before -> move(before, List.of(new LayerMove(id, newParentIdOrNull, index))));
+    }
+
+    /** One step of {@link #moveLayers}: a layer, its new parent ({@code null}: the top level) and its index there. */
+    public record LayerMove(String id, String parentId, int index) {
+    }
+
+    /**
+     * Moves several layers, one after the other as {@link #moveLayer} would, as one command. The
+     * masks are looked at once, when all layers are where they go: a masked layer that moves to
+     * another parent together with its mask layer keeps its mask; a mask whose two layers end up
+     * in different parents is cleared.
+     */
+    public static Command moveLayers(List<LayerMove> moves) {
+        List<LayerMove> copy = List.copyOf(moves);
+        return command(copy.size() == 1 ? "Move Layer" : "Move Layers", before -> move(before, copy));
+    }
+
+    private static Animation move(Animation before, List<LayerMove> moves) {
+        Animation moved = before;
+        Set<String> ids = new HashSet<>();
+        for (LayerMove move : moves) {
+            if (Layers.find(moved, move.id()).isPresent()) {
+                moved = Layers.move(moved, move.id(), move.parentId(), move.index());
+                ids.add(move.id());
             }
-            Animation moved = Layers.move(before, id, newParentIdOrNull, index);
-            Animation after = moved.withLayers(mapLayers(moved.layers(), layer -> {
-                Mask mask = layer.base().mask();
-                boolean concerned = mask != null && (layer.id().equals(id) || mask.layerId().equals(id));
-                return concerned && !areSiblings(moved, layer.id(), mask.layerId())
-                        ? layer.withBase(layer.base().withMask(null)) : layer;
-            }));
-            return after.layers().equals(before.layers()) ? before : after;
-        });
+        }
+        if (ids.isEmpty()) {
+            return before;
+        }
+        Animation placed = moved;
+        Animation after = placed.withLayers(mapLayers(placed.layers(), layer -> {
+            Mask mask = layer.base().mask();
+            boolean concerned = mask != null && (ids.contains(layer.id()) || ids.contains(mask.layerId()));
+            return concerned && !areSiblings(placed, layer.id(), mask.layerId())
+                    ? layer.withBase(layer.base().withMask(null)) : layer;
+        }));
+        return after.layers().equals(before.layers()) ? before : after;
     }
 
     // ------------------------------------------------------------------ masks, effects, trim, motion paths
 
     /**
      * Masks a layer with another layer of the same parent, or removes its mask with {@code null}.
-     * Does nothing when the mask layer is not a sibling of the layer.
+     * Does nothing when the mask layer {@link #canMask cannot mask} the layer.
      */
     public static Command setMask(String id, Mask maskOrNull) {
         return command(maskOrNull == null ? "Remove Mask" : "Set Mask", before -> {
-            if (maskOrNull != null && !areSiblings(before, id, maskOrNull.layerId())) {
+            if (maskOrNull != null && !canMask(before, id, maskOrNull.layerId())) {
                 return before;
             }
             return editLayer(before, id, layer -> layer.withBase(layer.base().withMask(maskOrNull)));
         });
+    }
+
+    /**
+     * Whether a layer can be the mask of another: they are different children of the same parent,
+     * and the mask layer is not itself masked by the layer, directly or through other masks. A
+     * layer that masks is not drawn, so two layers that mask each other would both disappear.
+     */
+    public static boolean canMask(Animation animation, String id, String maskLayerId) {
+        if (!areSiblings(animation, id, maskLayerId)) {
+            return false;
+        }
+        Set<String> seen = new HashSet<>();
+        String current = maskLayerId;
+        while (current != null && seen.add(current)) {
+            Mask mask = Layers.find(animation, current).map(layer -> layer.base().mask()).orElse(null);
+            current = mask == null ? null : mask.layerId();
+            if (id.equals(current)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Adds an effect after the effects the layer has. */

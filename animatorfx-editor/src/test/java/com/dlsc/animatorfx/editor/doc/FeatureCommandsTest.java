@@ -6,6 +6,7 @@ import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometries;
 import com.dlsc.animatorfx.model.Geometry;
+import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Keyframe;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.LayerProperties;
@@ -105,6 +106,28 @@ class FeatureCommandsTest {
         assertEquals(new Mask("b", Mask.Mode.CLIP), layer(after, "a").base().mask());
         Animation moved = Commands.moveLayer("a", null, 2).apply(start);
         assertEquals(new Mask("b", Mask.Mode.CLIP), layer(moved, "a").base().mask());
+    }
+
+    @Test
+    void movingAMaskedLayerTogetherWithItsMaskKeepsTheMask() {
+        Animation start = doc(masked(rect("a"), "b"), rect("b"), masked(rect("c"), "b"), group("g"));
+
+        Animation after = Commands.moveLayers(List.of(new Commands.LayerMove("a", "g", 0),
+                new Commands.LayerMove("b", "g", 1))).apply(start);
+
+        assertEquals(List.of("a", "b"), ((GroupLayer) layer(after, "g")).children().stream().map(Layer::id).toList());
+        assertEquals(new Mask("b", Mask.Mode.CLIP), layer(after, "a").base().mask(), "the pair is together again");
+        assertNull(layer(after, "c").base().mask(), "c stayed behind and lost its mask layer");
+        assertSame(start, Commands.moveLayers(List.of(new Commands.LayerMove("gone", "g", 0))).apply(start));
+    }
+
+    @Test
+    void twoLayersCannotMaskEachOther() {
+        Animation start = doc(masked(rect("a"), "b"), rect("b"), rect("c"));
+
+        assertSame(start, Commands.setMask("b", new Mask("a", Mask.Mode.CLIP)).apply(start));
+        assertEquals(new Mask("c", Mask.Mode.CLIP),
+                layer(Commands.setMask("b", new Mask("c", Mask.Mode.CLIP)).apply(start), "b").base().mask());
     }
 
     // ------------------------------------------------------------------ effects

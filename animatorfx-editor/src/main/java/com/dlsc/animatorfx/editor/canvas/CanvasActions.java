@@ -134,11 +134,12 @@ public final class CanvasActions {
 
     /** Whether a selected layer is a rectangle, ellipse, line, polygon or star, which can become a path. */
     public boolean canConvertToPath() {
-        if (doc() == null) {
-            return false;
-        }
-        Animation animation = doc().getAnimation();
-        return selected().stream().anyMatch(id -> Layers.find(animation, id)
+        return doc() != null && canConvertToPath(doc().getAnimation(), selected());
+    }
+
+    /** Whether one of the layers is a rectangle, ellipse, line, polygon or star. */
+    public static boolean canConvertToPath(Animation animation, List<String> layerIds) {
+        return layerIds.stream().anyMatch(id -> Layers.find(animation, id)
                 .filter(layer -> layer instanceof ShapeLayer shape && !(shape.geometry() instanceof Geometry.PathGeometry))
                 .isPresent());
     }

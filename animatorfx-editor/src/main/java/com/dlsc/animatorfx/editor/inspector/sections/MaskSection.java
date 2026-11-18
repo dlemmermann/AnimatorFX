@@ -23,7 +23,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * The mask of the one selected layer: another layer of the same parent, chosen from a list, and
+ * The mask of the one selected layer: another layer of the same parent, chosen from a list
+ * (without the layers that the selected one masks itself), and
  * how it masks — Clip uses its outline, Alpha its transparency. The layer that masks is no
  * longer drawn itself, which a line under the choice says; a layer that is used as a mask says
  * by which layers.
@@ -153,7 +154,10 @@ public final class MaskSection extends SectionBase {
         List<Choice> choices = new ArrayList<>();
         choices.add(NONE);
         for (Layer sibling : siblings(animation, selected)) {
-            choices.add(new Choice(sibling.id(), sibling.name()));
+            // not a layer that this one masks: the two would hide each other
+            if (Commands.canMask(animation, selected.id(), sibling.id())) {
+                choices.add(new Choice(sibling.id(), sibling.name()));
+            }
         }
         Mask mask = selected.base().mask();
         Choice current = mask == null ? NONE

@@ -179,10 +179,15 @@ final class MenuBarFactory {
         MenuItem convert = onLayers("menu-edit-convert-to-path", "Convert to Path", null, CanvasActions::convertToPath);
         // these need selected layers; cut and copy stay enabled because they also serve text inputs
         List<MenuItem> needSelection = List.of(duplicate, delete, group, ungroup, forward, backward, front, back,
-                editPath, convert);
+                editPath);
         bindToDocument(doc -> needSelection.forEach(item ->
                         item.disableProperty().bind(Bindings.isEmpty(doc.getSelection().layerIds()))),
                 () -> needSelection.forEach(MenuBarFactory::unbindDisabled));
+        // only for shapes that are not paths yet
+        bindToDocument(doc -> convert.disableProperty().bind(Bindings.createBooleanBinding(
+                        () -> !CanvasActions.canConvertToPath(doc.getAnimation(), doc.getSelection().layerIds()),
+                        doc.getSelection().layerIds(), doc.animationProperty())),
+                () -> unbindDisabled(convert));
 
         Menu menu = new Menu("Edit");
         menu.setId("menu-edit");

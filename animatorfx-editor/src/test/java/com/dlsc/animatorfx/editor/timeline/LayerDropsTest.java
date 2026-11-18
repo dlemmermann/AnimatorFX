@@ -7,7 +7,10 @@ import com.dlsc.animatorfx.editor.timeline.LayerDrops.Drop;
 import com.dlsc.animatorfx.editor.timeline.LayerDrops.Where;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.GroupLayer;
+import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.model.Layer;
+import com.dlsc.animatorfx.model.Layers;
+import com.dlsc.animatorfx.model.Mask;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +25,17 @@ class LayerDropsTest {
 
     private Animation drop(List<String> ids, String anchor, Where where) {
         return LayerDrops.command(doc, ids, new Drop(anchor, where)).orElseThrow().apply(doc);
+    }
+
+    @Test
+    void aMaskedLayerDroppedIntoAGroupTogetherWithItsMaskKeepsTheMask() {
+        Animation masked = Commands.setMask("a", new Mask("top", Mask.Mode.CLIP)).apply(doc);
+
+        Animation after = LayerDrops.command(masked, List.of("a", "top"), new Drop("g", Where.INTO)).orElseThrow()
+                .apply(masked);
+
+        assertEquals(List.of("c1", "c2", "a", "top"), ids(((GroupLayer) Layers.find(after, "g").orElseThrow()).children()));
+        assertEquals(new Mask("top", Mask.Mode.CLIP), Layers.find(after, "a").orElseThrow().base().mask());
     }
 
     @Test

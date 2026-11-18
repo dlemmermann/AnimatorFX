@@ -19,6 +19,7 @@ import javafx.application.Platform;
 import javafx.scene.Cursor;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 
 import java.util.ArrayList;
@@ -409,14 +410,25 @@ public final class PathEditTool implements Tool {
     // ------------------------------------------------------------------ keys and menu
 
     @Override
+    public boolean blocksToolShortcuts() {
+        return true;
+    }
+
+    @Override
     public boolean keyPressed(KeyEvent event) {
+        if (event.getCode() == KeyCode.DELETE || event.getCode() == KeyCode.BACK_SPACE) {
+            // always taken, so that it never falls through to deleting the layer
+            if (mode == Mode.IDLE && !event.isShortcutDown()) {
+                deleteSelected();
+            }
+            return true;
+        }
         if (event.isShortcutDown() || event.isAltDown() || mode != Mode.IDLE) {
             return false;
         }
         double step = event.isShiftDown() ? 10 : 1;
         switch (event.getCode()) {
             case ENTER -> leave();
-            case DELETE, BACK_SPACE -> deleteSelected();
             case LEFT -> nudge(new Vec2(-step, 0));
             case RIGHT -> nudge(new Vec2(step, 0));
             case UP -> nudge(new Vec2(0, -step));

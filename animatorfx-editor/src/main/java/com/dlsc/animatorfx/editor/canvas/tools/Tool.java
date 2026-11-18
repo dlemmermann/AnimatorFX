@@ -73,6 +73,14 @@ public interface Tool {
         return List.of();
     }
 
+    /**
+     * Whether the single-letter tool shortcuts are off for now, because the tool is in the
+     * middle of something that such a key would end by accident: a path being drawn or edited.
+     */
+    default boolean blocksToolShortcuts() {
+        return false;
+    }
+
     /** The cursor to show at the pointer. */
     default Cursor cursor(Pointer pointer) {
         return Cursor.DEFAULT;

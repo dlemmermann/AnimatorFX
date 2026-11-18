@@ -66,7 +66,7 @@ public final class LayerDrops {
             parentId = Layers.parentOf(animation, anchor.id()).map(Layer::id).orElse(null);
         }
 
-        List<Command> moves = new ArrayList<>();
+        List<Commands.LayerMove> moves = new ArrayList<>();
         Animation current = animation;
         String below = null;
         for (Layer layer : moving) {
@@ -80,11 +80,11 @@ public final class LayerDrops {
             } else {
                 index = indexOf(siblings, anchor.id()) + (drop.where() == Where.ABOVE ? 1 : 0);
             }
-            moves.add(Commands.moveLayer(layer.id(), parentId, index));
+            moves.add(new Commands.LayerMove(layer.id(), parentId, index));
             current = Layers.insert(current, parentId, index, layer);
             below = layer.id();
         }
-        return Optional.of(Commands.batch(moves.size() == 1 ? "Move Layer" : "Move Layers", moves));
+        return Optional.of(Commands.moveLayers(moves));
     }
 
     private static List<Layer> children(Animation animation, String parentId) {

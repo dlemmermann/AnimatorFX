@@ -285,6 +285,31 @@ class AdvancedSectionsTest extends EditorUiTest {
     }
 
     @Test
+    void aLayerThatIsMaskedByTheSelectedLayerIsNotOfferedAsItsMask() {
+        add(rect("c", 500, 100, 50, 50));
+        execute(Commands.setMask("b", new Mask("a", Mask.Mode.CLIP)));
+        select("a");
+        ComboBox<MaskSection.Choice> combo = lookup("#" + MaskSection.LAYER_ID);
+
+        assertEquals(List.of("None", "c"), fx(() -> combo.getItems().stream().map(MaskSection.Choice::name).toList()));
+    }
+
+    @Test
+    void convertToPathIsOnlyEnabledForPrimitiveShapes() {
+        add(group("g", rect("g1", 0, 0, 10, 10)));
+        select("a");
+        assertFalse(fx(() -> window.menuItem("menu-edit-convert-to-path").isDisable()));
+        select("g");
+        assertTrue(fx(() -> window.menuItem("menu-edit-convert-to-path").isDisable()));
+        select("a");
+        run(() -> window.menuItem("menu-edit-convert-to-path").fire());
+        layout();
+        assertTrue(fx(() -> window.menuItem("menu-edit-convert-to-path").isDisable()), "a path is a path already");
+        run(doc::undo);
+        assertFalse(fx(() -> window.menuItem("menu-edit-convert-to-path").isDisable()));
+    }
+
+    @Test
     void maskLayerAndMaskedLayerAreMarkedInTheInspectorAndTheTimeline() {
         execute(Commands.setMask("a", new Mask("b", Mask.Mode.CLIP)));
 

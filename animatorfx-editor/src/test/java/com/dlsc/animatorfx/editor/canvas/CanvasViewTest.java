@@ -675,6 +675,9 @@ class CanvasViewTest extends CanvasTestBase {
         run(() -> ((TextTool) canvas.getTool(ToolKind.TEXT)).edit(text.id()));
         TextField editor = (TextField) lookup("#" + TextTool.EDITOR_ID);
         assertSame(editor, fx(() -> window.getScene().getFocusOwner()));
+        // with its skin in place the field handles keys itself, as it does on screen: Delete
+        // removes the selected text; without this the outcome depends on when the next pulse runs
+        layout();
 
         key(KeyCode.DELETE);
         key(KeyCode.RIGHT);
@@ -689,7 +692,9 @@ class CanvasViewTest extends CanvasTestBase {
         assertEquals(ToolKind.SELECT, canvas.getActiveTool());
 
         // select all goes to the text
+        assertEquals("", fx(editor::getText), "Delete went to the text");
         run(() -> {
+            editor.setText("Title");
             editor.deselect();
             window.menuItem("menu-edit-select-all").fire();
         });

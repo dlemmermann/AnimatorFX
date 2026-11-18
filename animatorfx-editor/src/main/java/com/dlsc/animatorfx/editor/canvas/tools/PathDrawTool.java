@@ -128,8 +128,7 @@ abstract class PathDrawTool implements Tool {
             attached = true;
             canvas.getOverlay().addDecoration(overlay, this::refresh);
             canvas.getOverlay().setModeHint(modeName(), "Click: corner \u00b7 Drag: curve \u00b7 "
-                    + (canClose() ? "Click the first point: close \u00b7 " : "") + "Enter: finish \u00b7 Esc: "
-                    + (canClose() ? "finish" : "cancel"));
+                    + (canClose() ? "Click the first point: close \u00b7 " : "") + "Enter or Esc: finish");
         }
     }
 
@@ -174,6 +173,9 @@ abstract class PathDrawTool implements Tool {
             // the first click of the double-click has placed the last vertex
             if (vertices.size() >= 2) {
                 end(false, false);
+            } else if (vertices.isEmpty()) {
+                // a double-click that the tool only saw the second half of: no path was started
+                drawing = false;
             }
             return;
         }
@@ -276,6 +278,11 @@ abstract class PathDrawTool implements Tool {
     // ------------------------------------------------------------------ keys
 
     @Override
+    public boolean blocksToolShortcuts() {
+        return drawing;
+    }
+
+    @Override
     public boolean keyPressed(KeyEvent event) {
         if (!drawing || event.isShortcutDown()) {
             return false;
@@ -291,7 +298,7 @@ abstract class PathDrawTool implements Tool {
     }
 
     private void removeLast() {
-        if (pressing) {
+        if (pressing || vertices.isEmpty()) {
             return;
         }
         vertices.remove(vertices.size() - 1);

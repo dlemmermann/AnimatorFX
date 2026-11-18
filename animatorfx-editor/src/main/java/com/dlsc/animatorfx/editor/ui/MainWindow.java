@@ -388,11 +388,14 @@ public final class MainWindow {
         sidePanel.getTabPane().getSelectionModel().selectedItemProperty().addListener(layoutChanged);
     }
 
-    /** A tool key pressed without modifiers selects the tool, unless the user is typing text. */
+    /**
+     * A tool key pressed without modifiers selects the tool, unless the user is typing text or
+     * is in the middle of drawing or editing a path.
+     */
     private void installToolShortcuts() {
         scene.addEventHandler(KeyEvent.KEY_PRESSED, event -> {
             if (event.isShortcutDown() || event.isControlDown() || event.isAltDown() || event.isMetaDown()
-                    || scene.getFocusOwner() instanceof TextInputControl) {
+                    || scene.getFocusOwner() instanceof TextInputControl || canvasView.blocksToolShortcuts()) {
                 return;
             }
             ToolKind.forShortcut(event.getCode()).ifPresent(kind -> {

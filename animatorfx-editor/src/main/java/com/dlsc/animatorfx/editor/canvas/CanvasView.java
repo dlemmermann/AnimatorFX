@@ -347,6 +347,14 @@ public final class CanvasView extends Region {
         return modalTool;
     }
 
+    /**
+     * Whether the single-letter tool shortcuts are to be ignored for now: a path is being drawn
+     * or edited, and Enter or Escape is the way out.
+     */
+    public boolean blocksToolShortcuts() {
+        return getDocument() != null && currentTool().blocksToolShortcuts();
+    }
+
     /** The menu of a secondary click; its items come from {@link Tool#menuItems} of the tool in charge. */
     public ContextMenu getContextMenu() {
         return contextMenu;
