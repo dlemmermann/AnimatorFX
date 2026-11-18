@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.dlsc.animatorfx</groupId>
+        <artifactId>animatorfx-parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>animatorfx-sample-app</artifactId>
+    <name>AnimatorFX Sample Application</name>
+    <description>Embeds the runtime (animatorfx-player) without any of the tooling.</description>
+
+    <properties>
+        <maven.compiler.release>${runtime.java.release}</maven.compiler.release>
+        <surefire.jvm.args>${javafx.headless.jvm.args}</surefire.jvm.args>
+        <!-- mvn test -Dtest=SampleFilesTest -Danimatorfx.samples.write=true regenerates samples/animations -->
+        <animatorfx.samples.dir>${project.basedir}/../animations</animatorfx.samples.dir>
+    </properties>
+
+    <dependencies>
+        <!-- The only thing an application needs; it brings animatorfx-model and JavaFX. -->
+        <dependency>
+            <groupId>com.dlsc.animatorfx</groupId>
+            <artifactId>animatorfx-player</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testfx</groupId>
+            <artifactId>testfx-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testfx</groupId>
+            <artifactId>openjfx-monocle</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The sample animations live once, in samples/animations, and are copied next to the application classes. -->
+            <resource>
+                <directory>${animatorfx.samples.dir}</directory>
+                <targetPath>com/dlsc/animatorfx/sample/animations</targetPath>
+                <includes>
+                    <include>*.afx</include>
+                </includes>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <animatorfx.samples.dir>${animatorfx.samples.dir}</animatorfx.samples.dir>
+                        <animatorfx.readme>${project.basedir}/../../README.md</animatorfx.readme>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <!-- In addition to the inherited "no third-party runtime dependencies" rule. -->
+                    <execution>
+                        <id>no-tooling</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <searchTransitive>true</searchTransitive>
+                                    <excludes>
+                                        <exclude>com.dlsc.animatorfx:animatorfx-editor</exclude>
+                                        <exclude>com.dlsc.animatorfx:animatorfx-import</exclude>
+                                        <exclude>io.github.mkpaz:*</exclude>
+                                        <exclude>org.kordamp.ikonli:*</exclude>
+                                    </excludes>
+                                    <message>The sample application must depend on the runtime only: no editor, importer, AtlantaFX or Ikonli.</message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.dlsc.animatorfx.sample/com.dlsc.animatorfx.sample.SampleApp</mainClass>
+                    <options>
+                        <option>--enable-native-access=javafx.graphics</option>
+                    </options>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

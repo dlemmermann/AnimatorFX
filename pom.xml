@@ -15,6 +15,7 @@
         <module>animatorfx-player</module>
         <module>animatorfx-import</module>
         <module>animatorfx-editor</module>
+        <module>samples/animatorfx-sample-app</module>
     </modules>
 
     <properties>
