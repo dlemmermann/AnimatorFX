@@ -453,7 +453,9 @@ public class AnimationPlayer {
      * Binds a node to a slot in place: the node stays where it is in the scene graph and the
      * player drives its {@code translateX/Y}, {@code scaleX/Y}, {@code rotate}, {@code opacity},
      * {@code visible} and {@code effect} relative to the slot's rest transform. An earlier
-     * binding of the slot is released first.
+     * binding of the slot is released first. A player with in-place bindings keeps running
+     * while it plays, even when no view is showing, so {@link #stop()} it or
+     * {@link #unbind(String) unbind} the slots when the animation is no longer needed.
      *
      * @throws IllegalStateException    if no animation is set
      * @throws IllegalArgumentException if the animation has no slot of that name

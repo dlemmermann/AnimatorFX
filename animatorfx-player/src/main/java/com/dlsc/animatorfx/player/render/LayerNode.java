@@ -311,7 +311,9 @@ abstract class LayerNode {
         @Override
         void writeStatics(Layer layer, Assets assets) {
             ImageLayer source = (ImageLayer) layer;
-            view.setImage(assets.image(source.assetId()));
+            // a fit size of 0 would show the image at its own size: without a size there is nothing to draw
+            boolean sized = source.width() > 0 && source.height() > 0;
+            view.setImage(sized ? assets.image(source.assetId()) : null);
             view.setFitWidth(source.width());
             view.setFitHeight(source.height());
         }

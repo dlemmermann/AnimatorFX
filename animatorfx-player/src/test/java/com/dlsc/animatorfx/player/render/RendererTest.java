@@ -344,6 +344,22 @@ class RendererTest {
     }
 
     @Test
+    void anImageWithoutWidthOrHeightDrawsNothing() {
+        // a fit size of 0 means "the size of the image" to an ImageView
+        show(doc(image("flat").withHeight(0), image("thin").withWidth(0), image("back").withWidth(-5))
+                .withAssets(List.of(IMAGE_ASSET)), 0);
+
+        for (String id : List.of("flat", "thin", "back")) {
+            Bounds bounds = renderer.getLayerNode(id).getBoundsInLocal();
+            assertEquals(0, bounds.getWidth() * bounds.getHeight(), id);
+            assertNull(((ImageView) renderer.getLayerNode(id)).getImage(), id);
+        }
+
+        show(doc(image("flat").withHeight(12)).withAssets(List.of(IMAGE_ASSET)), 0);
+        assertEquals(12, renderer.getLayerNode("flat").getBoundsInLocal().getHeight(), 1e-9);
+    }
+
+    @Test
     void missingOrBrokenAssetsDoNotStopRendering() {
         Animation animation = doc(image("i"), text("t", "Hi").withFontAssetId("font"), rect("r", 10, 10))
                 .withAssets(List.of(IMAGE_ASSET, FONT_ASSET));
