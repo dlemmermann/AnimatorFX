@@ -257,22 +257,96 @@ class InspectorViewTest extends EditorUiTest {
         assertEquals(new Vec2(175, 150), position("a"));
     }
 
+    private void keyUp(Node node, KeyCode code) {
+        run(() -> Event.fireEvent(node, new KeyEvent(KeyEvent.KEY_RELEASED, "", "", code, false, false, false, false)));
+        layout();
+    }
+
+    /** Undoes until the document is back at the given animation and counts the steps. */
+    private int undoStepsBackTo(com.dlsc.animatorfx.model.Animation target) {
+        int steps = 0;
+        while (doc.getAnimation() != target && doc.isCanUndo()) {
+            run(doc::undo);
+            steps++;
+        }
+        assertSame(target, doc.getAnimation());
+        return steps;
+    }
+
     @Test
-    void arrowKeysStepTheValueAsOneUndoStep() {
+    void holdingAnArrowKeyIsOneUndoStepAndEachSeparatePressIsItsOwn() {
         NumberField x = transform.position().field().getFirst();
         run(x::requestFocus);
-        int steps = fx(() -> doc.isCanUndo()) ? 1 : 0;
+        com.dlsc.animatorfx.model.Animation before = doc.getAnimation();
+        // held down: the key repeats and is released once
         keyOn(x, KeyCode.UP, false, false);
-        assertEquals(151, position("a").x(), 1e-9);
+        keyOn(x, KeyCode.UP, false, false);
+        keyOn(x, KeyCode.UP, false, false);
+        keyUp(x, KeyCode.UP);
+        assertEquals(153, position("a").x(), 1e-9);
+        com.dlsc.animatorfx.model.Animation afterHold = doc.getAnimation();
+        // Shift steps by 10, Alt by a tenth; each press is a step of its own
         keyOn(x, KeyCode.UP, true, false);
-        assertEquals(161, position("a").x(), 1e-9);
+        keyUp(x, KeyCode.UP);
+        assertEquals(163, position("a").x(), 1e-9);
         keyOn(x, KeyCode.DOWN, false, true);
-        assertEquals(160.9, position("a").x(), 1e-9);
-        assertEquals("160.9px", text(x));
-        run(() -> canvas.requestFocus());
+        keyUp(x, KeyCode.DOWN);
+        assertEquals(162.9, position("a").x(), 1e-9);
+        assertEquals("162.9px", text(x));
+        assertSame(x, focusOwner(), "the field keeps the focus all the way");
+
+        assertEquals(2, undoStepsBackTo(afterHold));
+        assertEquals(1, undoStepsBackTo(before), "the held key undoes as one step");
+    }
+
+    @Test
+    void anArrowRunEndsWhenThePlayheadMoves() {
+        run(() -> doc.setAutoKey(true));
+        NumberField x = transform.position().field().getFirst();
+        run(x::requestFocus);
+        com.dlsc.animatorfx.model.Animation before = doc.getAnimation();
+        // the key is still down when the playhead moves, as during playback
+        keyOn(x, KeyCode.UP, false, false);
+        run(() -> doc.setPlayhead(1.0));
+        keyOn(x, KeyCode.UP, false, false);
+        keyUp(x, KeyCode.UP);
+        assertSame(x, focusOwner());
+        assertEquals(2, keyframes("a", POSITION).size(), "a keyframe at each time");
         run(doc::undo);
-        assertEquals(150, position("a").x(), 1e-9, "the three steps undo together");
-        assertEquals(steps, 1);
+        assertEquals(1, keyframes("a", POSITION).size(), "the second keyframe is a step of its own");
+        assertEquals(0.0, keyframes("a", POSITION).get(0).time(), 1e-9);
+        assertEquals(1, undoStepsBackTo(before));
+    }
+
+    @Test
+    void anArrowRunEndsWhenTheSelectionChanges() {
+        NumberField x = transform.position().field().getFirst();
+        run(x::requestFocus);
+        com.dlsc.animatorfx.model.Animation before = doc.getAnimation();
+        keyOn(x, KeyCode.UP, false, false);
+        select("b");
+        keyOn(x, KeyCode.UP, false, false);
+        keyUp(x, KeyCode.UP);
+        assertEquals(151, position("a").x(), 1e-9);
+        assertEquals(351, position("b").x(), 1e-9);
+        assertEquals(2, undoStepsBackTo(before));
+    }
+
+    @Test
+    void anArrowStepAndAFollowingLabelScrubAreSeparateUndoSteps() {
+        NumberField rotation = transform.rotation().field();
+        Node label = fx(() -> transform.rotation().row().getLabel());
+        run(rotation::requestFocus);
+        com.dlsc.animatorfx.model.Animation before = doc.getAnimation();
+        keyOn(rotation, KeyCode.UP, false, false);
+        keyUp(rotation, KeyCode.UP);
+        press(label, 10, 10, Keys.NONE);
+        dragTo(label, 20, 10, Keys.NONE);
+        release(label, 20, 10, Keys.NONE);
+        assertEquals(11.0, (Double) value("a", "transform.rotation").at(0), 1e-9);
+        run(doc::undo);
+        assertEquals(1.0, (Double) value("a", "transform.rotation").at(0), 1e-9);
+        assertEquals(1, undoStepsBackTo(before));
     }
 
     @Test
@@ -576,6 +650,33 @@ class InspectorViewTest extends EditorUiTest {
     }
 
     @Test
+    void addingAStopAndDraggingItOnIsOneUndoStep() {
+        PaintField fill = inspector.section(FillSection.class).orElseThrow().fill().field();
+        execute(Commands.setProperty("a", "fill", Animatable.of(new Paint.LinearGradient(new Vec2(0, 0), new Vec2(100, 0),
+                List.of(new Paint.Stop(0, Rgba.BLACK), new Paint.Stop(1, Rgba.WHITE))))));
+        com.dlsc.animatorfx.model.Animation before = doc.getAnimation();
+        GradientStopBar bar = fill.getStopBar();
+        // press on free space, drag the new stop along, release
+        drag(bar, fx(() -> bar.offsetToX(0.5)), 6, fx(() -> bar.offsetToX(0.8)), 6);
+        List<Paint.Stop> stops = ((Paint.LinearGradient) value("a", "fill").at(0)).stops();
+        assertEquals(3, stops.size());
+        assertEquals(0.8, stops.get(1).offset(), 0.011);
+        assertEquals(0.5, stops.get(1).color().r(), 0.02, "the colour of the place where it was added");
+        run(doc::undo);
+        assertSame(before, doc.getAnimation(), "adding and dragging undo together");
+
+        // a click without a drag is one step too, and what follows is not merged into it
+        layout();
+        click(bar, fx(() -> bar.offsetToX(0.5)), 6);
+        com.dlsc.animatorfx.model.Animation added = doc.getAnimation();
+        type(fill.getStopOffsetField(), "25");
+        run(doc::undo);
+        assertSame(added, doc.getAnimation());
+        run(doc::undo);
+        assertSame(before, doc.getAnimation());
+    }
+
+    @Test
     void thePointsOfALinearGradientAreNumbers() {
         PaintField fill = inspector.section(FillSection.class).orElseThrow().fill().field();
         execute(Commands.setProperty("a", "fill", Animatable.of(new Paint.LinearGradient(new Vec2(0, 0), new Vec2(100, 0),
@@ -699,6 +800,54 @@ class InspectorViewTest extends EditorUiTest {
         // names are unique, so two slots cannot be named at once
         select("s1", "s2");
         assertTrue(fx(name::isDisabled));
+    }
+
+    @Test
+    void aSlotNameTypedBeforeTheSelectionChangedNeverReachesAnotherLayer() {
+        add(NewLayers.slot(doc.getAnimation(), "card", new Vec2(50, 50), new Vec2(80, 40)).withBase(
+                        NewLayers.slot(doc.getAnimation(), "x", new Vec2(50, 50), new Vec2(80, 40)).base().withId("s1")),
+                NewLayers.slot(doc.getAnimation(), "button", new Vec2(50, 50), new Vec2(80, 40)).withBase(
+                        NewLayers.slot(doc.getAnimation(), "x", new Vec2(50, 50), new Vec2(80, 40)).base().withId("s2")));
+        select("s1");
+        TextValueField name = lookup("#" + SlotSection.NAME_ID);
+        List<Throwable> thrown = new java.util.ArrayList<>();
+        run(() -> Thread.currentThread().setUncaughtExceptionHandler((thread, error) -> thrown.add(error)));
+
+        // typed for s1, then another slot is selected, then the field loses the focus
+        run(() -> {
+            name.requestFocus();
+            name.setText("header");
+        });
+        select("s2");
+        run(() -> canvas.requestFocus());
+        layout();
+        assertEquals("header", ((SlotLayer) layer("s1")).slotName(), "the slot the name was typed for");
+        assertEquals("button", ((SlotLayer) layer("s2")).slotName());
+        assertEquals("button", text(name));
+
+        // typed for s2, then a shape is selected: the section is gone when the field loses the focus
+        run(() -> {
+            name.requestFocus();
+            name.setText("footer");
+        });
+        select("a");
+        run(() -> canvas.requestFocus());
+        layout();
+        assertEquals("footer", ((SlotLayer) layer("s2")).slotName());
+
+        // typed for s2, then s2 is deleted: nothing to rename
+        select("s2");
+        run(() -> {
+            name.requestFocus();
+            name.setText("gone");
+        });
+        execute(Commands.removeLayers(List.of("s2")));
+        String undoName = doc.getUndoName();
+        run(() -> canvas.requestFocus());
+        layout();
+        assertEquals(undoName, doc.getUndoName(), "no command was run");
+        assertEquals("header", ((SlotLayer) layer("s1")).slotName());
+        assertEquals(List.of(), thrown);
     }
 
     @Test

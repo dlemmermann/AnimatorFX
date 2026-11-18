@@ -17,7 +17,8 @@ import javafx.scene.input.MouseEvent;
  * <ul>
  * <li>Enter or losing the focus commits the typed text; Escape reverts it. Text that is not a
  * number reverts as well.</li>
- * <li>Arrow up and down change the value by 1 display unit, with Shift by 10, with Alt by 0.1.</li>
+ * <li>Arrow up and down change the value by 1 display unit, with Shift by 10, with Alt by 0.1.
+ * Holding the key down is one adjustment, which ends when the key is released.</li>
  * <li>{@link #installScrubbing} lets a horizontal drag on a label change the value.</li>
  * </ul>
  *
@@ -27,6 +28,9 @@ import javafx.scene.input.MouseEvent;
  * calls the handler, and it leaves the text alone while the user is typing in the field.
  */
 public final class NumberField extends TextField {
+
+    /** The field with an adjustment in progress; there is one keyboard and one pointer, so at most one. */
+    private static NumberField open;
 
     private final PropertyUnits units;
     private int decimals = 2;
@@ -64,6 +68,13 @@ public final class NumberField extends TextField {
             }
         });
         addEventFilter(KeyEvent.KEY_PRESSED, this::keyPressed);
+        // an arrow key held down is one adjustment; it ends when the key comes up
+        addEventFilter(KeyEvent.KEY_RELEASED, event -> {
+            if (event.getCode() == KeyCode.UP || event.getCode() == KeyCode.DOWN) {
+                endAdjusting();
+                event.consume();
+            }
+        });
     }
 
     /** At most this many decimals are shown; 2 unless set. */
@@ -172,6 +183,7 @@ public final class NumberField extends TextField {
         showValue();
         if (changed) {
             adjusting = true;
+            open = this;
             onChange.accept(stored, true);
         }
     }
@@ -183,7 +195,22 @@ public final class NumberField extends TextField {
     private void endAdjusting() {
         if (adjusting) {
             adjusting = false;
+            if (open == this) {
+                open = null;
+            }
             onAdjustEnd.run();
+        }
+    }
+
+    /**
+     * Ends the adjustment that is in progress in whichever field has one, so that what follows
+     * becomes a new undo step. The owner of the fields calls this when what the fields edit
+     * changes under them — the playhead moves or the selection changes — while an arrow key or
+     * a scrub is still held.
+     */
+    public static void endOpenAdjustment() {
+        if (open != null) {
+            open.endAdjusting();
         }
     }
 

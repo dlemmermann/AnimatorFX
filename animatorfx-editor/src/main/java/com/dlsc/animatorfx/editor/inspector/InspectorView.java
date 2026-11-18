@@ -1,6 +1,7 @@
 package com.dlsc.animatorfx.editor.inspector;
 
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
+import com.dlsc.animatorfx.editor.inspector.fields.NumberField;
 import com.dlsc.animatorfx.editor.inspector.sections.EasingSection;
 import com.dlsc.animatorfx.editor.inspector.sections.EffectsSection;
 import com.dlsc.animatorfx.editor.inspector.sections.FillSection;
@@ -46,7 +47,16 @@ public final class InspectorView extends StackPane {
     private final VBox empty = new VBox();
     private InspectorContext context;
     private final InvalidationListener refresh = obs -> refresh();
-    private final InvalidationListener tick = obs -> updateValues();
+    // An arrow key or scrub that is still held when the playhead or the selection changes must
+    // not go on in the same undo step: it now edits another time or other layers.
+    private final InvalidationListener tick = obs -> {
+        NumberField.endOpenAdjustment();
+        updateValues();
+    };
+    private final InvalidationListener selection = obs -> {
+        NumberField.endOpenAdjustment();
+        refresh();
+    };
 
     public InspectorView() {
         getStyleClass().add("inspector");
@@ -74,14 +84,14 @@ public final class InspectorView extends StackPane {
         document.addListener((obs, oldDoc, newDoc) -> {
             if (oldDoc != null) {
                 oldDoc.animationProperty().removeListener(refresh);
-                oldDoc.getSelection().layerIds().removeListener(refresh);
+                oldDoc.getSelection().layerIds().removeListener(selection);
                 oldDoc.getSelection().keyframes().removeListener(refresh);
                 oldDoc.playheadProperty().removeListener(tick);
             }
             context = newDoc == null ? null : new InspectorContext(newDoc);
             if (newDoc != null) {
                 newDoc.animationProperty().addListener(refresh);
-                newDoc.getSelection().layerIds().addListener(refresh);
+                newDoc.getSelection().layerIds().addListener(selection);
                 newDoc.getSelection().keyframes().addListener(refresh);
                 newDoc.playheadProperty().addListener(tick);
             }

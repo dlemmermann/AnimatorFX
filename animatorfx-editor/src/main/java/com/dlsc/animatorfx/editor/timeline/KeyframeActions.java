@@ -89,7 +89,7 @@ public final class KeyframeActions {
             for (PropertyRef property : LayerProperties.list(layer)) {
                 if (property.key().equals(copy.propertyKey())) {
                     for (Keyframe<?> keyframe : property.value().keyframes()) {
-                        if (Math.abs(keyframe.time() - (time + copy.offset())) < Animatable.TIME_EPSILON) {
+                        if (Math.abs(keyframe.time() - Commands.pasteTime(doc.getAnimation(), copy, time)) < Animatable.TIME_EPSILON) {
                             pasted.add(new KeyframeRef(layer.id(), property.key(), keyframe.id()));
                             layers.add(layer.id());
                         }

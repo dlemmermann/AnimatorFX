@@ -1,6 +1,7 @@
 package com.dlsc.animatorfx.editor.inspector.sections;
 
 import com.dlsc.animatorfx.editor.canvas.LayerNames;
+import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.PropertyUnits;
 import com.dlsc.animatorfx.editor.inspector.FieldRow;
 import com.dlsc.animatorfx.editor.inspector.InspectorContext;
@@ -8,6 +9,7 @@ import com.dlsc.animatorfx.editor.inspector.SectionBase;
 import com.dlsc.animatorfx.editor.inspector.fields.NumberField;
 import com.dlsc.animatorfx.editor.inspector.fields.TextValueField;
 import com.dlsc.animatorfx.model.Animatable;
+import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.Transform;
 import java.util.Optional;
@@ -31,16 +33,23 @@ public final class SlotSection extends SectionBase {
     private final TextValueField name = new TextValueField();
     private final NumberField width = new NumberField(PropertyUnits.NONE);
     private final NumberField height = new NumberField(PropertyUnits.NONE);
+    private String editedSlotId;
 
     public SlotSection() {
         super("Slot");
         name.setId(NAME_ID);
         name.getStyleClass().add("mono");
-        name.setValidator(text -> {
-            SlotLayer slot = (SlotLayer) context().layers().get(0);
-            return text.equals(slot.slotName()) ? Optional.empty() : LayerNames.slotNameError(context().animation(), text);
+        name.setValidator(text -> edited().filter(slot -> !text.equals(slot.slotName()))
+                .flatMap(slot -> LayerNames.slotNameError(context().animation(), text)));
+        // a commit on blur can come after the selection or the document changed: it renames the
+        // slot the name was typed for, or nothing when that slot is gone
+        name.setOnCommit(text -> edited().ifPresent(slot -> context().document().execute(
+                Commands.updateLayer("Rename Slot", slot.id(), l -> l instanceof SlotLayer s ? s.withSlotName(text) : l))));
+        name.focusedProperty().addListener((obs, was, focused) -> {
+            if (!focused && context() != null) {
+                editedSlotId = selectedSlotId(context());
+            }
         });
-        name.setOnCommit(text -> context().edit("Rename Slot", SlotLayer.class, l -> l.withSlotName(text), null));
         row("Name", name);
 
         width.setId(WIDTH_ID);
@@ -77,6 +86,20 @@ public final class SlotSection extends SectionBase {
         add(rest);
     }
 
+    /** The slot whose name is being edited, if the document still has it. */
+    private Optional<SlotLayer> edited() {
+        if (context() == null || editedSlotId == null) {
+            return Optional.empty();
+        }
+        return Layers.find(context().animation(), editedSlotId)
+                .filter(SlotLayer.class::isInstance).map(SlotLayer.class::cast);
+    }
+
+    /** The id of the selected slot when exactly one is selected, else {@code null}. */
+    private static String selectedSlotId(InspectorContext context) {
+        return context.layers().size() == 1 && context.layers().get(0) instanceof SlotLayer slot ? slot.id() : null;
+    }
+
     @Override
     public boolean appliesTo(InspectorContext context) {
         return context.allLayers(SlotLayer.class);
@@ -85,6 +108,11 @@ public final class SlotSection extends SectionBase {
     @Override
     protected void updateFields(InspectorContext context) {
         // slot names are unique, so only one slot at a time can be named
+        boolean typing = name.isFocused() && !java.util.Objects.equals(name.getText(), name.getValue());
+        if (!typing) {
+            // typed text stays with the slot it was typed for
+            editedSlotId = selectedSlotId(context);
+        }
         name.setDisable(context.layers().size() != 1);
         name.setValue(context.common(SlotLayer.class, SlotLayer::slotName));
         width.setValue(context.common(SlotLayer.class, SlotLayer::width));

@@ -114,6 +114,39 @@ class KeyframeCommandsTest {
     }
 
     @Test
+    void pastedKeyframesSnapToFramesAndStayInsideTheDuration() {
+        Animation doc = Commands.setProperty("a", "opacity", Animatable.keyframed(List.of(
+                new Keyframe<>("k1", 0.0, 0.1, Easing.LINEAR), new Keyframe<>("k2", 0.5, 0.2, Easing.LINEAR),
+                new Keyframe<>("k3", 1.0, 0.3, Easing.HOLD)))).apply(document());
+        List<KeyframeCopy> copies = Commands.copyKeyframes(doc, List.of(new KeyframeRef("a", "opacity", "k1"),
+                new KeyframeRef("a", "opacity", "k2"), new KeyframeRef("a", "opacity", "k3")));
+
+        // 1.507 s is between two frames of the 60 fps document: the paste starts on the nearer one
+        Animation snapped = Commands.pasteKeyframes(copies.subList(0, 1), 1.507).apply(doc);
+        assertEquals(1.5, value(snapped, "a", "opacity").keyframes().get(3).time(), 1e-12);
+        assertEquals(1.5, Commands.pasteTime(doc, copies.get(0), 1.507), 1e-12);
+
+        // at 2.4 s the copies would be at 2.4, 2.9 and 3.4: the last one is put at the end, 3 s
+        Animation clamped = Commands.pasteKeyframes(copies, 2.4).apply(doc);
+        List<? extends Keyframe<?>> keyframes = value(clamped, "a", "opacity").keyframes();
+        assertEquals(6, keyframes.size());
+        assertEquals(2.9, keyframes.get(4).time(), 1e-12);
+        assertEquals(3.0, keyframes.get(5).time(), 1e-12);
+
+        // at 2.9 s the second and the third both end at 3 s: the later one of the copy stays
+        Animation collapsed = Commands.pasteKeyframes(copies, 2.9).apply(doc);
+        keyframes = value(collapsed, "a", "opacity").keyframes();
+        assertEquals(5, keyframes.size());
+        assertEquals(2.9, keyframes.get(3).time(), 1e-12);
+        assertEquals(3.0, keyframes.get(4).time(), 1e-12);
+        assertEquals(0.3, keyframes.get(4).value());
+        assertEquals(Easing.HOLD, keyframes.get(4).easing());
+
+        // a negative time starts at zero
+        assertEquals(0.0, Commands.pasteTime(doc, copies.get(0), -1), 1e-12);
+    }
+
+    @Test
     void pastingSkipsLayersAndPropertiesThatAreGone() {
         Animation doc = Commands.addKeyframe("a", "geometry.cornerRadius", 0.5).apply(document());
         Layer a = Layers.find(doc, "a").orElseThrow();

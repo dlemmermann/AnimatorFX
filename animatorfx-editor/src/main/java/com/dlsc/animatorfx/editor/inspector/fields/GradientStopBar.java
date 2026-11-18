@@ -21,8 +21,8 @@ import javafx.scene.paint.LinearGradient;
 import javafx.scene.paint.Stop;
 
 /**
- * The stops of a gradient on a bar that previews it. A click on the bar adds a stop with the
- * colour the gradient has there; a stop is dragged to move it and dragged off the bar (or
+ * The stops of a gradient on a bar that previews it. A press on the bar adds a stop with the
+ * colour the gradient has there, and a drag that follows moves it, all as one adjustment; a stop is dragged to move it and dragged off the bar (or
  * removed with Delete while the bar has the focus) to delete it. A gradient keeps at least two
  * stops. One stop is selected; its colour is edited next to the bar.
  */
@@ -42,6 +42,8 @@ public final class GradientStopBar extends Region {
     private int dragged = -1;
     private boolean removing;
     private boolean moved;
+    /** Whether the press of the gesture in progress added the stop that it drags. */
+    private boolean added;
     private List<Paint.Stop> beforeDrag;
     private BiConsumer<List<Paint.Stop>, Boolean> onChange = (list, adjusting) -> {
     };
@@ -139,6 +141,7 @@ public final class GradientStopBar extends Region {
         requestFocus();
         dragged = -1;
         moved = false;
+        added = false;
         removing = false;
         beforeDrag = stops;
         for (int i = stops.size() - 1; i >= 0; i--) {
@@ -149,12 +152,14 @@ public final class GradientStopBar extends Region {
         }
         if (dragged < 0) {
             double offset = Math.round(xToOffset(event.getX()) * 100) / 100.0;
-            Paint.Stop added = new Paint.Stop(offset, colorAt(stops, offset));
+            Paint.Stop stop = new Paint.Stop(offset, colorAt(stops, offset));
             List<Paint.Stop> list = new ArrayList<>(stops);
-            list.add(added);
-            apply(list, added, false);
+            list.add(stop);
+            // adding is the start of the gesture: a drag that follows moves the new stop in the same undo step
+            apply(list, stop, true);
             dragged = selected;
             beforeDrag = stops;
+            added = true;
         } else {
             select(dragged);
         }
@@ -184,9 +189,10 @@ public final class GradientStopBar extends Region {
     }
 
     private void released() {
-        if (dragged >= 0 && moved) {
+        if (dragged >= 0 && (moved || added)) {
             onAdjustEnd.run();
         }
+        added = false;
         dragged = -1;
         removing = false;
         beforeDrag = null;

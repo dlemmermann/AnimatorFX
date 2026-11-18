@@ -393,24 +393,37 @@ public final class Commands {
     }
 
     /**
-     * Adds the copied keyframes to the properties they came from, the earliest one at the time
-     * and the others at their offsets after it. A keyframe that is already at such a time takes
-     * the pasted value and easing and keeps its id. Layers and properties that no longer exist
-     * are skipped.
+     * Adds the copied keyframes to the properties they came from, the earliest one at the time,
+     * snapped to the frames of the document, and the others at their offsets after it. Times
+     * are limited to {@code 0..duration}: keyframes that would land after the end are put at the
+     * end, where the one that was latest in the copy stays. A keyframe that is already at such a
+     * time takes the pasted value and easing and keeps its id. Layers and properties that no
+     * longer exist are skipped.
      */
     public static Command pasteKeyframes(List<KeyframeCopy> copies, double time) {
         List<KeyframeCopy> list = List.copyOf(copies);
         return command("Paste Keyframes", before -> {
             Animation after = before;
+            // earliest first, so of several that end at the same time the later one replaces the earlier
             for (KeyframeCopy copy : list) {
+                double at = pasteTime(before, copy, time);
                 after = editLayer(after, copy.layerId(), layer -> hasProperty(layer, copy.propertyKey())
                         ? LayerProperties.set(layer, copy.propertyKey(), withKeyframe(
-                                LayerProperties.get(layer, copy.propertyKey()), time + copy.offset(), copy.value(),
-                                copy.easing()))
+                                LayerProperties.get(layer, copy.propertyKey()), at, copy.value(), copy.easing()))
                         : layer);
             }
             return after;
         });
+    }
+
+    /**
+     * The time at which {@link #pasteKeyframes} puts a copied keyframe: the paste time snapped
+     * to the frame grid, plus the offset of the copy, limited to {@code 0..duration}.
+     */
+    public static double pasteTime(Animation animation, KeyframeCopy copy, double time) {
+        double rate = animation.frameRate();
+        double anchor = rate > 0 ? Math.round(time * rate) / rate : time;
+        return Math.clamp(anchor + copy.offset(), 0, Math.max(0, animation.duration()));
     }
 
     private static boolean hasProperty(Layer layer, String key) {

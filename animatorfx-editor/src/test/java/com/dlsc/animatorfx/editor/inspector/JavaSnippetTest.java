@@ -72,6 +72,30 @@ class JavaSnippetTest {
         assertTrue(code.contains("getResource(\"a\\\\b.afx\")"));
     }
 
+    @Test
+    void slotNamesThatClashWithTheSnippetGetOtherParameterNames() {
+        Animation doc = Animation.create("e", 400, 240, 3).withLayers(List.of(slot("e"), slot("file"), slot("view"),
+                slot("readFailure"), slot("AnimationIO"), slot("Node"), slot("slot2"), slot("EAnimation"), slot("ok")));
+        String code = JavaSnippet.generate(doc, "e.afx");
+        assertTrue(code.contains("public final class EAnimation {"), code);
+        assertTrue(code.contains(
+                "create(Node e, Node slot1, Node slot3, Node slot4, Node slot5, Node slot6, Node slot2, Node slot7, Node ok)"),
+                code);
+        // the slot keeps its name in the binding; only the parameter differs
+        assertTrue(code.contains("view.bind(\"e\", e);"));
+        assertTrue(code.contains("view.bind(\"file\", slot1);"));
+        assertTrue(code.contains("view.bind(\"AnimationIO\", slot5);"));
+        assertTrue(code.contains("view.bind(\"slot2\", slot2);"));
+        assertTrue(code.contains("catch (IOException readFailure)"));
+        assertTrue(code.contains("throw new UncheckedIOException(readFailure);"));
+    }
+
+    @Test
+    void parameterNamesAreUniqueIdentifiers() {
+        assertEquals(List.of("a", "slot1", "slot2", "slot3", "slot4"),
+                JavaSnippet.parameterNames(List.of("a", "a", "class", "2nd", ""), "XAnimation"));
+    }
+
     private static long count(String text, char c) {
         return text.chars().filter(ch -> ch == c).count();
     }

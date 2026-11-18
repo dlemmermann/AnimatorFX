@@ -6,8 +6,10 @@ import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.Marker;
 import com.dlsc.animatorfx.model.SlotLayer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.StringJoiner;
 
 /**
@@ -15,6 +17,9 @@ import java.util.StringJoiner;
  * plays it: a small class with one factory method, ready to paste into an application.
  */
 public final class JavaSnippet {
+
+    /** Not a likely slot name, and checked against the slot names all the same. */
+    private static final String CATCH_VARIABLE = "readFailure";
 
     private JavaSnippet() {
     }
@@ -49,15 +54,15 @@ public final class JavaSnippet {
         }
         out.append("     */\n");
         StringJoiner parameters = new StringJoiner(", ");
-        List<String> names = parameterNames(slots);
+        List<String> names = parameterNames(slots, className);
         names.forEach(name -> parameters.add("Node " + name));
         out.append("    public static AnimationView create(").append(parameters).append(") {\n");
         out.append("        AnimationFile file;\n");
         out.append("        try {\n");
         out.append("            file = AnimationIO.read(").append(className).append(".class.getResource(")
                 .append(literal(fileName)).append("));\n");
-        out.append("        } catch (IOException e) {\n");
-        out.append("            throw new UncheckedIOException(e);\n");
+        out.append("        } catch (IOException ").append(CATCH_VARIABLE).append(") {\n");
+        out.append("            throw new UncheckedIOException(").append(CATCH_VARIABLE).append(");\n");
         out.append("        }\n");
         out.append("        AnimationView view = new AnimationView(file);\n");
 
@@ -116,14 +121,44 @@ public final class JavaSnippet {
         return (base.isEmpty() ? "animation" : base) + ".afx";
     }
 
-    /** The editor only accepts Java identifiers as slot names; anything else gets a neutral name. */
-    private static List<String> parameterNames(List<String> slots) {
+    /**
+     * The identifiers the snippet uses itself. A slot of such a name gets another parameter name,
+     * or the parameter would shadow a class the code needs, or clash with a local variable.
+     */
+    private static final Set<String> OWN_NAMES = Set.of("file", "view", CATCH_VARIABLE, "AnimationFile", "AnimationIO",
+            "AnimationView", "IOException", "UncheckedIOException", "Node", "String", "Object", "Class");
+
+    private static final Set<String> KEYWORDS = Set.of("abstract", "assert", "boolean", "break", "byte", "case",
+            "catch", "char", "class", "const", "continue", "default", "do", "double", "else", "enum", "extends",
+            "final", "finally", "float", "for", "goto", "if", "implements", "import", "instanceof", "int",
+            "interface", "long", "native", "new", "package", "private", "protected", "public", "return", "short",
+            "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try",
+            "void", "volatile", "while", "true", "false", "null", "_", "var", "yield", "record", "sealed", "permits");
+
+    /**
+     * One parameter name per slot: the slot name where that is a usable Java identifier that
+     * clashes with nothing in the snippet, else {@code slot1}, {@code slot2}, …
+     */
+    static List<String> parameterNames(List<String> slots, String className) {
+        Set<String> taken = new HashSet<>(OWN_NAMES);
+        taken.add(className);
         List<String> names = new ArrayList<>();
+        // the names that slots keep are settled first, so that no substitute takes one of them
         for (String slot : slots) {
             boolean usable = !slot.isEmpty() && Character.isJavaIdentifierStart(slot.charAt(0))
-                    && slot.chars().allMatch(Character::isJavaIdentifierPart)
-                    && !slot.equals("file") && !slot.equals("view") && !names.contains(slot);
-            names.add(usable ? slot : "slot" + (names.size() + 1));
+                    && slot.chars().allMatch(Character::isJavaIdentifierPart) && !KEYWORDS.contains(slot)
+                    && taken.add(slot);
+            names.add(usable ? slot : null);
+        }
+        int number = 1;
+        for (int i = 0; i < names.size(); i++) {
+            if (names.get(i) == null) {
+                String substitute;
+                do {
+                    substitute = "slot" + number++;
+                } while (!taken.add(substitute));
+                names.set(i, substitute);
+            }
         }
         return names;
     }
