@@ -224,6 +224,19 @@ class TimelineViewTest extends EditorUiTest {
     }
 
     @Test
+    void aDropThatWouldNestLayersTooDeepIsRefusedWithANotice() {
+        add(com.dlsc.animatorfx.editor.doc.SaveableCommandsTest.nested("d", 100), group("g", rect("g1", 0, 0, 10, 10)));
+        Node deep = layerCell("d1");
+        Node g = layerCell("g");
+        double toY = fx(() -> deep.sceneToLocal(g.localToScene(0, 11)).getY());
+        drag(deep, 100, 10, 100, toY);
+
+        assertEquals(List.of("a", "b", "c", "d1", "g"), layerIds());
+        assertEquals(List.of("Layers cannot be nested deeper than 100 levels."),
+                fx(() -> window.getNoticeBar().getMessages()));
+    }
+
+    @Test
     void theKeyframeNavigatorJumpsAndToggles() {
         expand("a");
         playhead(1.0);

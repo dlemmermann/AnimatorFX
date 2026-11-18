@@ -4,6 +4,7 @@ import com.dlsc.animatorfx.editor.canvas.tools.NewLayers;
 import com.dlsc.animatorfx.editor.canvas.tools.TextTool;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.RoundTrip;
+import com.dlsc.animatorfx.editor.doc.SaveableCommandsTest;
 import com.dlsc.animatorfx.editor.ui.Formats;
 import com.dlsc.animatorfx.editor.ui.PngEncoder;
 import com.dlsc.animatorfx.editor.ui.ToolKind;
@@ -116,6 +117,32 @@ class CanvasActionsTest extends CanvasTestBase {
                 .map(SlotLayer::slotName).toList();
         assertEquals(8, names.size());
         assertEquals(8, new java.util.HashSet<>(names).size(), names.toString());
+        RoundTrip.of(doc.getFileContent());
+    }
+
+    @Test
+    void groupingAndPastingBeyondTheNestingLimitAreRefusedWithANotice() {
+        add(SaveableCommandsTest.nested("g", 100), rect("a", 100, 100, 100, 100));
+        String limit = "Layers cannot be nested deeper than 100 levels.";
+
+        select("g-leaf");
+        fire("menu-edit-group");
+        assertEquals(List.of(limit), fx(() -> window.getNoticeBar().getMessages()));
+        assertEquals("Add Layer", doc.getUndoName());
+        assertEquals(List.of("g-leaf"), selection());
+
+        // a rectangle fits into the innermost group, a group does not
+        select("g1");
+        fire("menu-edit-copy");
+        run(() -> canvas.enterGroup("g99"));
+        fire("menu-edit-paste");
+        assertEquals(2, fx(() -> window.getNoticeBar().getMessages().size()));
+        assertEquals("Add Layer", doc.getUndoName());
+
+        select("a");
+        fire("menu-edit-copy");
+        fire("menu-edit-paste");
+        assertEquals("Paste", doc.getUndoName());
         RoundTrip.of(doc.getFileContent());
     }
 

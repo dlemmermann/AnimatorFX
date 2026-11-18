@@ -7,6 +7,8 @@ import com.dlsc.animatorfx.editor.ui.Palette;
 import com.dlsc.animatorfx.model.Animation;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
 import javafx.beans.InvalidationListener;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -80,6 +82,9 @@ public final class TimelineView extends Region {
     private final InvalidationListener layerSelection = obs -> {
         pruneKeyframeSelection();
         requestLayout();
+    };
+
+    private Consumer<String> notifier = message -> {
     };
 
     public TimelineView() {
@@ -238,6 +243,15 @@ public final class TimelineView extends Region {
         Animation animation = getDocument().getAnimation();
         double snapped = free ? time : TimeScale.snap(time, animation.frameRate());
         return Math.clamp(snapped, 0, Math.max(0, animation.duration()));
+    }
+
+    /** Receives messages for the user, such as why layers could not be dropped into a group. */
+    public void setNotifier(Consumer<String> notifier) {
+        this.notifier = Objects.requireNonNull(notifier, "notifier");
+    }
+
+    public void notice(String message) {
+        notifier.accept(message);
     }
 
     /**

@@ -3,13 +3,16 @@ package com.dlsc.animatorfx.editor.doc;
 import com.dlsc.animatorfx.editor.doc.Selection.KeyframeRef;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Vec2;
 import com.dlsc.animatorfx.model.io.AnimationFile;
 import com.dlsc.animatorfx.model.io.AnimationIO;
+import com.dlsc.animatorfx.model.io.AnimationJson;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -169,6 +172,57 @@ class EditorDocumentTest {
         assertTrue(document.isDirty());
         document.redo();
         assertFalse(document.isDirty());
+    }
+
+    private static Command twoSlotsNamedCard() {
+        return Commands.all("Slots", Commands.addLayer(null, 0, SaveableCommandsTest.slot("s1", "card")),
+                Commands.addLayer(null, 1, SaveableCommandsTest.slot("s2", "card")));
+    }
+
+    private static List<String> names(Path dir) throws IOException {
+        try (var files = Files.list(dir)) {
+            return files.map(p -> p.getFileName().toString()).sorted().toList();
+        }
+    }
+
+    @Test
+    void aDocumentThatCouldNotBeOpenedAgainIsNotSavedAndTheFileStaysAsItWas(@TempDir Path dir) throws IOException {
+        EditorDocument document = EditorDocument.untitled();
+        document.execute(add("a"));
+        Path file = dir.resolve("one.afx");
+        document.saveAs(file);
+        byte[] good = Files.readAllBytes(file);
+        document.execute(twoSlotsNamedCard());
+
+        IOException failure = assertThrows(IOException.class, document::save);
+        assertEquals("layers[1].slotName: Duplicate slot name: card", failure.getMessage());
+        assertArrayEquals(good, Files.readAllBytes(file));
+        assertTrue(document.isDirty());
+
+        Path other = dir.resolve("two.afx");
+        failure = assertThrows(IOException.class, () -> document.saveAs(other));
+        assertEquals("layers[1].slotName: Duplicate slot name: card", failure.getMessage());
+        assertEquals(List.of("one.afx"), names(dir), "no new file and nothing temporary left behind");
+        assertEquals(file, document.getPath());
+        assertTrue(document.isDirty());
+
+        document.undo();
+        document.save();
+        assertFalse(document.isDirty());
+    }
+
+    @Test
+    void aDocumentNestedDeeperThanTheFormatAllowsSaysSoWhenSaved(@TempDir Path dir) throws IOException {
+        EditorDocument document = EditorDocument.untitled();
+        Layer nested = CommandsTest.rect("leaf");
+        for (int i = 0; i < AnimationJson.MAX_LAYER_DEPTH; i++) {
+            nested = CommandsTest.group("g" + i, nested);
+        }
+        document.execute(Commands.addLayer(null, 0, nested));
+
+        IOException failure = assertThrows(IOException.class, () -> document.saveAs(dir.resolve("deep.afx")));
+        assertTrue(failure.getMessage().startsWith("Layers are nested deeper than 100 levels"), failure.getMessage());
+        assertEquals(List.of(), names(dir));
     }
 
     @Test

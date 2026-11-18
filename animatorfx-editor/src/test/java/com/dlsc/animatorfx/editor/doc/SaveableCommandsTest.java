@@ -17,6 +17,7 @@ import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.Vec2;
+import com.dlsc.animatorfx.model.io.AnimationJson;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -31,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** What the commands produce can be saved and opened again: the reader is stricter than the model. */
-class SaveableCommandsTest {
+public class SaveableCommandsTest {
 
     static SlotLayer slot(String id, String slotName) {
         return new SlotLayer(LayerBase.create(id, 3).withId(id), slotName, 100, 50, Transform.IDENTITY);
@@ -229,5 +230,24 @@ class SaveableCommandsTest {
             assertTrue(easing.x1() >= 0 && easing.x1() <= 1 && easing.x2() >= 0 && easing.x2() <= 1, easing.toString());
             RoundTrip.of(Commands.setEasing(List.of(new KeyframeRef("a", OPACITY, "k1")), easing).apply(animation));
         }
+    }
+
+    /** A chain of groups around a rectangle that is nested {@code depth} levels deep. */
+    public static Layer nested(String prefix, int depth) {
+        Layer layer = rect(prefix + "-leaf");
+        for (int i = depth - 1; i >= 1; i--) {
+            layer = group(prefix + i, layer);
+        }
+        return layer;
+    }
+
+    @Test
+    void nestingIsLimitedToWhatAFileCanHold() {
+        Animation full = doc(nested("g", AnimationJson.MAX_LAYER_DEPTH));
+        assertTrue(Commands.nestingObstacle(full).isEmpty());
+        RoundTrip.of(full);
+
+        Animation tooDeep = Commands.groupLayers(List.of("g1"), "outer", "Outer").apply(full);
+        assertEquals("Layers cannot be nested deeper than 100 levels.", Commands.nestingObstacle(tooDeep).orElseThrow());
     }
 }

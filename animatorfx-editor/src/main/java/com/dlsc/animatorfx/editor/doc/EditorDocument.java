@@ -10,6 +10,7 @@ import com.dlsc.animatorfx.model.LayerProperties;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.PropertyRef;
 import com.dlsc.animatorfx.model.io.AnimationFile;
+import com.dlsc.animatorfx.model.io.AnimationFormatException;
 import com.dlsc.animatorfx.model.io.AnimationIO;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
@@ -464,25 +465,31 @@ public final class EditorDocument {
     }
 
     /**
-     * @throws IllegalStateException if the document has no file yet
+     * Saves to the file of the document. The content is read back before it replaces the file:
+     * a document that could not be opened again is not written, the file stays as it was and
+     * the document stays dirty.
+     *
+     * @throws IllegalStateException    if the document has no file yet
+     * @throws AnimationFormatException if the document could not be opened again; the message
+     *                                  says what is wrong and where
      */
     public void save() throws IOException {
         Path target = getPath();
         if (target == null) {
             throw new IllegalStateException("The document has no file; use saveAs");
         }
-        AnimationIO.write(state.file(), target);
+        DocumentFiles.write(state.file(), target);
         saved = state;
         updateDirty();
     }
 
     /**
-     * Saves to the file and makes it the file of the document. When writing fails the document
-     * keeps its previous file.
+     * Saves to the file as {@link #save()} does and makes it the file of the document. When
+     * writing fails the document keeps its previous file.
      */
     public void saveAs(Path file) throws IOException {
         Objects.requireNonNull(file, "file");
-        AnimationIO.write(state.file(), file);
+        DocumentFiles.write(state.file(), file);
         setPath(file);
         saved = state;
         updateDirty();

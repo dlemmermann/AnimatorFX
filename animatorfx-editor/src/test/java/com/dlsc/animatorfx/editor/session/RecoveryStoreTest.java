@@ -3,11 +3,15 @@ package com.dlsc.animatorfx.editor.session;
 import com.dlsc.animatorfx.editor.session.RecoveryStore.Recovered;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.LayerBase;
+import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.io.AnimationFile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -115,14 +119,48 @@ class RecoveryStoreTest {
     }
 
     @Test
-    void anUnreadableCopyIsSkipped() throws IOException {
+    void anUnreadableCopyIsSkippedAndKeptUnderAnotherName() throws IOException {
         RecoveryStore store = new RecoveryStore(dir.resolve("recovery"));
-        store.store("doc-1", file("One"), null);
+        store.store("doc-1", file("One"), dir.resolve("one.afx"));
         store.store("doc-2", file("Two"), null);
         Files.writeString(dir.resolve("recovery/doc-1.afx"), "not a document");
 
         assertTrue(store.load("doc-1").isEmpty());
         assertEquals(List.of("doc-2"), store.all().stream().map(Recovered::docId).toList());
+
+        List<RecoveryStore.Unreadable> unreadable = store.takeUnreadable();
+        assertEquals(1, unreadable.size());
+        assertEquals(dir.resolve("one.afx"), unreadable.get(0).originalPath());
+        Path kept = unreadable.get(0).movedTo();
+        assertTrue(kept.getFileName().toString().startsWith("doc-1.afx.unreadable-"), kept.toString());
+        assertEquals("not a document", Files.readString(kept));
+        assertFalse(Files.exists(dir.resolve("recovery/doc-1.afx")));
+        assertEquals(List.of(), store.takeUnreadable(), "reported once");
+
+        // neither discarding the document nor a new copy of it touches the one that was moved aside
+        store.discard("doc-1");
+        store.store("doc-1", file("One again"), null);
+        store.discard("doc-1");
+        assertEquals("not a document", Files.readString(kept));
+        assertEquals(List.of("doc-2"), store.all().stream().map(Recovered::docId).toList());
+    }
+
+    @Test
+    void aCopyThatCouldNotBeReadBackIsNotWrittenAndThePreviousOneStays() throws IOException {
+        RecoveryStore store = new RecoveryStore(dir.resolve("recovery"));
+        store.store("doc-1", file("Good"), null);
+        byte[] good = Files.readAllBytes(dir.resolve("recovery/doc-1.afx"));
+        SlotLayer slot = new SlotLayer(LayerBase.create("s", 2), "card", 10, 10, Transform.IDENTITY);
+        Animation broken = Animation.create("Broken", 320, 200, 2).withLayers(List.of(slot,
+                slot.withBase(slot.base().withId("other"))));
+
+        UncheckedIOException failure = assertThrows(UncheckedIOException.class,
+                () -> store.store("doc-1", new AnimationFile(broken, Map.of()), null));
+
+        assertEquals("layers[1].slotName: Duplicate slot name: card", failure.getCause().getMessage());
+        assertArrayEquals(good, Files.readAllBytes(dir.resolve("recovery/doc-1.afx")));
+        assertEquals(List.of("doc-1.afx", "index.json"), fileNames());
+        assertEquals("Good", store.load("doc-1").orElseThrow().file().animation().name());
     }
 
     @Test

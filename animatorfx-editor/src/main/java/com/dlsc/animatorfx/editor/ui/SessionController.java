@@ -4,12 +4,14 @@ import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.ViewState;
 import com.dlsc.animatorfx.editor.session.RecoveryStore;
 import com.dlsc.animatorfx.editor.session.RecoveryStore.Recovered;
+import com.dlsc.animatorfx.editor.session.RecoveryStore.Unreadable;
 import com.dlsc.animatorfx.editor.session.SessionState;
 import com.dlsc.animatorfx.editor.session.SessionState.DocumentState;
 import com.dlsc.animatorfx.editor.session.SessionState.WindowState;
 import com.dlsc.animatorfx.editor.session.SessionStore;
 import com.dlsc.animatorfx.editor.ui.WindowPlacement.Placement;
 import com.dlsc.animatorfx.model.io.AnimationFile;
+import com.dlsc.animatorfx.model.io.AnimationFormatException;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.PauseTransition;
@@ -37,7 +39,8 @@ import java.util.Set;
  * Keeps the session state and the recovery copies of a window up to date: restores them on
  * start, writes {@code session.json} 500 ms after the last change and on shutdown, and stores a
  * recovery copy of every dirty document every 5 seconds. A document that becomes clean or is
- * closed loses its recovery copy.
+ * closed loses its recovery copy. A recovery copy that cannot be read on start is kept under
+ * another name and reported.
  */
 public final class SessionController {
 
@@ -59,6 +62,10 @@ public final class SessionController {
     /** The content that the recovery copy of a document holds, by document id. */
     private final Map<String, AnimationFile> stored = new HashMap<>();
     private final Map<String, LocalTime> autosavedAt = new HashMap<>();
+    /** The content that could not be read back as a recovery copy, by document id; it is not tried again. */
+    private final Map<String, AnimationFile> unstorable = new HashMap<>();
+    /** The documents whose failing recovery copy the user has been told about. */
+    private final Set<String> reportedStoreFailures = new HashSet<>();
     /** The documents whose "recovered" notice still offers to discard them. */
     private final Map<EditorDocument, RecoveryNotice> recoveryNotices = new HashMap<>();
 
@@ -107,6 +114,12 @@ public final class SessionController {
             if (seen.add(recovered.docId())) {
                 adopt(recovered(recovered, recovered.originalPath()));
             }
+        }
+        for (Unreadable copy : recoveryStore.takeUnreadable()) {
+            String name = copy.originalPath() == null || copy.originalPath().getFileName() == null
+                    ? "an unsaved document" : copy.originalPath().getFileName().toString();
+            window.getNoticeBar().show("The recovery copy of " + name + " could not be read. It was kept as "
+                    + copy.movedTo() + ".");
         }
         if (workspace.getDocuments().isEmpty()) {
             workspace.add(EditorDocument.untitled());
@@ -163,20 +176,33 @@ public final class SessionController {
     }
 
     /**
-     * Stores a recovery copy of every dirty document that changed since its last copy.
+     * Stores a recovery copy of every dirty document that changed since its last copy. A
+     * document whose copy could not be read back keeps its previous copy; the user is told
+     * once per document, and the same content is not tried again.
      */
     public void autosaveNow() {
         for (EditorDocument document : workspace.getDocuments()) {
+            String id = document.getId();
             AnimationFile content = document.getFileContent();
-            if (!document.isDirty() || stored.get(document.getId()) == content) {
+            if (!document.isDirty() || stored.get(id) == content || unstorable.get(id) == content) {
                 continue;
             }
             try {
-                recoveryStore.store(document.getId(), content, document.getPath());
-                stored.put(document.getId(), content);
-                autosavedAt.put(document.getId(), LocalTime.now());
+                recoveryStore.store(id, content, document.getPath());
+                stored.put(id, content);
+                unstorable.remove(id);
+                autosavedAt.put(id, LocalTime.now());
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "Could not store a recovery copy of " + document.getTitle(), e);
+                Throwable cause = e.getCause() == null ? e : e.getCause();
+                if (cause instanceof AnimationFormatException) {
+                    unstorable.put(id, content);
+                }
+                if (reportedStoreFailures.add(id)) {
+                    LOG.log(System.Logger.Level.WARNING, "Could not store a recovery copy of " + document.getTitle(), e);
+                    String reason = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
+                    window.getNoticeBar().show("Recovery copy could not be written: " + reason + " ("
+                            + document.getTitle() + ")");
+                }
             }
         }
         updateStatus();
@@ -388,6 +414,8 @@ public final class SessionController {
     /** Deletes the recovery copy even when this window did not write it: a stale copy would shadow the file on the next start. */
     private void forget(EditorDocument document) {
         stored.remove(document.getId());
+        unstorable.remove(document.getId());
+        reportedStoreFailures.remove(document.getId());
         recoveryStore.discard(document.getId());
         autosavedAt.remove(document.getId());
     }

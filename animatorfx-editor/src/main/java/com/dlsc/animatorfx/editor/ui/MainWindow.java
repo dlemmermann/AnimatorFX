@@ -356,6 +356,7 @@ public final class MainWindow {
         toolBar.playingProperty().bind(canvasView.playingProperty());
         toolBar.setOnPlayPause(canvasView::togglePlayback);
         canvasView.setNotifier(noticeBar::show);
+        timelineView.setNotifier(noticeBar::show);
         sidePanel.getInspector().section(MotionPathSection.class)
                 .ifPresent(section -> section.setActions(canvasView::drawMotionPath, canvasView::editMotionPath));
     }

@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.importer.FxmlImporter;
@@ -177,7 +178,13 @@ public final class ImportActions {
         for (Asset asset : content.animation().assets()) {
             assets.put(asset, content.assets().get(asset.id()));
         }
-        document.execute(Commands.addLayers("Import SVG", null, target.layers().size(), List.of(group)), assets);
+        Command command = Commands.addLayers("Import SVG", null, target.layers().size(), List.of(group));
+        Optional<String> obstacle = Commands.nestingObstacle(command.apply(target));
+        if (obstacle.isPresent()) {
+            notices.show("Could not import " + file.getFileName() + ": " + obstacle.get());
+            return false;
+        }
+        document.execute(command, assets);
         document.getSelection().layerIds().setAll(group.id());
         report(file, result.warnings());
         return true;

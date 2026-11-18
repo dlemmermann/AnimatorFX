@@ -22,6 +22,7 @@ import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.Trim;
 import com.dlsc.animatorfx.model.Vec2;
+import com.dlsc.animatorfx.model.io.AnimationJson;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -107,6 +108,32 @@ public final class Commands {
             }
             return after;
         });
+    }
+
+    /**
+     * Why the document cannot be nested as it is, as a sentence for the user: a file holds
+     * layers up to {@link AnimationJson#MAX_LAYER_DEPTH} levels deep. Empty within the limit.
+     * Whatever nests layers deeper checks its result with this before it runs.
+     */
+    public static Optional<String> nestingObstacle(Animation animation) {
+        return exceeds(animation.layers(), AnimationJson.MAX_LAYER_DEPTH)
+                ? Optional.of("Layers cannot be nested deeper than " + AnimationJson.MAX_LAYER_DEPTH + " levels.")
+                : Optional.empty();
+    }
+
+    private static boolean exceeds(List<Layer> layers, int levelsLeft) {
+        if (layers.isEmpty()) {
+            return false;
+        }
+        if (levelsLeft == 0) {
+            return true;
+        }
+        for (Layer layer : layers) {
+            if (layer instanceof GroupLayer group && exceeds(group.children(), levelsLeft - 1)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The slot names the document uses. */

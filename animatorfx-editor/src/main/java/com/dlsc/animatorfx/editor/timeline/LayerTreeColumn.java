@@ -347,7 +347,12 @@ public final class LayerTreeColumn extends Region {
             Command command = dropCommand;
             cancelGesture();
             if (command != null && doc != null) {
-                doc.execute(command);
+                Optional<String> obstacle = Commands.nestingObstacle(command.apply(doc.getAnimation()));
+                if (obstacle.isPresent()) {
+                    timeline.notice(obstacle.get());
+                } else {
+                    doc.execute(command);
+                }
             }
         } else if (selectOnRelease && pressedRow != null && doc != null) {
             doc.getSelection().layerIds().setAll(pressedRow.layerId());

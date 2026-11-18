@@ -1,6 +1,7 @@
 package com.dlsc.animatorfx.editor.canvas;
 
 import com.dlsc.animatorfx.editor.canvas.tools.NewLayers;
+import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.model.Animation;
@@ -57,6 +58,13 @@ public final class CanvasActions {
 
     private List<String> selected() {
         return doc() == null ? List.of() : List.copyOf(doc().getSelection().layerIds());
+    }
+
+    /** Whether the command would nest layers deeper than a file can hold; says so in a notice. */
+    private boolean nestsTooDeep(Command command) {
+        Optional<String> obstacle = Commands.nestingObstacle(command.apply(doc().getAnimation()));
+        obstacle.ifPresent(canvas::notice);
+        return obstacle.isPresent();
     }
 
     private static Set<String> ids(Animation animation) {
@@ -169,7 +177,11 @@ public final class CanvasActions {
         }
         Animation before = doc().getAnimation();
         String groupId = UUID.randomUUID().toString();
-        doc().execute(Commands.groupLayers(ids, groupId, LayerNames.next(before, "Group")));
+        Command command = Commands.groupLayers(ids, groupId, LayerNames.next(before, "Group"));
+        if (nestsTooDeep(command)) {
+            return;
+        }
+        doc().execute(command);
         if (doc().getAnimation() == before) {
             canvas.notice("Only layers of the same group can be grouped, and a mask has to stay with its layer.");
         } else {
@@ -259,7 +271,8 @@ public final class CanvasActions {
     /**
      * Pastes copies of the clipboard layers, with new ids, on top of the current level, each
      * paste 10 px further down and right, together with the assets they need, and selects them.
-     * A pasted slot whose name is taken gets the next free slot name.
+     * A pasted slot whose name is taken gets the next free slot name. Refuses with a notice
+     * when the layers would end up nested deeper than a file can hold.
      */
     public void paste() {
         if (doc() == null || clipboard.isEmpty()) {
@@ -273,8 +286,11 @@ public final class CanvasActions {
             copies.add(Commands.uniqueSlots(Commands.translated(copy, new Vec2(offset, offset)), slotNames));
         }
         String parent = canvas.getEnteredGroupId();
-        doc().execute(Commands.addLayers("Paste", parent, canvas.getGeometry().scope().size(), copies),
-                clipboard.getAssets());
+        Command command = Commands.addLayers("Paste", parent, canvas.getGeometry().scope().size(), copies);
+        if (nestsTooDeep(command)) {
+            return;
+        }
+        doc().execute(command, clipboard.getAssets());
         doc().getSelection().layerIds().setAll(copies.stream().map(Layer::id).toList());
     }
 

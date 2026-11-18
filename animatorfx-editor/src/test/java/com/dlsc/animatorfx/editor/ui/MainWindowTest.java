@@ -12,6 +12,8 @@ import com.dlsc.animatorfx.model.LayerBase;
 import com.dlsc.animatorfx.model.Paint;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
+import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.Vec2;
 import javafx.event.Event;
 import javafx.scene.control.Button;
@@ -36,6 +38,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -482,6 +485,96 @@ class MainWindowTest {
         assertTrue(recovery.load(id).isEmpty());
         assertTrue(Files.exists(dir.resolve("out.afx")));
         assertEquals("Saved", fx(() -> text(window, "#status-autosave")));
+    }
+
+    /** Two slots with one name: the model and the writer take that, the reader does not. */
+    private static void addTwoSlotsNamedCard(EditorDocument document) {
+        SlotLayer slot = new SlotLayer(LayerBase.create("s", 3), "card", 10, 10, Transform.IDENTITY);
+        document.execute(Commands.addLayer(null, 0, slot));
+        document.execute(Commands.addLayer(null, 1, slot.withBase(slot.base().withId("other"))));
+    }
+
+    @Test
+    void aDocumentThatCouldNotBeOpenedAgainIsNotSavedAndTheNoticeSaysWhy() throws Exception {
+        MainWindow window = start();
+        Path file = dir.resolve("out.afx");
+        dialogs.saveAnswers.add(file);
+        run(() -> window.getWorkspace().getActiveDocument().execute(Commands.addLayer(null, 0, rect("a"))));
+        assertTrue(fx(() -> window.getFileActions().save()));
+        byte[] good = Files.readAllBytes(file);
+
+        run(() -> addTwoSlotsNamedCard(window.getWorkspace().getActiveDocument()));
+        assertFalse(fx(() -> window.getFileActions().save()));
+
+        assertEquals(List.of("Could not save out.afx: layers[1].slotName: Duplicate slot name: card"),
+                fx(() -> window.getNoticeBar().getMessages()));
+        assertTrue(fx(() -> window.getWorkspace().getActiveDocument().isDirty()));
+        assertArrayEquals(good, Files.readAllBytes(file));
+    }
+
+    @Test
+    void aRecoveryCopyThatCouldNotBeReadBackKeepsThePreviousOneAndIsReportedOnce() {
+        MainWindow window = start();
+        RecoveryStore recovery = new RecoveryStore(config().resolve("recovery"));
+        String id = fx(() -> {
+            EditorDocument document = window.getWorkspace().getActiveDocument();
+            document.execute(Commands.addLayer(null, 0, rect("a")));
+            window.getSession().autosaveNow();
+            addTwoSlotsNamedCard(document);
+            window.getSession().autosaveNow();
+            window.getSession().autosaveNow();
+            document.execute(Commands.addLayer(null, 0, rect("b")));
+            window.getSession().autosaveNow();
+            return document.getId();
+        });
+
+        assertEquals(List.of("Recovery copy could not be written: layers[1].slotName: Duplicate slot name: card (Untitled)"),
+                fx(() -> window.getNoticeBar().getMessages()));
+        assertEquals(1, recovery.load(id).orElseThrow().file().animation().layers().size(), "the last good copy");
+
+        // once the document can be read back again, its copy is written again
+        run(() -> {
+            EditorDocument document = window.getWorkspace().getActiveDocument();
+            document.undo();
+            document.undo();
+            document.undo();
+            document.execute(Commands.addLayer(null, 0, rect("c")));
+            window.getSession().autosaveNow();
+        });
+        assertEquals(2, recovery.load(id).orElseThrow().file().animation().layers().size());
+    }
+
+    @Test
+    void anUnreadableRecoveryCopyIsKeptUnderAnotherNameAndReported() throws Exception {
+        MainWindow first = start();
+        String id = fx(() -> {
+            EditorDocument document = first.getWorkspace().getActiveDocument();
+            document.execute(Commands.addLayer(null, 0, rect("a")));
+            return document.getId();
+        });
+        quit(first);
+        Path copy = config().resolve("recovery").resolve(id + ".afx");
+        Files.writeString(copy, "damaged");
+
+        MainWindow second = start();
+
+        Path kept;
+        try (var files = Files.list(config().resolve("recovery"))) {
+            kept = files.filter(p -> p.getFileName().toString().startsWith(id + ".afx.unreadable-")).findFirst().orElseThrow();
+        }
+        assertEquals(List.of("The recovery copy of an unsaved document could not be read. It was kept as " + kept + "."),
+                fx(() -> second.getNoticeBar().getMessages()));
+        assertFalse(Files.exists(copy));
+        // the document comes back empty; working on it and closing it leaves the copy where it is
+        run(() -> {
+            EditorDocument document = second.getWorkspace().getActiveDocument();
+            assertEquals(id, document.getId());
+            document.execute(Commands.addLayer(null, 0, rect("b")));
+            second.getSession().autosaveNow();
+            second.getFileActions().discard(document);
+        });
+        quit(second);
+        assertEquals("damaged", Files.readString(kept));
     }
 
     @Test
