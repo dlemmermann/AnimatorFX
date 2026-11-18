@@ -111,8 +111,8 @@ class DocumentCheckTest {
             depth++;
         }
         assertEquals(Limits.MAX_DEPTH - 1, depth);
-        assertEquals(List.of("Layers with an id that another layer has got a new id (1 layer)",
-                "Nesting deeper than 64 levels is not supported; the deeper content was skipped"), warnings.lines());
+        assertEquals(List.of("Nesting deeper than 64 levels is not supported; the deeper content was skipped",
+                "Layers with an id that another layer has got a new id (1 layer)"), warnings.lines());
     }
 
     @Test
@@ -133,5 +133,70 @@ class DocumentCheckTest {
     void aDocumentThatCannotBeRepairedByDroppingLayersFails() {
         Animation animation = Animation.create("test", Double.NaN, 10, 1);
         assertThrows(IOException.class, () -> DocumentCheck.repair(animation, new Warnings()));
+    }
+
+    @Test
+    void aTreeOfAnyDepthIsCutWithoutRecursion() throws IOException {
+        Layer nested = shape("bottom");
+        for (int i = 0; i < 50_000; i++) {
+            nested = new GroupLayer(LayerBase.create("level", 1), List.of(nested));
+        }
+        Animation deep = document(shape("beside"), nested);
+        Warnings warnings = new Warnings();
+        Animation result = ImportChecks.onSmallStack(() -> DocumentCheck.repair(deep, warnings));
+        assertEquals(Limits.MAX_DEPTH, ImportChecks.measure(result)[1]);
+        assertEquals(Limits.MAX_DEPTH + 1, ImportChecks.measure(result)[0]);
+        ImportChecks.assertSavesAndRenders(new AnimationFile(result, Map.of()));
+        assertEquals(List.of("Nesting deeper than 64 levels is not supported; the deeper content was skipped"),
+                warnings.lines());
+    }
+
+    @Test
+    void layersBeyondTheLimitAreCutWhateverTheyAreThereFor() throws IOException {
+        // 15,000 pairs of a mask and its layer: 30,000 layers
+        List<Layer> layers = new java.util.ArrayList<>();
+        for (int i = 0; i < 15_000; i++) {
+            ShapeLayer mask = shape("mask");
+            layers.add(masked(shape("masked"), mask.id()));
+            layers.add(mask);
+        }
+        // and a group whose children would cross the limit
+        Warnings warnings = new Warnings();
+        Animation result = repaired(Animation.create("test", 10, 10, 1).withLayers(layers), warnings);
+        assertEquals(Limits.MAX_LAYERS, ImportChecks.measure(result)[0]);
+        // the limit falls between two pairs: every layer that stays has its mask
+        for (int i = 0; i < result.layers().size(); i += 2) {
+            assertEquals(result.layers().get(i + 1).id(), result.layers().get(i).base().mask().layerId());
+        }
+        assertEquals(List.of("Import stopped at 20000 layers; the rest of the file was skipped"), warnings.lines());
+
+        List<Layer> children = new java.util.ArrayList<>();
+        for (int i = 0; i < 25_000; i++) {
+            children.add(shape("child"));
+        }
+        result = repaired(document(new GroupLayer(LayerBase.create("g", 1), children), shape("after")),
+                new Warnings());
+        assertEquals(Limits.MAX_LAYERS, ImportChecks.measure(result)[0]);
+        assertEquals(List.of("g"), names(result.layers()));
+    }
+
+    @Test
+    void aLayerThatOnlyMaskedDroppedLayersGoesWithThem() throws IOException {
+        ShapeLayer source = shape("source");
+        ShapeLayer shared = shape("shared");
+        ShapeLayer chained = shape("chained");
+        Layer broken = masked(shape("broken"), source.id());
+        broken = broken.withBase(broken.base().withOpacity(Animatable.of(Double.NaN)));
+        Layer alsoBroken = masked(shape("also broken"), shared.id());
+        alsoBroken = alsoBroken.withBase(alsoBroken.base().withOpacity(Animatable.of(Double.NaN)));
+        // source masks only the broken layer, and is itself masked by "chained", which nothing else uses
+        Animation animation = document(chained, masked(source, chained.id()), broken, shared, alsoBroken,
+                masked(shape("user"), shared.id()), shape("plain"));
+        Warnings warnings = new Warnings();
+        Animation result = repaired(animation, warnings);
+        assertEquals(List.of("shared", "user", "plain"), names(result.layers()));
+        assertEquals(shared.id(), result.layers().get(1).base().mask().layerId());
+        assertEquals(List.of("Layers with values that are not finite or too large were dropped (2 layers)"),
+                warnings.lines());
     }
 }

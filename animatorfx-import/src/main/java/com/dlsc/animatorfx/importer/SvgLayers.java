@@ -58,6 +58,8 @@ final class SvgLayers {
     private final Set<Element> expanding = new HashSet<>();
     private final Limits limits;
     private int clipDepth;
+    /** Set by {@link #clip} when the clip path could not be built in full. */
+    private boolean clipIncomplete;
 
     SvgLayers(Map<String, Element> ids, Warnings warnings, double viewportWidth, double viewportHeight) {
         this.ids = ids;
@@ -133,6 +135,11 @@ final class SvgLayers {
         if (!limits.layer()) {
             return;
         }
+        // the clip first: an element whose clip cannot be built is left out, not shown unclipped
+        Layer mask = clip(style, user);
+        if (clipIncomplete) {
+            return;
+        }
         boolean leaf = true;
         Layer layer;
         switch (kind) {
@@ -159,7 +166,6 @@ final class SvgLayers {
         String visibility = style.get("visibility", "visible");
         boolean visible = displayed && !(leaf && (visibility.equals("hidden") || visibility.equals("collapse")));
         LayerBase base = layer.base().withOpacity(Animatable.of(opacity(style, warnings))).withVisible(visible);
-        Layer mask = clip(style, user);
         if (mask != null) {
             out.add(mask);
             base = base.withMask(new Mask(mask.id(), Mask.Mode.CLIP));
@@ -276,6 +282,7 @@ final class SvgLayers {
      * @return the layer, or {@code null} if the element is not clipped
      */
     private Layer clip(SvgStyle style, double[] user) {
+        clipIncomplete = false;
         String value = style.get("clip-path", "none").trim();
         if (!value.startsWith("url(") || !value.endsWith(")")) {
             return null;
@@ -296,6 +303,11 @@ final class SvgLayers {
         }
         double[] matrix = Matrix.multiply(user, transform(clipPath.getAttribute("transform")));
         List<Layer> shapes = new ArrayList<>();
+        // the shapes may end up in a group: one level deeper, and one more layer
+        if (!limits.enter()) {
+            clipIncomplete = true;
+            return null;
+        }
         clipDepth++;
         try {
             SvgStyle clipStyle = SvgStyle.of(clipPath, null);
@@ -304,12 +316,22 @@ final class SvgLayers {
             }
         } finally {
             clipDepth--;
+            limits.leave();
+        }
+        // the shapes reset the flag for themselves
+        clipIncomplete = limits.stopped();
+        if (clipIncomplete) {
+            return null;
         }
         String id = clipPath.getAttribute("id");
         String name = id.isEmpty() ? "clipPath" : id;
         if (shapes.size() == 1) {
             Layer only = shapes.get(0);
             return only.withBase(only.base().withName(name));
+        }
+        if (!limits.layer()) {
+            clipIncomplete = true;
+            return null;
         }
         return new GroupLayer(LayerBase.create(name, SvgImporter.DURATION), shapes);
     }

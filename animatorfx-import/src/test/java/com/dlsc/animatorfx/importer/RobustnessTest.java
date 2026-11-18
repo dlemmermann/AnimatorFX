@@ -2,9 +2,7 @@ package com.dlsc.animatorfx.importer;
 
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Geometry;
-import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Layer;
-import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.Mask;
 import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.ShapeLayer;
@@ -229,7 +227,7 @@ class RobustnessTest {
         }
         svg.append("</defs><use href='#l9'/><rect id='after' width='5' height='5'/></svg>");
         ImportResult result = svg(svg.toString());
-        int layers = Layers.flatten(result.file().animation()).size();
+        int layers = ImportChecks.measure(result.file().animation())[0];
         assertTrue(layers > 1000 && layers <= 20000, "layers: " + layers);
         assertEquals(1, result.warnings().stream().filter(STOPPED::equals).count(), result.warnings().toString());
     }
@@ -243,23 +241,19 @@ class RobustnessTest {
         svg.append("<rect id='u20000' width='1' height='1'/></svg>");
         ImportResult result = svg(svg.toString());
         assertEquals(1, result.warnings().stream().filter(TOO_DEEP::equals).count(), result.warnings().toString());
-        assertTrue(depth(result.file().animation().layers()) <= 64);
+        assertTrue(depth(result.file().animation()) <= 64);
     }
 
     @Test
     void deeplyNestedGroupsStopAtTheDepthLimit() throws IOException {
         ImportResult result = svg(SVG + "<g>".repeat(90) + "<rect width='1' height='1'/>" + "</g>".repeat(90)
                 + "</svg>");
-        assertTrue(depth(result.file().animation().layers()) <= 64);
+        assertTrue(depth(result.file().animation()) <= 64);
         assertWarns(result, TOO_DEEP);
     }
 
-    private static int depth(List<Layer> layers) {
-        int depth = 0;
-        for (Layer layer : layers) {
-            depth = Math.max(depth, 1 + (layer instanceof GroupLayer group ? depth(group.children()) : 0));
-        }
-        return depth;
+    private static int depth(Animation animation) {
+        return ImportChecks.measure(animation)[1];
     }
 
     @Test
@@ -274,7 +268,7 @@ class RobustnessTest {
             assets.append("]}");
         }
         ImportResult result = lottie(lottieDocument(assets.toString(), "{\"ty\":0,\"ip\":0,\"op\":60,\"refId\":\"c9\"}"));
-        int layers = Layers.flatten(result.file().animation()).size();
+        int layers = ImportChecks.measure(result.file().animation())[0];
         assertTrue(layers > 1000 && layers <= 20000, "layers: " + layers);
         assertEquals(1, result.warnings().stream().filter(STOPPED::equals).count(), result.warnings().toString());
     }
@@ -287,9 +281,9 @@ class RobustnessTest {
                     .append(i < 2000 ? ",\"parent\":" + (i + 1) : "").append("}");
         }
         ImportResult result = lottie(lottieDocument("", layers.toString()));
-        int count = Layers.flatten(result.file().animation()).size();
+        int count = ImportChecks.measure(result.file().animation())[0];
         assertTrue(count <= 20000, "layers: " + count);
-        assertTrue(depth(result.file().animation().layers()) <= 64);
+        assertTrue(depth(result.file().animation()) <= 64);
         assertWarns(result, "Parent chains longer than 64 layers are not supported; the layers are treated as unparented");
     }
 
@@ -314,5 +308,142 @@ class RobustnessTest {
         result = lottie(lottieDocument("", "{\"ty\":4,\"nm\":\"L\",\"ip\":0,\"op\":60,\"shapes\":["
                 + String.format(star, 2, "1e300") + "]}"));
         assertWarns(result, "Properties with values that are not finite or too large use their default");
+    }
+
+    // ------------------------------------------------------------------ limits on the result, whatever made the layers
+
+    private static final String MASK = "\"masksProperties\":[{\"mode\":\"a\",\"o\":{\"a\":0,\"k\":100},\"pt\":{\"a\":0,"
+            + "\"k\":{\"c\":true,\"v\":[[0,0],[5,0],[5,5]],\"i\":[[0,0],[0,0],[0,0]],\"o\":[[0,0],[0,0],[0,0]]}}}],";
+
+    @Test
+    void precompositionsUnderParentChainsDoNotOverflowTheStack() throws IOException {
+        // 63 precompositions inside each other, each parented to a chain of 64 layers that are not
+        // converted themselves: the carriers alone would nest more than 4000 groups
+        StringBuilder assets = new StringBuilder();
+        for (int level = 1; level <= 63; level++) {
+            assets.append(level == 1 ? "" : ",").append("{\"id\":\"c").append(level).append("\",\"layers\":[");
+            assets.append(level < 63
+                    ? "{\"ty\":0,\"ind\":1,\"parent\":2,\"ip\":0,\"op\":60,\"refId\":\"c" + (level + 1) + "\"}"
+                    : "{\"ty\":4,\"ind\":1,\"parent\":2,\"ip\":0,\"op\":60," + BOX + "}");
+            for (int ind = 2; ind <= 65; ind++) {
+                assets.append(",{\"ty\":13,\"ind\":").append(ind).append(ind < 65 ? ",\"parent\":" + (ind + 1) : "")
+                        .append("}");
+            }
+            assets.append("]}");
+        }
+        String json = lottieDocument(assets.toString(), "{\"ty\":0,\"ip\":0,\"op\":60,\"refId\":\"c1\"}");
+        ImportResult result = ImportChecks.onSmallStack(() -> LottieImporter.read(
+                new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)), "test"));
+        ImportChecks.assertSavesAndRenders(result.file());
+        assertEquals(1, result.warnings().stream().filter(TOO_DEEP::equals).count(), result.warnings().toString());
+    }
+
+    @Test
+    void carriersOfParentChainsCountTowardsTheDepth() throws IOException {
+        // five precompositions, each under a chain of 20 parents: 105 levels without the limit
+        StringBuilder assets = new StringBuilder();
+        for (int level = 1; level <= 5; level++) {
+            assets.append(level == 1 ? "" : ",").append("{\"id\":\"c").append(level).append("\",\"layers\":[");
+            assets.append(level < 5
+                    ? "{\"ty\":0,\"ind\":1,\"parent\":2,\"ip\":0,\"op\":60,\"refId\":\"c" + (level + 1) + "\"}"
+                    : "{\"ty\":4,\"ind\":1,\"parent\":2,\"ip\":0,\"op\":60," + BOX + "}");
+            for (int ind = 2; ind <= 21; ind++) {
+                assets.append(",{\"ty\":3,\"ind\":").append(ind).append(",\"ip\":0,\"op\":60")
+                        .append(ind < 21 ? ",\"parent\":" + (ind + 1) : "").append("}");
+            }
+            assets.append("]}");
+        }
+        // and beside them a chain of 2000 parents
+        StringBuilder layers = new StringBuilder("{\"ty\":0,\"ind\":5000,\"ip\":0,\"op\":60,\"refId\":\"c1\"}");
+        for (int i = 1; i <= 2000; i++) {
+            layers.append(",{\"ty\":3,\"ind\":").append(i).append(",\"ip\":0,\"op\":60")
+                    .append(i < 2000 ? ",\"parent\":" + (i + 1) : "").append("}");
+        }
+        ImportResult result = lottie(lottieDocument(assets.toString(), layers.toString()));
+        assertEquals(64, ImportChecks.measure(result.file().animation())[1]);
+        assertWarns(result, TOO_DEEP);
+        assertWarns(result, "Parent chains longer than 64 layers are not supported");
+    }
+
+    @Test
+    void maskLayersCountTowardsTheLayerLimit() throws IOException {
+        StringBuilder layers = new StringBuilder();
+        for (int i = 0; i < 20000; i++) {
+            layers.append(i == 0 ? "" : ",").append("{\"ty\":4,\"ip\":0,\"op\":60,").append(MASK).append(BOX).append("}");
+        }
+        String json = lottieDocument("", layers.toString());
+        // also a guard on the time: checking 20,000 masks must not take a comparison per pair of layers
+        ImportResult result = org.junit.jupiter.api.Assertions.assertTimeout(java.time.Duration.ofSeconds(3),
+                () -> LottieImporter.read(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)), "test"));
+        ImportChecks.assertSavesAndRenders(result.file());
+        int count = ImportChecks.measure(result.file().animation())[0];
+        assertTrue(count > 15000 && count <= 20000, "layers: " + count);
+        assertEquals(1, result.warnings().stream().filter(STOPPED::equals).count(), result.warnings().toString());
+        // no layer is left without the mask it had
+        for (Layer layer : result.file().animation().layers()) {
+            assertTrue(layer.name().endsWith("(mask)") || layer.base().mask() != null, layer.name());
+        }
+    }
+
+    @Test
+    void aLottieBombWithMasksStopsAtTheLayerLimit() throws IOException {
+        StringBuilder assets = new StringBuilder("{\"id\":\"c0\",\"layers\":[{\"ty\":4,\"ip\":0,\"op\":60," + MASK + BOX
+                + "}]}");
+        for (int level = 1; level <= 9; level++) {
+            assets.append(",{\"id\":\"c").append(level).append("\",\"layers\":[");
+            for (int i = 0; i < 10; i++) {
+                assets.append(i == 0 ? "" : ",").append("{\"ty\":0,\"ip\":0,\"op\":60,").append(MASK)
+                        .append("\"tt\":").append(i % 2).append(",\"refId\":\"c").append(level - 1).append("\"}");
+            }
+            assets.append("]}");
+        }
+        ImportResult result = lottie(lottieDocument(assets.toString(), "{\"ty\":0,\"ip\":0,\"op\":60,\"refId\":\"c9\"}"));
+        int[] measured = ImportChecks.measure(result.file().animation());
+        assertTrue(measured[0] > 1000, "layers: " + measured[0] + ", depth " + measured[1] + ", " + result.warnings());
+        assertEquals(1, result.warnings().stream().filter(STOPPED::equals).count(), result.warnings().toString());
+    }
+
+    @Test
+    void anSvgBombWithClipPathsStopsAtTheLayerLimit() throws IOException {
+        StringBuilder svg = new StringBuilder(SVG).append("<defs><clipPath id='c'><rect width='1' height='1'/>"
+                + "<circle r='1'/></clipPath><rect id='l0' width='1' height='1' clip-path='url(#c)'/>");
+        for (int level = 1; level <= 9; level++) {
+            svg.append("<g id='l").append(level).append("' clip-path='url(#c)'>");
+            for (int i = 0; i < 10; i++) {
+                svg.append("<use href='#l").append(level - 1).append("'/>");
+            }
+            svg.append("</g>");
+        }
+        svg.append("</defs><use href='#l9'/></svg>");
+        ImportResult result = svg(svg.toString());
+        assertTrue(ImportChecks.measure(result.file().animation())[0] > 1000);
+        assertEquals(1, result.warnings().stream().filter(STOPPED::equals).count(), result.warnings().toString());
+    }
+
+    @Test
+    void aDroppedLayerTakesItsMaskLayerAlong() throws IOException {
+        // the text is dropped for its size; its mask shape must not stay behind as a visible layer
+        ImportResult result = lottie(lottieDocument("", "{\"ty\":5,\"nm\":\"T\",\"ip\":0,\"op\":60," + MASK
+                + "\"t\":{\"d\":{\"k\":[{\"t\":0,\"s\":{\"s\":1e300,\"f\":\"Arial\",\"t\":\"text\",\"fc\":[0,0,0]}}]}}},"
+                + "{\"ty\":4,\"nm\":\"Other\",\"ip\":0,\"op\":60," + BOX + "}"));
+        assertEquals(List.of("Other"), names(result.file().animation().layers()));
+        assertWarns(result, "Layers with values that are not finite or too large were dropped (1 layer)");
+    }
+
+    @Test
+    void aDroppedLayerTakesItsTrackMatteAlongUnlessAnotherLayerUsesIt() throws IOException {
+        String matte = "{\"ty\":4,\"ind\":1,\"nm\":\"Matte\",\"td\":1,\"ip\":0,\"op\":60," + BOX + "},";
+        String broken = "{\"ty\":1,\"ind\":2,\"nm\":\"Broken\",\"tt\":1,\"tp\":1,\"ip\":0,\"op\":60,\"sc\":\"#ff0000\","
+                + "\"sw\":1e300,\"sh\":10}";
+        ImportResult result = lottie(lottieDocument("", matte + broken));
+        assertEquals(List.of(), result.file().animation().layers());
+        assertWarns(result, "Layers with values that are not finite or too large were dropped (1 layer)");
+
+        // a second user keeps the matte
+        result = lottie(lottieDocument("", matte + broken + ",{\"ty\":4,\"ind\":3,\"nm\":\"User\",\"tt\":1,\"tp\":1,"
+                + "\"ip\":0,\"op\":60," + BOX + "}"));
+        Animation animation = result.file().animation();
+        assertEquals(List.of("User", "Matte"), names(animation.layers()));
+        assertEquals(new Mask(named(animation, "Matte").id(), Mask.Mode.ALPHA), named(animation, "User").base().mask());
     }
 }

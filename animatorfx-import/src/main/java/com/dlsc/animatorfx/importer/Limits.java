@@ -22,6 +22,7 @@ final class Limits {
     private final Warnings warnings;
     private int layers;
     private int depth;
+    private boolean stopped;
 
     Limits(Warnings warnings) {
         this.warnings = warnings;
@@ -42,22 +43,29 @@ final class Limits {
     }
 
     /**
-     * Asks for one more layer.
+     * Asks for one more layer. Every layer that ends up in the document must be asked for,
+     * whatever it is there for: content, a group that carries a parent's transform, a mask.
      *
      * @return {@code false} once the import has produced all the layers it may; nothing more
      *         must be converted then
      */
     boolean layer() {
         if (layers >= MAX_LAYERS) {
-            warnings.once("Import stopped at " + MAX_LAYERS + " layers; the rest of the file was skipped");
+            stopped = true;
+            stopped(warnings);
             return false;
         }
         layers++;
         return true;
     }
 
-    boolean exhausted() {
-        return layers >= MAX_LAYERS;
+    /** Whether a layer has been refused: what was being built at that moment is incomplete. */
+    boolean stopped() {
+        return stopped;
+    }
+
+    static void stopped(Warnings warnings) {
+        warnings.once("Import stopped at " + MAX_LAYERS + " layers; the rest of the file was skipped");
     }
 
     /**

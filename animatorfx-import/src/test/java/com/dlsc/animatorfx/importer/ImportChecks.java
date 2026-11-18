@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Shared helpers of the importer tests. */
 final class ImportChecks {
@@ -57,6 +58,7 @@ final class ImportChecks {
      * and evaluate at any time.
      */
     static void assertSavesAndRenders(AnimationFile file) throws IOException {
+        assertWithinLimits(file.animation());
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         AnimationIO.write(file, out);
         AnimationFile reread = AnimationIO.read(new ByteArrayInputStream(out.toByteArray()));
@@ -74,6 +76,72 @@ final class ImportChecks {
                 assertNotNull(frame.get(layer.id()), layer.name());
             }
         }
+    }
+
+    /**
+     * What every import promises about its result, however the layers came about: at most
+     * {@link Limits#MAX_LAYERS} layers in total and groups nested at most {@link Limits#MAX_DEPTH}
+     * deep. Walks the tree without recursion, so it is safe on a tree that breaks the promise.
+     */
+    static void assertWithinLimits(Animation animation) {
+        int[] measured = measure(animation);
+        assertTrue(measured[0] <= Limits.MAX_LAYERS, "layers: " + measured[0]);
+        assertTrue(measured[1] <= Limits.MAX_DEPTH, "nesting: " + measured[1]);
+    }
+
+    /** {@code {number of layers, deepest nesting}}; a top-level layer is at depth 1. */
+    static int[] measure(Animation animation) {
+        int count = 0;
+        int deepest = 0;
+        java.util.ArrayDeque<Layer> layers = new java.util.ArrayDeque<>();
+        java.util.ArrayDeque<Integer> depths = new java.util.ArrayDeque<>();
+        for (Layer layer : animation.layers()) {
+            layers.push(layer);
+            depths.push(1);
+        }
+        while (!layers.isEmpty()) {
+            Layer layer = layers.pop();
+            int depth = depths.pop();
+            count++;
+            deepest = Math.max(deepest, depth);
+            if (layer instanceof GroupLayer group) {
+                for (Layer child : group.children()) {
+                    layers.push(child);
+                    depths.push(depth + 1);
+                }
+            }
+        }
+        return new int[]{count, deepest};
+    }
+
+    /**
+     * Runs an import on a new thread with a small stack and hands on whatever it throws, so that
+     * recursion without a bound fails for certain, whatever the JIT and the default stack size.
+     */
+    static <T> T onSmallStack(java.util.concurrent.Callable<T> action) throws IOException {
+        Object[] outcome = new Object[2];
+        Thread thread = new Thread(null, () -> {
+            try {
+                outcome[0] = action.call();
+            } catch (Throwable e) {
+                outcome[1] = e;
+            }
+        }, "small-stack", 256 * 1024);
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            throw new AssertionError(e);
+        }
+        if (outcome[1] instanceof IOException declared) {
+            throw declared;
+        }
+        if (outcome[1] != null) {
+            throw new AssertionError("Failed on a small stack: " + outcome[1], (Throwable) outcome[1]);
+        }
+        @SuppressWarnings("unchecked")
+        T result = (T) outcome[0];
+        return result;
     }
 
     static Layer named(Animation animation, String name) {

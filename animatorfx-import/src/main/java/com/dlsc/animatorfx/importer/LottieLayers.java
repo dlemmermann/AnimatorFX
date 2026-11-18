@@ -165,9 +165,44 @@ final class LottieLayers {
         return get(unit.json, "parent") instanceof Number index ? byIndex.get(index.intValue()) : null;
     }
 
+    /**
+     * Converts the layer where it will end up: below one carrier group per ancestor. The carriers
+     * count as levels of nesting like any other group.
+     */
     private void convert(Unit unit, double frameOffset) {
-        Object json = unit.json;
         if (!limits.layer()) {
+            return;
+        }
+        int ancestors = 0;
+        for (Unit ancestor = unit.parent; ancestor != null; ancestor = ancestor.parent) {
+            ancestors++;
+        }
+        int entered = 0;
+        try {
+            // levels and layers for the carriers first: the content must not use them up
+            while (entered < ancestors) {
+                if (!limits.enter()) {
+                    return;
+                }
+                entered++;
+                if (!limits.layer()) {
+                    return;
+                }
+            }
+            build(unit, frameOffset);
+        } finally {
+            while (entered-- > 0) {
+                limits.leave();
+            }
+        }
+    }
+
+    private void build(Unit unit, double frameOffset) {
+        Object json = unit.json;
+        // The mask layer is asked for before the content: a layer that cannot have its mask is
+        // left out as a whole, and must not have used up the budget by then.
+        Object mask = chooseMask(json);
+        if (mask != null && !limits.layer()) {
             return;
         }
         if (LottieJson.flag(json, "ddd")) {
@@ -205,7 +240,9 @@ final class LottieLayers {
         if (unit.core == null) {
             return;
         }
-        mask(unit, frameOffset);
+        if (mask != null) {
+            mask(unit, mask, frameOffset);
+        }
 
         List<Layer> tops = new ArrayList<>();
         if (unit.maskLayer != null) {
@@ -215,9 +252,6 @@ final class LottieLayers {
         // A child follows the transform of its parent, but neither its opacity nor its time
         // range: a group with a copy of the parent's transform carries it, one per ancestor.
         for (Unit ancestor = unit.parent; ancestor != null; ancestor = ancestor.parent) {
-            if (!limits.layer()) {
-                return;
-            }
             LayerBase carrier = LayerBase.create(ancestor.name + " (parent transform)", duration)
                     .withTransform(ancestor.placement.transform());
             tops = new ArrayList<>(List.of(new GroupLayer(carrier, tops)));
@@ -357,13 +391,10 @@ final class LottieLayers {
         }
     }
 
-    /**
-     * The layer's own mask: the first additive one. The mask path is in the coordinates of the
-     * layer, so the mask layer, a sibling as the model wants it, gets the same transform.
-     */
-    private void mask(Unit unit, double frameOffset) {
+    /** The mask of a layer that is converted: the first additive one, or {@code null}. */
+    private Object chooseMask(Object json) {
         Object chosen = null;
-        for (Object mask : list(unit.json, "masksProperties")) {
+        for (Object mask : list(json, "masksProperties")) {
             String mode = LottieJson.string(mask, "mode", "a");
             if (mode.equals("n")) {
                 continue;
@@ -374,9 +405,14 @@ final class LottieLayers {
                 warnings.add("Only one additive mask per layer is supported", "mask ignored", "masks ignored");
             }
         }
-        if (chosen == null) {
-            return;
-        }
+        return chosen;
+    }
+
+    /**
+     * The mask path is in the coordinates of the layer, so the mask layer, a sibling as the
+     * model wants it, gets the same transform.
+     */
+    private void mask(Unit unit, Object chosen, double frameOffset) {
         Animatable<PathData> path = properties.path(get(chosen, "pt"), frameOffset);
         Animatable<Double> opacity = transforms.opacity(get(chosen, "o"), frameOffset);
         boolean opaque = !opacity.isAnimated() && opacity.at(0) >= 1;
@@ -426,8 +462,9 @@ final class LottieLayers {
                         "mattes ignored");
                 continue;
             }
-            single(source);
-            single(unit);
+            if (!single(source) || !single(unit)) {
+                continue;
+            }
             Layer masked = unit.tops.get(0);
             if (masked.base().mask() != null) {
                 // cannot happen as units are built; a second mask would orphan the first
@@ -455,9 +492,13 @@ final class LottieLayers {
      * Makes one layer stand for the unit, so that it can mask or be masked. A unit that is two
      * layers (the layer and its own mask) goes into a group; the mask inside stays beside its layer.
      */
-    private void single(Unit unit) {
+    private boolean single(Unit unit) {
         if (unit.tops.size() > 1) {
+            if (!limits.layer()) {
+                return false;
+            }
             unit.tops = List.of(new GroupLayer(LayerBase.create(unit.name, duration), unit.tops));
         }
+        return true;
     }
 }
