@@ -1,7 +1,8 @@
-package com.dlsc.animatorfx.player.render;
+package com.dlsc.animatorfx.player.internal;
 
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.player.LayerState.EffectState;
+import com.dlsc.animatorfx.player.render.PaintConverter;
 import javafx.scene.Node;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.GaussianBlur;
@@ -13,14 +14,18 @@ import java.util.Objects;
 
 /**
  * The JavaFX effects of one layer. The first effect of the list is applied first, so it is the
- * innermost input; the node carries the last one.
+ * innermost input; the node carries the last one. Shared by the renderer and in-place slot bindings.
  */
-final class EffectChain {
+public final class EffectChain {
 
     private javafx.scene.effect.Effect[] chain = {};
     private List<EffectState> last = List.of();
 
-    void apply(Node node, List<EffectState> states) {
+    /**
+     * Writes the effects to the node. The effect instances are kept as long as the list has the
+     * same effect types; the node's effect is only replaced when it has not.
+     */
+    public void apply(Node node, List<EffectState> states) {
         if (states == last) {
             return;
         }

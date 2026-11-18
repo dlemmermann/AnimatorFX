@@ -1,0 +1,10 @@
+/*
+ * User-agent stylesheet of com.dlsc.animatorfx.player.AnimationView.
+ *
+ * -fx-fit:       contain | cover | none
+ * -fx-auto-play: true | false
+ */
+.animation-view {
+    -fx-fit: contain;
+    -fx-auto-play: false;
+}

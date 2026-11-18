@@ -8,6 +8,7 @@ import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.Stroke;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.player.LayerState;
+import com.dlsc.animatorfx.player.internal.EffectChain;
 import javafx.geometry.VPos;
 import javafx.scene.Group;
 import javafx.scene.Node;

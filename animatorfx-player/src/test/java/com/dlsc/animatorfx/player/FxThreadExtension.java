@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.InvocationInterceptor;
 import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
 import org.testfx.api.FxToolkit;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +25,15 @@ public final class FxThreadExtension implements InvocationInterceptor {
             FxToolkit.registerPrimaryStage();
             started = true;
         }
+    }
+
+    /** Controls cannot even be loaded before the toolkit runs, so start it before the test instance exists. */
+    @Override
+    public <T> T interceptTestClassConstructor(Invocation<T> invocation,
+                                               ReflectiveInvocationContext<Constructor<T>> invocationContext,
+                                               ExtensionContext extensionContext) throws Throwable {
+        start();
+        return invocation.proceed();
     }
 
     @Override
