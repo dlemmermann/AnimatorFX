@@ -463,6 +463,31 @@ class TimelineViewTest extends EditorUiTest {
         assertEquals(1, keyframes("a", POSITION).size());
     }
 
+    @Test
+    void aContextMenuClickOnAKeyframeSelectsItAndOpensTheMenu() {
+        expand("a");
+        double kx = x(1.5);
+        double ky = y("a", POSITION);
+        run(() -> {
+            var scene = tracks.localToScene(kx, ky);
+            var screen = tracks.localToScreen(kx, ky);
+            Event.fireEvent(tracks, new javafx.scene.input.ContextMenuEvent(
+                    javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, scene.getX(), scene.getY(),
+                    screen.getX(), screen.getY(), false, null));
+        });
+        assertEquals(Set.of(ref("a", POSITION, "p2")), selectedKeys());
+        assertTrue(fx(() -> tracks.getKeyframeMenu().isShowing()));
+        run(() -> tracks.getKeyframeMenu().hide());
+        // free space has no menu
+        run(() -> {
+            var scene = tracks.localToScene(kx + 60, ky);
+            Event.fireEvent(tracks, new javafx.scene.input.ContextMenuEvent(
+                    javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, scene.getX(), scene.getY(), 0, 0, false,
+                    null));
+        });
+        assertFalse(fx(() -> tracks.getKeyframeMenu().isShowing()));
+    }
+
     // ------------------------------------------------------------------ bars
 
     @Test

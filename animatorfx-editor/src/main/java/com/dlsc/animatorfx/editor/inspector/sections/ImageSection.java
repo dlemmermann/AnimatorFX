@@ -4,6 +4,7 @@ import com.dlsc.animatorfx.editor.doc.PropertyUnits;
 import com.dlsc.animatorfx.editor.inspector.FieldRow;
 import com.dlsc.animatorfx.editor.inspector.InspectorContext;
 import com.dlsc.animatorfx.editor.inspector.SectionBase;
+import com.dlsc.animatorfx.editor.inspector.fields.Combos;
 import com.dlsc.animatorfx.editor.inspector.fields.NumberField;
 import com.dlsc.animatorfx.model.Asset;
 import com.dlsc.animatorfx.model.ImageLayer;
@@ -31,7 +32,6 @@ public final class ImageSection extends SectionBase {
     public ImageSection() {
         super("Image");
         asset.setId(ASSET_ID);
-        asset.getStyleClass().add("compact-combo");
         asset.setPromptText("Mixed");
         asset.setMaxWidth(Double.MAX_VALUE);
         asset.setMinWidth(0);
@@ -46,6 +46,7 @@ public final class ImageSection extends SectionBase {
                 return null;
             }
         });
+        Combos.compact(asset);
         asset.valueProperty().addListener((obs, old, value) -> {
             if (!updating && value != null) {
                 context().edit("Change Image", ImageLayer.class, l -> l.withAssetId(value.id()), null);

@@ -267,6 +267,30 @@ class ScreenshotHarness {
         settle();
         snapshot(side, out.resolve("extra-inspector-shape.png"));
 
+        // the timeline with everything collapsed, a hold keyframe, a hidden and a locked layer
+        java.util.Set<String> expanded = new java.util.HashSet<>(doc.getViewState().getExpandedLayerIds());
+        fx(() -> {
+            doc.getViewState().getExpandedLayerIds().clear();
+            doc.getViewState().setTimelineZoom(2.4);
+            return null;
+        });
+        settle();
+        snapshot(timeline, out.resolve("extra-timeline-collapsed.png"));
+        fx(() -> {
+            doc.getViewState().getExpandedLayerIds().addAll(expanded);
+            doc.getViewState().setShowAllProperties(true);
+            return null;
+        });
+        settle();
+        snapshot(timeline, out.resolve("extra-timeline-all-properties.png"));
+        fx(() -> {
+            doc.getViewState().setShowAllProperties(false);
+            doc.getViewState().setTimelineZoom(1);
+            doc.getViewState().setTimelineScroll(0);
+            return null;
+        });
+        settle();
+
         fx(() -> {
             doc.getSelection().layerIds().setAll(doc.getAnimation().layers().get(5).id());
             return null;

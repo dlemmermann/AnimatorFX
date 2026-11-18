@@ -362,6 +362,22 @@ class InspectorViewTest extends EditorUiTest {
     }
 
     @Test
+    void aMixedPaintShowsMixedInTheTypeSelector() {
+        execute(Commands.setProperty("b", "fill", Animatable.of(new Paint.None())));
+        ComboBox<String> type = inspector.section(FillSection.class).orElseThrow().fill().field().getTypeBox();
+        assertEquals("Solid", fx(() -> type.getButtonCell().getText()));
+        select("a", "b");
+        assertNull(fx(type::getValue));
+        assertEquals("Mixed", fx(() -> type.getButtonCell().getText()));
+        // choosing a type makes all of them that type
+        run(() -> type.setValue(PaintField.SOLID));
+        layout();
+        assertInstanceOf(Paint.Solid.class, value("a", "fill").at(0));
+        assertInstanceOf(Paint.Solid.class, value("b", "fill").at(0));
+        assertEquals("Solid", fx(() -> type.getButtonCell().getText()));
+    }
+
+    @Test
     void theDiamondWorksOnAllSelectedLayers() {
         select("a", "b");
         execute(Commands.addKeyframe("a", OPACITY, 0));

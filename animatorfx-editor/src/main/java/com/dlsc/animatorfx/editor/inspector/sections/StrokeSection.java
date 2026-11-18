@@ -6,6 +6,7 @@ import com.dlsc.animatorfx.editor.inspector.FieldRow;
 import com.dlsc.animatorfx.editor.inspector.InspectorContext;
 import com.dlsc.animatorfx.editor.inspector.PropertyRows;
 import com.dlsc.animatorfx.editor.inspector.SectionBase;
+import com.dlsc.animatorfx.editor.inspector.fields.Combos;
 import com.dlsc.animatorfx.editor.inspector.fields.NumberField;
 import com.dlsc.animatorfx.editor.inspector.fields.TextValueField;
 import com.dlsc.animatorfx.model.Animatable;
@@ -66,8 +67,9 @@ public final class StrokeSection extends SectionBase {
         join.getItems().addAll(Stroke.Join.values());
         cap.setConverter(names());
         join.setConverter(names());
+        Combos.compact(cap);
+        Combos.compact(join);
         for (ComboBox<?> box : List.of(cap, join)) {
-            box.getStyleClass().add("compact-combo");
             box.setPromptText("Mixed");
             box.setMaxWidth(Double.MAX_VALUE);
             box.setMinWidth(0);

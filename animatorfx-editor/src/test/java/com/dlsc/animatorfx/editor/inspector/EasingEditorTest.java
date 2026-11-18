@@ -74,6 +74,7 @@ class EasingEditorTest extends EditorUiTest {
         selectKeys(OPACITY + "/k1");
         assertEquals("Linear", fx(presets::getPromptText));
         assertNull(fx(presets::getValue));
+        assertEquals("Linear", fx(() -> presets.getButtonCell().getText()), "the selector shows it");
         assertEquals("cubic-bezier(0, 0, 1, 1)", fx(bezier::getText));
     }
 

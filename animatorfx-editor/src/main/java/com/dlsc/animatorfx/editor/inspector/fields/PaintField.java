@@ -64,7 +64,7 @@ public final class PaintField extends VBox {
     public PaintField() {
         getStyleClass().add("paint-field");
         type.getItems().addAll(NONE, SOLID, LINEAR, RADIAL);
-        type.getStyleClass().add("compact-combo");
+        Combos.compact(type);
         type.setPromptText("Mixed");
         type.setMinWidth(72);
         type.setPrefWidth(72);
@@ -74,6 +74,7 @@ public final class PaintField extends VBox {
             }
         });
         HBox.setHgrow(solid, Priority.ALWAYS);
+        HBox.setHgrow(type, Priority.ALWAYS);
         HBox head = new HBox(type, solid);
         head.getStyleClass().add("paint-head");
 
@@ -303,6 +304,8 @@ public final class PaintField extends VBox {
             updating = false;
         }
         boolean isSolid = value instanceof Paint.Solid;
+        // next to a colour the selector is narrow; on its own it takes the width of the row
+        type.setMaxWidth(isSolid ? 72 : Double.MAX_VALUE);
         boolean linear = value instanceof Paint.LinearGradient;
         boolean radial = value instanceof Paint.RadialGradient;
         visible(solid, isSolid);

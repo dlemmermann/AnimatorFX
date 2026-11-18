@@ -79,6 +79,17 @@ final class TrackInteraction {
         tracks.setOnMouseReleased(this::released);
         tracks.setOnMouseMoved(e -> tracks.setCursor(tracks.hitAt(e.getX(), e.getY()) instanceof Hit.Bar b
                 && b.part() != BarPart.BODY ? Cursor.H_RESIZE : Cursor.DEFAULT));
+        tracks.setOnContextMenuRequested(e -> {
+            // on a keyframe: the menu is about the selected keyframes, this one included
+            if (doc() != null && tracks.hitAt(e.getX(), e.getY()) instanceof Hit.Key key) {
+                tracks.requestFocus();
+                if (!doc().getSelection().keyframes().contains(key.ref())) {
+                    selectKeys(List.of(key.ref()), false);
+                }
+                getKeyframeMenu().show(tracks, e.getScreenX(), e.getScreenY());
+            }
+            e.consume();
+        });
         tracks.addEventHandler(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.ESCAPE && mode != Mode.NONE && moved) {
                 cancel();
@@ -104,16 +115,6 @@ final class TrackInteraction {
             return;
         }
         Hit hit = tracks.hitAt(event.getX(), event.getY());
-        if (event.getButton() == MouseButton.SECONDARY) {
-            if (hit instanceof Hit.Key key) {
-                if (!doc.getSelection().keyframes().contains(key.ref())) {
-                    selectKeys(List.of(key.ref()), false);
-                }
-                getKeyframeMenu().show(tracks, event.getScreenX(), event.getScreenY());
-            }
-            event.consume();
-            return;
-        }
         if (event.getButton() != MouseButton.PRIMARY) {
             return;
         }

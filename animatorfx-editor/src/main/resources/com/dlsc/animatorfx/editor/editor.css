@@ -721,6 +721,10 @@
     -fx-text-fill: -afx-fg;
 }
 
+.compact-combo > .list-cell:empty {
+    -fx-opacity: 1;
+}
+
 .compact-combo > .arrow-button {
     -fx-background-color: transparent;
     -fx-padding: 0 6 0 2;

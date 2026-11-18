@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.editor.inspector;
 import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.Selection.KeyframeRef;
+import com.dlsc.animatorfx.editor.inspector.fields.Combos;
 import com.dlsc.animatorfx.editor.inspector.fields.TextValueField;
 import com.dlsc.animatorfx.editor.ui.Palette;
 import com.dlsc.animatorfx.editor.ui.Palette.Tone;
@@ -96,7 +97,7 @@ public final class EasingEditor extends VBox {
         curve.setOnMouseReleased(e -> released());
 
         presets.setId(PRESET_ID);
-        presets.getStyleClass().add("compact-combo");
+        Combos.compact(presets);
         presets.getItems().addAll(Easing.presets().keySet());
         presets.setVisibleRowCount(12);
         presets.setMaxWidth(Double.MAX_VALUE);

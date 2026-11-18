@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.editor.inspector.sections;
 import com.dlsc.animatorfx.editor.inspector.InspectorContext;
 import com.dlsc.animatorfx.editor.inspector.PropertyRows;
 import com.dlsc.animatorfx.editor.inspector.SectionBase;
+import com.dlsc.animatorfx.editor.inspector.fields.Combos;
 import com.dlsc.animatorfx.editor.inspector.fields.TextValueField;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
@@ -65,7 +66,7 @@ public final class TextSection extends SectionBase {
         row("Text", text);
 
         font.setId(FONT_ID);
-        font.getStyleClass().add("compact-combo");
+        Combos.compact(font);
         font.setPromptText("Mixed");
         font.setMaxWidth(Double.MAX_VALUE);
         font.setMinWidth(0);

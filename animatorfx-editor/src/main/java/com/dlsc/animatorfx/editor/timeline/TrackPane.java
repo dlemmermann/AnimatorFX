@@ -247,7 +247,7 @@ public final class TrackPane extends Region {
             g.setFill(palette.get(slot ? Tone.FG : Tone.KEY));
             for (double time : TimelineRows.keyTimes(layer)) {
                 double x = Math.round(scale.toX(time)) + 0.5;
-                diamond(g, x, cy, 2.5);
+                diamond(g, x, cy, 3);
                 g.fill();
             }
         }
