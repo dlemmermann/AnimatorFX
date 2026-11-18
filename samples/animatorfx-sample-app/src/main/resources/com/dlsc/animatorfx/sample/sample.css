@@ -1,0 +1,7 @@
+.sample-stage {
+    -fx-background-color: #0f172a;
+}
+
+.light .sample-stage {
+    -fx-background-color: #f8fafc;
+}
