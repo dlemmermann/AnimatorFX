@@ -54,7 +54,7 @@ final class AnimationJsonWriter {
         if (!a.assets().isEmpty()) {
             json.put("assets", list(a.assets(), AnimationJsonWriter::asset));
         }
-        json.put("layers", list(a.layers(), layer -> layer(layer, a.duration())));
+        json.put("layers", list(a.layers(), layer -> layer(layer, a.duration(), 1)));
         return json;
     }
 
@@ -75,7 +75,15 @@ final class AnimationJsonWriter {
         return json;
     }
 
-    private static Map<String, Object> layer(Layer layer, double duration) {
+    /**
+     * @param depth the nesting of the layer; 1 for a top-level layer
+     * @throws IllegalArgumentException if the layer is nested deeper than the format allows
+     */
+    private static Map<String, Object> layer(Layer layer, double duration, int depth) {
+        if (depth > AnimationJson.MAX_LAYER_DEPTH) {
+            throw new IllegalArgumentException("Layers are nested deeper than " + AnimationJson.MAX_LAYER_DEPTH
+                    + " levels: " + layer.name());
+        }
         Map<String, Object> json = new LinkedHashMap<>();
         json.put("type", switch (layer) {
             case ShapeLayer s -> "shape";
@@ -114,7 +122,7 @@ final class AnimationJsonWriter {
                 json.put("width", image.width());
                 json.put("height", image.height());
             }
-            case GroupLayer group -> json.put("children", list(group.children(), child -> layer(child, duration)));
+            case GroupLayer group -> json.put("children", list(group.children(), child -> layer(child, duration, depth + 1)));
             case SlotLayer slot -> {
                 json.put("slotName", slot.slotName());
                 json.put("width", slot.width());

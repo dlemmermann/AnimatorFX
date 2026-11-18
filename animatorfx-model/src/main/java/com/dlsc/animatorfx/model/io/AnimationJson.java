@@ -10,6 +10,13 @@ import java.util.Map;
  */
 public final class AnimationJson {
 
+    /**
+     * How deep layers may be nested in groups; a top-level layer is at depth 1. The limit keeps
+     * the JSON text within the nesting that {@link Json} parses, and writing and reading within
+     * the stack of any thread.
+     */
+    static final int MAX_LAYER_DEPTH = 100;
+
     private AnimationJson() {
     }
 

@@ -59,7 +59,7 @@ final class AnimationJsonReader {
         Rgba background = root.get("background").isMissing() ? Defaults.BACKGROUND : color(root.get("background"));
         List<Marker> markers = markers(root.elements("markers"));
         List<Asset> assets = assets(root.elements("assets"));
-        List<Layer> layers = layers(root.elements("layers"));
+        List<Layer> layers = layers(root.elements("layers"), 1);
         return new Animation(Animation.CURRENT_FORMAT, name, width, height, frameRate, duration, background, markers,
                 assets, layers);
     }
@@ -90,10 +90,19 @@ final class AnimationJsonReader {
         return assets;
     }
 
-    private List<Layer> layers(List<Node> nodes) throws AnimationFormatException {
+    /**
+     * @param depth the nesting of the layers; 1 for the top-level layers
+     */
+    private List<Layer> layers(List<Node> nodes, int depth) throws AnimationFormatException {
+        if (depth > AnimationJson.MAX_LAYER_DEPTH && !nodes.isEmpty()) {
+            throw nodes.get(0).error("Layers are nested deeper than " + AnimationJson.MAX_LAYER_DEPTH + " levels");
+        }
         List<Layer> layers = new ArrayList<>();
+        Set<String> ids = new HashSet<>();
         for (Node node : nodes) {
-            layers.add(layer(node));
+            Layer layer = layer(node, depth);
+            layers.add(layer);
+            ids.add(layer.id());
         }
         // A mask is another layer of the same parent, which may come later in the list.
         for (int i = 0; i < layers.size(); i++) {
@@ -106,14 +115,14 @@ final class AnimationJsonReader {
             if (mask.layerId().equals(layer.id())) {
                 throw reference.error("A layer cannot mask itself");
             }
-            if (layers.stream().noneMatch(sibling -> sibling.id().equals(mask.layerId()))) {
+            if (!ids.contains(mask.layerId())) {
                 throw reference.error("No layer with id " + mask.layerId() + " in the same parent");
             }
         }
         return layers;
     }
 
-    private Layer layer(Node node) throws AnimationFormatException {
+    private Layer layer(Node node, int depth) throws AnimationFormatException {
         Node type = node.required("type");
         LayerBase base = base(node);
         return switch (type.string()) {
@@ -122,7 +131,7 @@ final class AnimationJsonReader {
             case "text" -> text(node, base);
             case "image" -> new ImageLayer(base, assetId(node.required("asset"), Asset.Kind.IMAGE),
                     node.required("width").number(), node.required("height").number());
-            case "group" -> new GroupLayer(base, layers(node.elements("children")));
+            case "group" -> new GroupLayer(base, layers(node.elements("children"), depth + 1));
             case "slot" -> slot(node, base);
             default -> throw type.error("Unknown layer type: " + type.string());
         };
