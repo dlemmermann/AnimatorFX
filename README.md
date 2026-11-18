@@ -314,7 +314,7 @@ The editor writes this code for a document: *Document* tab ▸ *Copy Java Snippe
 | Nudge selection | Arrow keys (1 px), with Shift 10 px |
 | Cancel a drag, leave a tool, a group or the selection | `Esc` |
 | Edit the path of the selected layer | `Enter` |
-| Delete layers, keyframes or the selected marker (depends on the focus) | `Delete` / `Backspace` |
+| Delete layers, keyframes or the selected marker (depends on the focus; selected keyframes go first anywhere in the timeline) | `Delete` / `Backspace` |
 | Undo / redo | `Cmd Z` / `Shift Cmd Z` |
 | Cut, copy, paste (layers, or keyframes while keyframes are selected) | `Cmd X`, `Cmd C`, `Cmd V` |
 | Duplicate, select all | `Cmd D`, `Cmd A` |
@@ -345,7 +345,8 @@ segment starts from.
 
 Expand a layer to see its animated properties, or all of them with the header toggle. Layer bars
 move and trim the in/out range. Rows can be renamed, hidden, locked and reordered by dragging,
-also into groups. Markers live in the lane under the ruler: double-click to create, drag to move
+also into groups. A locked layer cannot be picked on the canvas, its bar and keyframes stay put
+in the timeline, and the inspector only lets you unlock it. Markers live in the lane under the ruler: double-click to create, drag to move
 or resize, double-click to rename.
 
 ### Paths and morphing
@@ -384,7 +385,14 @@ The editor reopens as you left it: window bounds, panel layout, theme, open docu
 document the zoom, pan, playhead, selection, expanded layers and auto-key state. Unsaved changes
 are autosaved every 5 seconds to a recovery copy; after a crash or a quit, the document comes back
 with those changes, marked as modified, with a notice that offers to discard them. A broken
-session file is moved aside and never prevents the start. Undo history is not kept across restarts.
+session file is moved aside and never prevents the start; a recovery copy that cannot be read is
+kept as `<id>.afx.unreadable-<timestamp>` in `recovery/` and a notice says so. Undo history is
+not kept across restarts.
+
+Before a document is saved or autosaved, the bytes are read back with the same reader that opens
+files. If that fails, nothing on disk changes — the file, or the previous recovery copy, stays as
+it was — the document stays modified, and a notice gives the reason with its place in the
+document (for example `layers[1].slotName: Duplicate slot name: card`).
 
 The session lives in the per-user configuration directory:
 
@@ -411,7 +419,12 @@ assets/<id>.<ext>  images (PNG, JPEG) and fonts (TTF, OTF)
   cleanly. Equal documents give byte-identical archives.
 - `formatVersion` is `1`. The reader migrates older versions and rejects newer ones.
 - The reader also accepts a bare `animation.json` when the document has no assets. The editor
-  always writes zips.
+  always writes zips: *Save* on a document that was opened from a file that is no `.afx` asks
+  for an `.afx` file instead of replacing the source. *Save As* adds `.afx` to a name that does
+  not end with it (`my.animation` becomes `my.animation.afx`) and refuses a file that is open
+  in another tab.
+- Groups nest at most 100 levels deep (a top-level layer is level 1). The writer rejects deeper
+  documents, and the editor refuses to group, paste, drop or import beyond the limit.
 - Time is in seconds, coordinates in document pixels (origin top-left, y down), angles in degrees
   clockwise, colours `#RRGGBB` or `#RRGGBBAA`, opacity and trim `0..1`, scale `1` = 100 %.
 - Layers have a `type`: `shape`, `text`, `image`, `group`, `slot`. They are listed bottom to top.
@@ -530,7 +543,9 @@ Gaps in what is there:
 - **Packaging**: unsigned application image only, macOS on Apple Silicon only tried, no file
   association for `.afx`.
 - **Large documents** have not been profiled; the editor refreshes its panels on every change and
-  writes recovery copies on the UI thread.
+  writes recovery copies on the UI thread. Every save and recovery copy is serialised and parsed
+  once more to verify it.
+- **Images** need a width and a height above 0; an image layer with a size of 0 draws nothing.
 - **Editor interaction is covered by automated tests that fire JavaFX events**, not by manual
   testing with real mouse and keyboard input. In particular the macOS menu shortcuts while a text
   field has the focus have not been checked by hand.
@@ -559,7 +574,7 @@ mvn -pl animatorfx-player test                      # one module
 mvn -pl animatorfx-editor test -Dtest=MainWindowTest   # one test class
 ```
 
-- Tests are JUnit 5. Everything that needs JavaFX runs **headless** on the Monocle platform with
+- Tests are JUnit Jupiter (JUnit 6, through the `junit-bom`). Everything that needs JavaFX runs **headless** on the Monocle platform with
   TestFX; no window appears and no display is needed. The flags are in the parent pom
   (`javafx.headless.jvm.args`).
 - The build needs JDK 26 as `JAVA_HOME`, also for the Java 21 modules (they are compiled with
