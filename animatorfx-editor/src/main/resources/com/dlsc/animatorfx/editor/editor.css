@@ -896,6 +896,155 @@
     -fx-opacity: 0.45;
 }
 
+/* A text button with a menu, such as Add Effect. */
+
+.section-menu-button {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-max-height: 22;
+}
+
+.section-menu-button > .label {
+    -fx-padding: 0 4 0 10;
+    -fx-font-size: 11px;
+    -fx-text-fill: -afx-fg;
+}
+
+.section-menu-button > .arrow-button {
+    -fx-padding: 0 8 0 2;
+}
+
+.section-menu-button > .arrow-button > .arrow {
+    -fx-background-color: -afx-muted;
+    -fx-scale-x: 0.8;
+    -fx-scale-y: 0.8;
+}
+
+.section-menu-button:hover,
+.section-menu-button:showing {
+    -fx-background-color: -afx-muted, -afx-panel-alt;
+}
+
+.section-footer {
+    -fx-padding: 2 0 0 0;
+    -fx-alignment: center-left;
+}
+
+.hint-row {
+    -fx-spacing: 8;
+    -fx-padding: 2 0 0 0;
+}
+
+/* A check box at the size of the inspector text. */
+
+.section-check {
+    -fx-font-size: 11px;
+    -fx-text-fill: -afx-fg;
+    -fx-label-padding: 0 0 0 6;
+    -fx-min-height: 22;
+}
+
+.section-check > .box {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+    -fx-border-width: 0;
+    -fx-padding: 3;
+}
+
+.section-check:hover > .box {
+    -fx-background-color: -afx-muted, -afx-panel-alt;
+}
+
+.section-check > .box > .mark {
+    -fx-background-color: transparent;
+    -fx-padding: 4;
+    -fx-shape: "M 1 5.5 L 4 8.5 L 9.5 2 L 8 1 L 4 6 L 2.2 4.2 Z";
+}
+
+.section-check:selected > .box {
+    -fx-background-color: -afx-accent, -afx-accent;
+}
+
+.section-check:selected > .box > .mark {
+    -fx-background-color: -afx-on-accent;
+}
+
+.section-check:indeterminate > .box > .mark {
+    -fx-background-color: -afx-muted;
+    -fx-shape: "M 0 0 H 8 V 2 H 0 Z";
+    -fx-padding: 1 4 1 4;
+}
+
+/* Two or more choices side by side, one of them on: Clip | Alpha. */
+
+.segmented {
+    -fx-spacing: 0;
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+    -fx-padding: 1;
+}
+
+.segment-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 2;
+    -fx-border-width: 0;
+    -fx-padding: 0 8 0 8;
+    -fx-min-height: 20;
+    -fx-pref-height: 20;
+    -fx-max-height: 20;
+    -fx-font-size: 11px;
+    -fx-text-fill: -afx-muted;
+    -fx-alignment: center;
+}
+
+.segment-button:hover {
+    -fx-text-fill: -afx-fg;
+}
+
+.segment-button:selected {
+    -fx-background-color: -afx-accent-bar;
+    -fx-text-fill: -afx-fg;
+}
+
+/* The heading of one effect in the Effects section. */
+
+.effect-header {
+    -fx-spacing: 2;
+    -fx-padding: 2 0 0 0;
+    -fx-min-height: 24;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 1 0 0 0;
+}
+
+.effect-header.first {
+    -fx-border-width: 0;
+    -fx-padding: 0;
+}
+
+.effect-title {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -afx-fg;
+    -fx-padding: 0 0 0 6;
+}
+
+.effect-index {
+    -fx-font-size: 10px;
+    -fx-text-fill: -afx-accent;
+    -fx-background-color: -afx-accent-soft;
+    -fx-background-radius: 3;
+    -fx-padding: 0 4 0 4;
+    -fx-min-width: 16;
+    -fx-alignment: center;
+}
+
 /* colours and paints */
 
 .swatch {
@@ -1160,6 +1309,19 @@
 .layer-name {
     -fx-text-fill: -afx-fg;
     -fx-padding: 0 4 0 6;
+}
+
+.layer-badge {
+    -fx-font-size: 9px;
+    -fx-text-fill: -afx-muted;
+    -fx-border-color: -afx-line;
+    -fx-border-radius: 3;
+    -fx-padding: 0 4 0 4;
+}
+
+.layer-row:selected .layer-badge {
+    -fx-text-fill: -afx-fg;
+    -fx-border-color: -afx-muted;
 }
 
 .layer-icon {

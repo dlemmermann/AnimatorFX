@@ -191,9 +191,14 @@ public final class StrokeSection extends SectionBase {
                 gestureKey);
     }
 
-    private void setStroke(String name, boolean present) {
-        Stroke fresh = new Stroke(Animatable.of(new Paint.Solid(NewLayers.SHAPE_COLOR)), Animatable.of(2.0),
+    /** The stroke that Add Stroke gives a layer: 2 px in the colour of new shapes. */
+    public static Stroke defaultStroke() {
+        return new Stroke(Animatable.of(new Paint.Solid(NewLayers.SHAPE_COLOR)), Animatable.of(2.0),
                 Stroke.Cap.BUTT, Stroke.Join.MITER, 10, List.of(), Animatable.of(0.0));
+    }
+
+    private void setStroke(String name, boolean present) {
+        Stroke fresh = defaultStroke();
         context().edit(name, Layer.class, layer -> present
                 ? (stroke(layer) == null ? withStroke(layer, fresh) : layer) : withStroke(layer, null), null);
     }

@@ -1,5 +1,7 @@
 package com.dlsc.animatorfx.editor.inspector.sections;
 
+import com.dlsc.animatorfx.editor.canvas.Box;
+import com.dlsc.animatorfx.editor.canvas.PathOps;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.ShapeLayer;
@@ -25,7 +27,10 @@ final class Extents {
                 case Geometry.Line g -> g.end().at(time).minus(g.start().at(time));
                 case Geometry.Polygon g -> new Vec2(2 * g.radius().at(time), 2 * g.radius().at(time));
                 case Geometry.Star g -> new Vec2(2 * g.outerRadius().at(time), 2 * g.outerRadius().at(time));
-                case Geometry.PathGeometry g -> FALLBACK;
+                case Geometry.PathGeometry g -> {
+                    Box box = PathOps.bounds(g.path().at(time));
+                    yield box == null ? FALLBACK : new Vec2(box.maxX(), box.maxY());
+                }
             };
             case TextLayer text -> new Vec2(text.fontSize().at(time) * Math.max(1, text.text().length()) * 0.5,
                     text.fontSize().at(time));

@@ -48,7 +48,7 @@ public record PropertyUnits(double factor, String suffix) {
             case Paint.Solid solid -> hex(solid.color());
             case Paint.LinearGradient linear -> "linear " + linear.stops().size();
             case Paint.RadialGradient radial -> "radial " + radial.stops().size();
-            case PathData path -> "path";
+            case PathData path -> path.contours().stream().mapToInt(c -> c.vertices().size()).sum() + " pts";
             default -> String.valueOf(value);
         };
     }

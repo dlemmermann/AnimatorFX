@@ -2,14 +2,18 @@ package com.dlsc.animatorfx.editor.inspector;
 
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.inspector.sections.EasingSection;
+import com.dlsc.animatorfx.editor.inspector.sections.EffectsSection;
 import com.dlsc.animatorfx.editor.inspector.sections.FillSection;
 import com.dlsc.animatorfx.editor.inspector.sections.GeometrySection;
 import com.dlsc.animatorfx.editor.inspector.sections.ImageSection;
 import com.dlsc.animatorfx.editor.inspector.sections.LayerSection;
+import com.dlsc.animatorfx.editor.inspector.sections.MaskSection;
+import com.dlsc.animatorfx.editor.inspector.sections.MotionPathSection;
 import com.dlsc.animatorfx.editor.inspector.sections.SlotSection;
 import com.dlsc.animatorfx.editor.inspector.sections.StrokeSection;
 import com.dlsc.animatorfx.editor.inspector.sections.TextSection;
 import com.dlsc.animatorfx.editor.inspector.sections.TransformSection;
+import com.dlsc.animatorfx.editor.inspector.sections.TrimSection;
 import java.util.List;
 import java.util.Optional;
 import javafx.beans.InvalidationListener;
@@ -64,7 +68,8 @@ public final class InspectorView extends StackPane {
             refresh();
         });
         sections.addAll(new EasingSection(), new LayerSection(), new TransformSection(), new GeometrySection(),
-                new FillSection(), new StrokeSection(), new TextSection(), new ImageSection(), new SlotSection());
+                new FillSection(), new StrokeSection(), new TrimSection(), new TextSection(), new ImageSection(),
+                new SlotSection(), new EffectsSection(), new MaskSection(), new MotionPathSection());
 
         document.addListener((obs, oldDoc, newDoc) -> {
             if (oldDoc != null) {

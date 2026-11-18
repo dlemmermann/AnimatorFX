@@ -12,6 +12,9 @@ import com.dlsc.animatorfx.editor.timeline.TimelineRow.LayerRow;
 import com.dlsc.animatorfx.editor.timeline.TimelineRow.PropertyRow;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import java.util.HashSet;
+import java.util.Set;
+import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
@@ -75,6 +78,8 @@ public final class LayerTreeColumn extends Region {
 
     private static final PseudoClass SELECTED = PseudoClass.getPseudoClass("selected");
     private static final PseudoClass SLOT = PseudoClass.getPseudoClass("slot");
+    private Animation maskSource;
+    private Set<String> maskIds = Set.of();
     private static final PseudoClass OFF = PseudoClass.getPseudoClass("off");
     private static final PseudoClass ACTIVE = PseudoClass.getPseudoClass("active");
     private static final PseudoClass INTO = PseudoClass.getPseudoClass("into");
@@ -495,6 +500,24 @@ public final class LayerTreeColumn extends Region {
 
     // ------------------------------------------------------------------ cells
 
+    /** The ids of the layers that other layers use as their mask. */
+    private Set<String> maskIds() {
+        Animation animation = doc() == null ? null : doc().getAnimation();
+        if (animation != maskSource) {
+            Set<String> ids = new HashSet<>();
+            if (animation != null) {
+                for (Layer layer : Layers.flatten(animation)) {
+                    if (layer.base().mask() != null) {
+                        ids.add(layer.base().mask().layerId());
+                    }
+                }
+            }
+            maskIds = ids;
+            maskSource = animation;
+        }
+        return maskIds;
+    }
+
     private static Ikon icon(Layer layer, boolean expanded) {
         return switch (layer) {
             case ShapeLayer shape -> switch (shape.geometry()) {
@@ -542,6 +565,7 @@ public final class LayerTreeColumn extends Region {
         private final FontIcon chevron = new FontIcon(Material2AL.CHEVRON_RIGHT);
         private final FontIcon typeIcon = new FontIcon();
         private final Label name = new Label();
+        private final Label badge = new Label();
         private final FontIcon eyeIcon = new FontIcon(Material2MZ.VISIBILITY);
         private final FontIcon lockIcon = new FontIcon(Material2AL.LOCK_OPEN);
         private final Button eye = rowButton("eye", eyeIcon);
@@ -558,7 +582,9 @@ public final class LayerTreeColumn extends Region {
             name.setMaxWidth(Double.MAX_VALUE);
             name.setMinWidth(0);
             HBox.setHgrow(name, Priority.ALWAYS);
-            getChildren().addAll(indent, disclosure, typeIcon, name, eye, lock);
+            badge.getStyleClass().addAll("layer-badge", "mono");
+            badge.setMinWidth(Region.USE_PREF_SIZE);
+            getChildren().addAll(indent, disclosure, typeIcon, name, badge, eye, lock);
 
             disclosure.setOnAction(e -> {
                 var expanded = doc().getViewState().getExpandedLayerIds();
@@ -600,6 +626,12 @@ public final class LayerTreeColumn extends Region {
             lockIcon.setIconCode(layer.base().locked() ? Material2AL.LOCK : Material2AL.LOCK_OPEN);
             eye.pseudoClassStateChanged(ACTIVE, !layer.base().visible());
             lock.pseudoClassStateChanged(ACTIVE, layer.base().locked());
+            // a layer that masks is not drawn itself; a masked layer is cut by another one
+            boolean masks = maskIds().contains(layer.id());
+            boolean masked = layer.base().mask() != null;
+            badge.setText(masks ? "MASK" : masked ? "MASKED" : "");
+            badge.setVisible(masks || masked);
+            badge.setManaged(masks || masked);
             pseudoClassStateChanged(SELECTED, selected);
             pseudoClassStateChanged(SLOT, layer instanceof SlotLayer);
             pseudoClassStateChanged(OFF, !layer.base().visible());

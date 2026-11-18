@@ -4,6 +4,7 @@ import com.dlsc.animatorfx.editor.doc.PropertyUnits;
 import com.dlsc.animatorfx.editor.inspector.fields.KeyframeToggle;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import javafx.css.PseudoClass;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -116,6 +117,11 @@ public abstract class SectionBase implements InspectorSection {
         return register(new PropertyRows.Vec2Row(this, key, label, PropertyUnits.of(key), firstName, secondName, linkable));
     }
 
+    /** Adds a row for a colour property. */
+    protected final PropertyRows.ColorRow color(String key, String label) {
+        return register(new PropertyRows.ColorRow(this, key, label));
+    }
+
     /** Adds a row for a paint property. */
     protected final PropertyRows.PaintRow paint(String key, String label) {
         return register(new PropertyRows.PaintRow(this, key, label));
@@ -127,13 +133,36 @@ public abstract class SectionBase implements InspectorSection {
         return row;
     }
 
+    /**
+     * Removes every row and node of the section, for a section whose rows depend on the
+     * selection, such as one block of rows per effect. To be called from {@link #prepare}.
+     */
+    protected final void clearContent() {
+        propertyRows.clear();
+        content.getChildren().clear();
+    }
+
+    /**
+     * Runs at the start of every update, before the property rows are brought up to date: the
+     * place to rebuild rows whose set depends on the selection. Must not build nodes when
+     * nothing structural changed, because it also runs on every move of the playhead.
+     */
+    protected void prepare(InspectorContext context) {
+    }
+
     @Override
     public final void update(InspectorContext newContext) {
         context = newContext;
+        prepare(newContext);
         for (PropertyRows.PropertyRow row : propertyRows) {
             row.update(newContext);
         }
         updateFields(newContext);
+    }
+
+    /** The row of a property of this section, when there is one. */
+    public final Optional<PropertyRows.PropertyRow> propertyRow(String key) {
+        return propertyRows.stream().filter(row -> row.key().equals(key)).findFirst();
     }
 
     /** Shows the values of the editors that are not property rows. */

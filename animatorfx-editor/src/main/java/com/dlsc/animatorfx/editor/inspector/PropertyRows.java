@@ -1,11 +1,13 @@
 package com.dlsc.animatorfx.editor.inspector;
 
 import com.dlsc.animatorfx.editor.doc.PropertyUnits;
+import com.dlsc.animatorfx.editor.inspector.fields.ColorField;
 import com.dlsc.animatorfx.editor.inspector.fields.KeyframeToggle;
 import com.dlsc.animatorfx.editor.inspector.fields.NumberField;
 import com.dlsc.animatorfx.editor.inspector.fields.PaintField;
 import com.dlsc.animatorfx.editor.inspector.fields.Vec2Field;
 import com.dlsc.animatorfx.model.Paint;
+import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.Vec2;
 import java.util.ArrayList;
 import java.util.List;
@@ -128,6 +130,27 @@ public final class PropertyRows {
                 ys.add(((Vec2) value).y());
             }
             field.setValue(InspectorContext.common(xs), InspectorContext.common(ys));
+        }
+    }
+
+    public static final class ColorRow extends PropertyRow {
+
+        private final ColorField field = new ColorField();
+
+        ColorRow(SectionBase section, String key, String label) {
+            super(section, key);
+            field.setOnChange(this::write);
+            field.setOnAdjustEnd(() -> context().endGesture());
+            build(label, field);
+        }
+
+        public ColorField field() {
+            return field;
+        }
+
+        @Override
+        void show(List<Object> values) {
+            field.setValue((Rgba) InspectorContext.common(values));
         }
     }
 

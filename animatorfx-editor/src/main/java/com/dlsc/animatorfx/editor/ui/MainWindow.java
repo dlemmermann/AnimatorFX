@@ -2,6 +2,7 @@ package com.dlsc.animatorfx.editor.ui;
 
 import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
+import com.dlsc.animatorfx.editor.inspector.sections.MotionPathSection;
 import com.dlsc.animatorfx.editor.session.RecoveryStore;
 import com.dlsc.animatorfx.editor.session.SessionState.Layout;
 import com.dlsc.animatorfx.editor.session.SessionStore;
@@ -348,6 +349,8 @@ public final class MainWindow {
         toolBar.playingProperty().bind(canvasView.playingProperty());
         toolBar.setOnPlayPause(canvasView::togglePlayback);
         canvasView.setNotifier(noticeBar::show);
+        sidePanel.getInspector().section(MotionPathSection.class)
+                .ifPresent(section -> section.setActions(canvasView::drawMotionPath, canvasView::editMotionPath));
     }
 
     private void installPanelToggles() {

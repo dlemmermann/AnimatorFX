@@ -103,7 +103,8 @@ class InspectorViewTest extends EditorUiTest {
 
     @Test
     void theSectionsFollowTheSelection() {
-        assertEquals(List.of("Layer", "Transform", "Geometry", "Fill", "Stroke"), visibleSections());
+        assertEquals(List.of("Layer", "Transform", "Geometry", "Fill", "Stroke", "Trim", "Effects", "Mask", "Motion Path"),
+                visibleSections());
         select();
         assertEquals(List.of(), visibleSections());
         assertTrue(fx(() -> inspector.lookup(".inspector-empty").isVisible()));
@@ -114,16 +115,17 @@ class InspectorViewTest extends EditorUiTest {
                         NewLayers.slot(doc.getAnimation(), "x", Vec2.ZERO, Vec2.ONE).base().withId("s")),
                 group("g", rect("g1", 0, 0, 10, 10)));
         select("t");
-        assertEquals(List.of("Layer", "Transform", "Fill", "Stroke", "Text"), visibleSections());
+        assertEquals(List.of("Layer", "Transform", "Fill", "Stroke", "Text", "Effects", "Mask", "Motion Path"),
+                visibleSections());
         select("s");
-        assertEquals(List.of("Layer", "Transform", "Slot"), visibleSections());
+        assertEquals(List.of("Layer", "Transform", "Slot", "Effects", "Mask", "Motion Path"), visibleSections());
         select("g");
-        assertEquals(List.of("Layer", "Transform"), visibleSections());
+        assertEquals(List.of("Layer", "Transform", "Effects", "Mask", "Motion Path"), visibleSections());
         // a mixed selection shows what all layers have
         select("a", "t");
-        assertEquals(List.of("Layer", "Transform", "Fill", "Stroke"), visibleSections());
+        assertEquals(List.of("Layer", "Transform", "Fill", "Stroke", "Effects"), visibleSections());
         select("a", "s");
-        assertEquals(List.of("Layer", "Transform"), visibleSections());
+        assertEquals(List.of("Layer", "Transform", "Effects"), visibleSections());
     }
 
     @Test
@@ -138,10 +140,10 @@ class InspectorViewTest extends EditorUiTest {
     }
 
     @Test
-    void aSectionCanBeAddedForLaterFeatures() {
+    void aSectionCanBeAdded() {
         class Extra extends SectionBase {
             Extra() {
-                super("Effects");
+                super("Extra");
             }
 
             @Override
@@ -150,7 +152,8 @@ class InspectorViewTest extends EditorUiTest {
             }
         }
         run(() -> inspector.getSections().add(2, new Extra()));
-        assertEquals(List.of("Layer", "Effects", "Transform", "Geometry", "Fill", "Stroke"), visibleSections());
+        assertEquals(List.of("Layer", "Extra", "Transform", "Geometry", "Fill", "Stroke", "Trim", "Effects", "Mask",
+                "Motion Path"), visibleSections());
     }
 
     // ------------------------------------------------------------------ numbers
