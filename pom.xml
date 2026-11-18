@@ -4,14 +4,144 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.dlsc.kmu</groupId>
-    <artifactId>AnimatorFX</artifactId>
+    <groupId>com.dlsc.animatorfx</groupId>
+    <artifactId>animatorfx-parent</artifactId>
     <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>AnimatorFX</name>
+
+    <modules>
+        <module>animatorfx-model</module>
+        <module>animatorfx-player</module>
+        <module>animatorfx-import</module>
+        <module>animatorfx-editor</module>
+    </modules>
 
     <properties>
-        <maven.compiler.source>26</maven.compiler.source>
-        <maven.compiler.target>26</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Runtime libraries (model, player) target Java 21 / JavaFX 21; the importer and editor use Java 26 / JavaFX 25. -->
+        <runtime.java.release>21</runtime.java.release>
+        <editor.java.release>26</editor.java.release>
+        <javafx.runtime.version>21.0.13</javafx.runtime.version>
+        <javafx.editor.version>25.0.5</javafx.editor.version>
+
+        <junit.version>6.1.3</junit.version>
+        <atlantafx.version>3.0.0</atlantafx.version>
+        <ikonli.version>12.4.0</ikonli.version>
+        <testfx.version>4.0.18</testfx.version>
+        <monocle.version>21.0.2</monocle.version>
+
+        <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
+        <maven-enforcer-plugin.version>3.7.0</maven-enforcer-plugin.version>
+        <javafx-maven-plugin.version>0.0.8</javafx-maven-plugin.version>
     </properties>
 
+    <!-- org.openjfx is not managed here: player pins ${javafx.runtime.version}, import and editor manage ${javafx.editor.version}. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.dlsc.animatorfx</groupId>
+                <artifactId>animatorfx-model</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dlsc.animatorfx</groupId>
+                <artifactId>animatorfx-player</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dlsc.animatorfx</groupId>
+                <artifactId>animatorfx-import</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.mkpaz</groupId>
+                <artifactId>atlantafx-base</artifactId>
+                <version>${atlantafx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.kordamp.ikonli</groupId>
+                <artifactId>ikonli-javafx</artifactId>
+                <version>${ikonli.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.kordamp.ikonli</groupId>
+                <artifactId>ikonli-material2-pack</artifactId>
+                <version>${ikonli.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testfx</groupId>
+                <artifactId>testfx-junit5</artifactId>
+                <version>${testfx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testfx</groupId>
+                <artifactId>openjfx-monocle</artifactId>
+                <version>${monocle.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-maven-plugin</artifactId>
+                    <version>${javafx-maven-plugin.version}</version>
+                </plugin>
+                <!-- Declared (without configuration) by model and player: no third-party compile/runtime dependencies. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven-enforcer-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>no-third-party-runtime-dependencies</id>
+                            <phase>validate</phase>
+                            <goals>
+                                <goal>enforce</goal>
+                            </goals>
+                            <configuration>
+                                <rules>
+                                    <bannedDependencies>
+                                        <searchTransitive>true</searchTransitive>
+                                        <excludes>
+                                            <exclude>*:*:*:*:compile</exclude>
+                                            <exclude>*:*:*:*:runtime</exclude>
+                                        </excludes>
+                                        <includes>
+                                            <include>com.dlsc.animatorfx:*</include>
+                                            <include>org.openjfx:*</include>
+                                        </includes>
+                                        <message>animatorfx-model and animatorfx-player must not have third-party compile/runtime dependencies.</message>
+                                    </bannedDependencies>
+                                </rules>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 </project>
