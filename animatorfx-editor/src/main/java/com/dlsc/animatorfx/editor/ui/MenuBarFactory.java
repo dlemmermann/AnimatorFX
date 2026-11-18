@@ -29,8 +29,7 @@ import java.util.function.Consumer;
 
 /**
  * Builds the menu bar. Every item has an id ({@code menu-file-save}, {@code menu-edit-duplicate},
- * …) for {@link MainWindow#menuItem}. Items whose feature does not exist yet are present but
- * disabled and have no action.
+ * …) for {@link MainWindow#menuItem}.
  *
  * <p>With the system menu bar of macOS an accelerator fires before the focused control sees the
  * key. The Edit items therefore look at the focus first: while a text input has it, Undo, Redo,
@@ -68,9 +67,12 @@ final class MenuBarFactory {
         Menu imports = new Menu("Import");
         imports.setId("menu-file-import");
         imports.getItems().addAll(
-                later("menu-file-import-svg", "SVG…", null),
-                later("menu-file-import-lottie", "Lottie…", null),
-                later("menu-file-import-fxml", "FXML…", null),
+                item("menu-file-import-svg", "SVG…", null, () -> imports().chooseAndImport(ImportActions.Kind.SVG)),
+                item("menu-file-import-svg-into", "SVG into Current Document…", null,
+                        () -> imports().chooseSvgIntoDocument()),
+                item("menu-file-import-lottie", "Lottie…", null,
+                        () -> imports().chooseAndImport(ImportActions.Kind.LOTTIE)),
+                item("menu-file-import-fxml", "FXML…", null, () -> imports().chooseAndImport(ImportActions.Kind.FXML)),
                 item("menu-file-import-image", "Image…", null, () -> window.getCanvasView().getActions().chooseImage()));
 
         // macOS has Quit in the application menu, where it ends the application the same way
@@ -96,6 +98,10 @@ final class MenuBarFactory {
                 quitSeparator,
                 quit);
         return menu;
+    }
+
+    private ImportActions imports() {
+        return window.getImportActions();
     }
 
     private Menu recentMenu() {
@@ -350,17 +356,6 @@ final class MenuBarFactory {
             item.setAccelerator(accelerator);
         }
         item.setOnAction(e -> action.run());
-        return item;
-    }
-
-    /** An item for a feature of a later task: present, disabled, without an action. */
-    private static MenuItem later(String id, String text, KeyCombination accelerator) {
-        MenuItem item = new MenuItem(text);
-        item.setId(id);
-        if (accelerator != null) {
-            item.setAccelerator(accelerator);
-        }
-        item.setDisable(true);
         return item;
     }
 

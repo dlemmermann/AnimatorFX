@@ -31,6 +31,7 @@ import javafx.stage.WindowEvent;
 
 import java.io.File;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The main window in the motion-tool layout: toolbar with the document tabs at the top, tool rail
@@ -53,6 +54,7 @@ public final class MainWindow {
     private final NoticeBar noticeBar = new NoticeBar();
     private final Dialogs dialogs;
     private final FileActions fileActions;
+    private final ImportActions importActions;
     private final ToolBarView toolBar;
     private final ToolRail toolRail = new ToolRail();
     private final StatusBar statusBar = new StatusBar();
@@ -92,6 +94,7 @@ public final class MainWindow {
         this.stage = stage;
         this.dialogs = dialogs != null ? dialogs : new SystemDialogs(theme);
         fileActions = new FileActions(workspace, this.dialogs, noticeBar, () -> stage);
+        importActions = new ImportActions(workspace, noticeBar, theme, () -> stage);
         toolBar = new ToolBarView(new DocumentTabs(workspace, fileActions::close, fileActions::newDocument), theme);
 
         canvasSlot.setMinSize(0, 0);
@@ -188,6 +191,10 @@ public final class MainWindow {
 
     public FileActions getFileActions() {
         return fileActions;
+    }
+
+    public ImportActions getImportActions() {
+        return importActions;
     }
 
     public Dialogs getDialogs() {
@@ -407,27 +414,40 @@ public final class MainWindow {
 
     private void installFileDrop() {
         scene.setOnDragOver(event -> {
-            if (event.getDragboard().hasFiles() && event.getDragboard().getFiles().stream().anyMatch(MainWindow::isDocument)) {
+            if (event.getDragboard().hasFiles() && event.getDragboard().getFiles().stream().anyMatch(MainWindow::isDroppable)) {
                 event.acceptTransferModes(TransferMode.COPY);
             }
             event.consume();
         });
         scene.setOnDragDropped(event -> {
-            boolean opened = false;
-            if (event.getDragboard().hasFiles()) {
-                for (File file : event.getDragboard().getFiles()) {
-                    if (isDocument(file)) {
-                        opened |= fileActions.open(file.toPath()).isPresent();
-                    }
-                }
-            }
-            event.setDropCompleted(opened);
+            event.setDropCompleted(event.getDragboard().hasFiles() && openDropped(event.getDragboard().getFiles()));
             event.consume();
         });
     }
 
-    private static boolean isDocument(File file) {
-        return file.isFile() && file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".afx");
+    /**
+     * Opens the {@code .afx} files among the dropped files and imports the SVG ({@code .svg}),
+     * Lottie ({@code .json}) and FXML ({@code .fxml}) files, each as a document of its own.
+     * Images are taken by the canvas.
+     *
+     * @return whether any file became a document
+     */
+    boolean openDropped(List<File> files) {
+        boolean opened = false;
+        for (File file : files) {
+            if (!isDroppable(file)) {
+                continue;
+            }
+            Optional<ImportActions.Kind> kind = ImportActions.Kind.of(file.toPath());
+            opened |= kind.isPresent() ? importActions.importFile(file.toPath(), kind.get()).isPresent()
+                    : fileActions.open(file.toPath()).isPresent();
+        }
+        return opened;
+    }
+
+    static boolean isDroppable(File file) {
+        return file.isFile() && (file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".afx")
+                || ImportActions.Kind.of(file.toPath()).isPresent());
     }
 
     private void bindTitle(EditorDocument document) {

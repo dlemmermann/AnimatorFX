@@ -390,6 +390,7 @@ public final class CanvasView extends Region {
             oldDoc.animationProperty().removeListener(animationListener);
             oldDoc.playheadProperty().removeListener(playheadListener);
             oldDoc.getSelection().layerIds().removeListener(refresh);
+            oldDoc.getSlotPreviews().removeListener(refresh);
             ViewState state = oldDoc.getViewState();
             state.canvasZoomProperty().removeListener(refresh);
             state.canvasPanXProperty().removeListener(refresh);
@@ -402,6 +403,7 @@ public final class CanvasView extends Region {
             newDoc.animationProperty().addListener(animationListener);
             newDoc.playheadProperty().addListener(playheadListener);
             newDoc.getSelection().layerIds().addListener(refresh);
+            newDoc.getSlotPreviews().addListener(refresh);
             ViewState state = newDoc.getViewState();
             state.canvasZoomProperty().addListener(refresh);
             state.canvasPanXProperty().addListener(refresh);

@@ -333,4 +333,25 @@ class EditorDocumentTest {
         assertTrue(document.getFileContent().assets().isEmpty());
         assertFalse(document.canUndoProperty().get());
     }
+
+    @Test
+    void anImportedDocumentIsUntitledDirtyAndNamedAfterItsAnimation(@TempDir Path dir) throws IOException {
+        Animation animation = Animation.create("logo", 100, 50, 2);
+        EditorDocument document = EditorDocument.imported(new AnimationFile(animation, Map.of()));
+
+        assertSame(animation, document.getAnimation());
+        assertNull(document.getPath());
+        assertTrue(document.isDirty());
+        assertFalse(document.isCanUndo());
+        assertEquals("logo", document.getTitle());
+
+        // recovered without a file, it keeps that title; once saved, the file names it
+        EditorDocument recovered = EditorDocument.recovered("doc-2", document.getFileContent(), null);
+        assertEquals("logo", recovered.getTitle());
+        document.saveAs(dir.resolve("saved.afx"));
+        assertEquals("saved.afx", document.getTitle());
+        assertFalse(document.isDirty());
+        assertEquals("Untitled", EditorDocument.imported(
+                new AnimationFile(Animation.create(" ", 1, 1, 1), Map.of())).getTitle());
+    }
 }

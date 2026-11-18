@@ -566,15 +566,13 @@ class MainWindowTest {
     }
 
     @Test
-    void menuItemsOfLaterTasksArePresentButDisabled() {
+    void menuItemsThatNeedASelectionAreDisabledWithoutOne() {
         MainWindow window = start();
 
         run(() -> {
-            for (String id : List.of("menu-file-import-svg", "menu-file-import-lottie", "menu-file-import-fxml")) {
-                assertTrue(window.menuItem(id).isDisable(), id);
-            }
-            // the canvas commands are live; those that need selected layers wait for a selection
-            for (String id : List.of("menu-file-import-image", "menu-edit-cut", "menu-edit-copy", "menu-edit-paste",
+            // the imports and the canvas commands are live; those that need selected layers wait for a selection
+            for (String id : List.of("menu-file-import-svg", "menu-file-import-svg-into", "menu-file-import-lottie",
+                    "menu-file-import-fxml", "menu-file-import-image", "menu-edit-cut", "menu-edit-copy", "menu-edit-paste",
                     "menu-edit-select-all", "menu-view-zoom-in", "menu-view-zoom-out", "menu-view-zoom-fit",
                     "menu-view-actual-size")) {
                 assertFalse(window.menuItem(id).isDisable(), id);

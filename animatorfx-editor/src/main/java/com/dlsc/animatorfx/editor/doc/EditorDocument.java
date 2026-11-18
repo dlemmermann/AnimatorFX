@@ -23,6 +23,9 @@ import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableMap;
+import javafx.scene.image.Image;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -71,6 +74,9 @@ public final class EditorDocument {
     private final ReadOnlyStringWrapper redoName = new ReadOnlyStringWrapper(this, "redoName");
     private final Selection selection = new Selection();
     private final ViewState viewState = new ViewState();
+    private final ObservableMap<String, Image> slotPreviews = FXCollections.observableHashMap();
+    /** What the document is called while it has no file. */
+    private final String untitledName;
 
     private final Deque<Step> undoStack = new ArrayDeque<>();
     private final Deque<Step> redoStack = new ArrayDeque<>();
@@ -82,9 +88,15 @@ public final class EditorDocument {
     private List<Step> redoBeforeGesture;
 
     private EditorDocument(String id, State state, Path path, boolean matchesFile) {
+        this(id, state, path, matchesFile, UNTITLED);
+    }
+
+    private EditorDocument(String id, State state, Path path, boolean matchesFile, String untitledName) {
         this.id = Objects.requireNonNull(id, "id");
+        this.untitledName = untitledName == null || untitledName.isBlank() ? UNTITLED : untitledName;
         this.path.addListener((obs, oldPath, newPath) -> updateTitle());
         this.path.set(path);
+        updateTitle();
         this.saved = matchesFile ? state : null;
         setState(state);
     }
@@ -118,12 +130,24 @@ public final class EditorDocument {
     }
 
     /**
-     * A document restored from a recovery copy. It is dirty until it is saved or reverted.
+     * A document restored from a recovery copy. It is dirty until it is saved or reverted. Without
+     * a file it is titled with the name of its animation.
      *
      * @param originalPathOrNull the file the document belongs to, or {@code null} for an untitled one
      */
     public static EditorDocument recovered(String id, AnimationFile content, Path originalPathOrNull) {
-        return new EditorDocument(id, new State(content.animation(), content.assets()), originalPathOrNull, false);
+        return new EditorDocument(id, new State(content.animation(), content.assets()), originalPathOrNull, false,
+                content.animation().name());
+    }
+
+    /**
+     * A new document made from a file of another format. It has no file of its own, is titled
+     * with the name of its animation, and is dirty, so that it is kept across a crash like any
+     * unsaved work.
+     */
+    public static EditorDocument imported(AnimationFile content) {
+        return new EditorDocument(UUID.randomUUID().toString(), new State(content.animation(), content.assets()),
+                null, false, content.animation().name());
     }
 
     /**
@@ -192,7 +216,8 @@ public final class EditorDocument {
     }
 
     /**
-     * The file name, or "Untitled" for a document without a file.
+     * The file name. A document without a file is "Untitled", or has the name of its animation
+     * when it was imported or recovered.
      *
      * @return the title property
      */
@@ -296,6 +321,16 @@ public final class EditorDocument {
 
     public ViewState getViewState() {
         return viewState;
+    }
+
+    /**
+     * Pictures of the application nodes that slots stand for, by slot name; the canvas shows
+     * them inside the slot rectangles. They come from an FXML import and belong to the editing
+     * session: they are not part of the document, stay as they are through undo and redo, and
+     * are not saved.
+     */
+    public ObservableMap<String, Image> getSlotPreviews() {
+        return slotPreviews;
     }
 
     /**
@@ -532,7 +567,7 @@ public final class EditorDocument {
 
     private void updateTitle() {
         Path file = getPath();
-        title.set(file == null || file.getFileName() == null ? UNTITLED : file.getFileName().toString());
+        title.set(file == null || file.getFileName() == null ? untitledName : file.getFileName().toString());
     }
 
     /**

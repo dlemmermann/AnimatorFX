@@ -16,6 +16,8 @@ import javafx.geometry.VPos;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.shape.Circle;
@@ -23,6 +25,7 @@ import javafx.scene.shape.Line;
 import javafx.scene.shape.Path;
 import javafx.scene.shape.Polygon;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.transform.Affine;
 import javafx.scene.transform.Rotate;
 import javafx.scene.text.Text;
 
@@ -48,6 +51,7 @@ public final class Overlay extends Pane {
 
     private static final double HANDLE_SIZE = 7;
     private static final double ANCHOR_RADIUS = 4;
+    private static final double SLOT_PREVIEW_OPACITY = 0.7;
 
     private record Decoration(Node node, Runnable update) {
     }
@@ -57,6 +61,9 @@ public final class Overlay extends Pane {
     private final Group outlines = new Group();
     private final Group guides = new Group();
     private final Group decorations = new Group();
+    private final Group slotPictures = new Group();
+    private final List<ImageView> slotPreviews = new ArrayList<>();
+    private final List<Affine> slotPreviewPlacements = new ArrayList<>();
     private final List<Polygon> slotShapes = new ArrayList<>();
     private final List<Text> slotLabels = new ArrayList<>();
     private final List<Polygon> memberOutlines = new ArrayList<>();
@@ -122,7 +129,7 @@ public final class Overlay extends Pane {
         modeTitle.getStyleClass().add("overlay-mode-title");
         modeDetail.getStyleClass().add("overlay-mode-detail");
         modeHint.setVisible(false);
-        getChildren().addAll(slots, groupOutline, hoverOutline, outlines, motion, selectionOutline, rotateStem,
+        getChildren().addAll(slotPictures, slots, groupOutline, hoverOutline, outlines, motion, selectionOutline, rotateStem,
                 handleNodes, rotateHandle, anchor, preview, guides, marquee, readout, decorations, modeHint);
         refresh();
     }
@@ -403,6 +410,15 @@ public final class Overlay extends Pane {
         }
         boolean created = slotShapes.size() < shown.size();
         pool(slotShapes, slots, shown.size(), () -> polygon("overlay-slot"));
+        pool(slotPreviews, slotPictures, shown.size(), () -> {
+            ImageView view = new ImageView();
+            view.getStyleClass().add("overlay-slot-preview");
+            view.setOpacity(SLOT_PREVIEW_OPACITY);
+            Affine placement = new Affine();
+            view.getTransforms().add(placement);
+            slotPreviewPlacements.add(placement);
+            return view;
+        });
         while (slotLabels.size() < shown.size()) {
             Text label = new Text();
             label.getStyleClass().addAll("overlay-slot-label", "mono");
@@ -421,6 +437,7 @@ public final class Overlay extends Pane {
             }
             Quad quad = quads.get(i);
             show(slotShapes.get(i), quad);
+            showPreview(i, doc.getSlotPreviews().get(shown.get(i).slotName()), quad);
             label.setText("slot: " + shown.get(i).slotName());
             Bounds text = label.getLayoutBounds();
             Box box = quad.bounds();
@@ -429,6 +446,22 @@ public final class Overlay extends Pane {
             label.setX(Math.rint(inside ? centre.x() - text.getWidth() / 2 : box.minX()));
             label.setY(Math.rint(inside ? centre.y() : box.minY() - text.getHeight() / 2 - 3));
         }
+    }
+
+    /** Stretches the picture of the node a slot stands for over the slot, dimmed, however the slot is transformed. */
+    private void showPreview(int index, Image image, Quad quad) {
+        ImageView view = slotPreviews.get(index);
+        view.setVisible(image != null && image.getWidth() > 0 && image.getHeight() > 0);
+        if (!view.isVisible()) {
+            view.setImage(null);
+            return;
+        }
+        view.setImage(image);
+        Vec2 origin = quad.topLeft();
+        Vec2 across = quad.topRight().minus(origin).times(1 / image.getWidth());
+        Vec2 down = quad.bottomLeft().minus(origin).times(1 / image.getHeight());
+        slotPreviewPlacements.get(index).setToTransform(across.x(), down.x(), origin.x(), across.y(), down.y(),
+                origin.y());
     }
 
     private static Polygon polygon(String styleClass) {

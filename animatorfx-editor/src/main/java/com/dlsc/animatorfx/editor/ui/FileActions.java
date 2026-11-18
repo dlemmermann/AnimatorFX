@@ -170,7 +170,7 @@ public final class FileActions {
         }
     }
 
-    private static boolean isUntouched(EditorDocument document) {
+    static boolean isUntouched(EditorDocument document) {
         return document.getPath() == null && !document.isDirty() && !document.isCanUndo() && !document.isCanRedo();
     }
 
