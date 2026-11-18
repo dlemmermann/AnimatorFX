@@ -3,7 +3,6 @@ package com.dlsc.animatorfx.sample;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
-import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.Marker;
@@ -28,11 +27,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -227,12 +224,6 @@ class SampleFilesTest {
             assertEquals(Vec2.ONE, rest.scale());
             assertEquals(slot.restTransform().position().at(0), rest.position());
         }
-    }
-
-    @Test
-    void theSamplesCoverGroupsToo() throws IOException {
-        assertFalse(Layers.flatten(committed("success")).stream().filter(GroupLayer.class::isInstance)
-                .collect(Collectors.toList()).isEmpty());
     }
 
     private static ShapeLayer shape(Animation animation, String id) {

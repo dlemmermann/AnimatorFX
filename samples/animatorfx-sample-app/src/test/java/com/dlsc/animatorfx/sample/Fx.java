@@ -11,6 +11,7 @@ import org.testfx.util.WaitForAsyncUtils;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
@@ -96,7 +97,7 @@ final class Fx {
 
     private static void chunk(ByteArrayOutputStream out, String type, byte[] content) throws IOException {
         DataOutputStream data = new DataOutputStream(out);
-        byte[] name = type.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        byte[] name = type.getBytes(StandardCharsets.US_ASCII);
         CRC32 crc = new CRC32();
         crc.update(name);
         crc.update(content);

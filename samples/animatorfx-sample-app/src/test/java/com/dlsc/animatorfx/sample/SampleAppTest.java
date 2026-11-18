@@ -4,7 +4,6 @@ import com.dlsc.animatorfx.player.AnimationPlayer;
 import com.dlsc.animatorfx.player.AnimationView;
 import javafx.scene.Node;
 import javafx.scene.Parent;
-import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceBox;
@@ -18,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -168,7 +168,7 @@ class SampleAppTest {
             button.setRotate(3);
             button.fire();
             assertEquals(AnimationPlayer.Status.PLAYING, player.getStatus());
-            assertEquals(java.util.Set.of("target"), player.getBoundSlots());
+            assertEquals(Set.of("target"), player.getBoundSlots());
             player.pause();
             player.seek(0.1);
             assertEquals(-7, button.getRotate(), 1e-9);

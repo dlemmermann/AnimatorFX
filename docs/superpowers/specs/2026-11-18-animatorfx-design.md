@@ -181,8 +181,8 @@ the archive is an error.
 Public entry points:
 
 ```java
-Animation a = AnimationIO.read(Path | URL | InputStream);
-AnimationIO.write(a, assets, Path | OutputStream);
+AnimationFile file = AnimationIO.read(Path | URL | InputStream);   // the document plus its asset bytes
+AnimationIO.write(file, Path | OutputStream);
 ```
 
 ## 5. Runtime (`animatorfx-player`)
@@ -201,7 +201,7 @@ updates values:
 | Model | JavaFX |
 |---|---|
 | `GroupLayer` | `Group` |
-| `ShapeLayer` | `Path` (all geometry is converted to path elements) |
+| `ShapeLayer` | a `Group` of `Path`s: the outline (all geometry is converted to path elements) and, while trimmed, the stroke |
 | `TextLayer` | `Text` |
 | `ImageLayer` | `ImageView` |
 | `SlotLayer` | container `Group` for an embedded node, or nothing in in-place mode |
@@ -209,7 +209,7 @@ updates values:
 | Mask `CLIP` | `Node.setClip` |
 | Mask `ALPHA` | `Node.setClip` with the rendered mask layer, which JavaFX treats as an alpha mask |
 | Effects | chained `javafx.scene.effect` instances |
-| Trim | stroke dash array and dash offset computed from path length |
+| Trim | the trimmed stroke path, computed with `PathMeasure` |
 
 Each frame, only values that changed since the previous frame are written to
 nodes. Layers outside their `inPoint..outPoint` range are set invisible.
