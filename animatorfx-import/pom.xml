@@ -15,6 +15,7 @@
 
     <properties>
         <maven.compiler.release>${editor.java.release}</maven.compiler.release>
+        <surefire.jvm.args>${javafx.headless.jvm.args}</surefire.jvm.args>
     </properties>
 
     <!-- Pins every (also transitive) JavaFX artifact to the editor JavaFX version. -->
@@ -51,6 +52,30 @@
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.dlsc.animatorfx</groupId>
+            <artifactId>animatorfx-player</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testfx</groupId>
+            <artifactId>testfx-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testfx</groupId>
+            <artifactId>openjfx-monocle</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
