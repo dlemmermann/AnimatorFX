@@ -373,6 +373,95 @@ class MainWindowTest {
         assertTrue(new RecoveryStore(config().resolve("recovery")).all().isEmpty());
     }
 
+    /** Starts, makes the untitled document dirty, quits and starts again: the second window shows the recovered document. */
+    private MainWindow restartWithARecoveredUntitledDocument() {
+        MainWindow first = start();
+        run(() -> first.getWorkspace().getActiveDocument().execute(Commands.addLayer(null, 0, rect("a"))));
+        quit(first);
+        MainWindow second = start();
+        assertEquals(1, fx(() -> second.getNoticeBar().getMessages().size()));
+        return second;
+    }
+
+    @Test
+    void editingARecoveredDocumentRetiresTheDiscardNotice() {
+        MainWindow window = restartWithARecoveredUntitledDocument();
+
+        run(() -> {
+            EditorDocument recovered = window.getWorkspace().getActiveDocument();
+            recovered.execute(Commands.addLayer(null, 0, rect("b")));
+
+            assertTrue(window.getNoticeBar().getMessages().isEmpty());
+            assertNull(window.getNoticeBar().lookup(".notice-action"));
+            assertSame(recovered, window.getWorkspace().getActiveDocument());
+            assertEquals(2, recovered.getAnimation().layers().size());
+        });
+    }
+
+    @Test
+    void undoInARecoveredDocumentRetiresTheDiscardNotice() throws Exception {
+        Path file = dir.resolve("work.afx");
+        MainWindow first = start();
+        run(() -> {
+            EditorDocument document = first.getWorkspace().getActiveDocument();
+            try {
+                document.saveAs(file);
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+            document.execute(Commands.addLayer(null, 0, rect("a")));
+        });
+        quit(first);
+        MainWindow second = start();
+
+        run(() -> {
+            EditorDocument recovered = second.getWorkspace().getActiveDocument();
+            recovered.execute(Commands.addLayer(null, 0, rect("b")));
+            recovered.undo();
+
+            assertTrue(second.getNoticeBar().getMessages().isEmpty());
+            assertEquals(1, recovered.getAnimation().layers().size());
+        });
+    }
+
+    @Test
+    void savingARecoveredDocumentRetiresTheDiscardNotice() {
+        MainWindow window = restartWithARecoveredUntitledDocument();
+
+        dialogs.saveAnswers.add(dir.resolve("kept.afx"));
+        assertTrue(fx(() -> window.getFileActions().save()));
+
+        assertTrue(fx(() -> window.getNoticeBar().getMessages().isEmpty()));
+    }
+
+    @Test
+    void closingARecoveredDocumentRetiresTheDiscardNotice() {
+        MainWindow window = restartWithARecoveredUntitledDocument();
+
+        dialogs.closeAnswers.add(Dialogs.CloseChoice.DISCARD);
+        assertTrue(fx(() -> window.getFileActions().close()));
+
+        assertTrue(fx(() -> window.getNoticeBar().getMessages().isEmpty()));
+    }
+
+    @Test
+    void aRecoveryCopyTheWindowDidNotWriteIsDeletedWhenTheDocumentIsSaved() {
+        MainWindow window = start();
+        RecoveryStore recovery = new RecoveryStore(config().resolve("recovery"));
+
+        String id = fx(() -> {
+            EditorDocument document = window.getWorkspace().getActiveDocument();
+            document.execute(Commands.addLayer(null, 0, rect("a")));
+            // as a store that failed half way leaves it: the copy is there, the window does not know
+            recovery.store(document.getId(), document.getFileContent(), null);
+            return document.getId();
+        });
+        dialogs.saveAnswers.add(dir.resolve("saved.afx"));
+        assertTrue(fx(() -> window.getFileActions().save()));
+
+        assertTrue(recovery.load(id).isEmpty());
+    }
+
     @Test
     void savingADocumentDeletesItsRecoveryCopy() {
         MainWindow window = start();
@@ -421,6 +510,9 @@ class MainWindowTest {
             ((Button) second.getNoticeBar().lookup(".notice-dismiss")).fire();
             assertTrue(second.getNoticeBar().getMessages().isEmpty());
         });
+        // the stored session forgets the file without any further change
+        WaitForAsyncUtils.waitFor(5, java.util.concurrent.TimeUnit.SECONDS,
+                () -> new SessionStore(config()).load().documents().stream().noneMatch(d -> file.equals(d.path())));
     }
 
     @Test

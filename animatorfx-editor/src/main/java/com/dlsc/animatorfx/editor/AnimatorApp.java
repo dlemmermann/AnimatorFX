@@ -7,6 +7,7 @@ import com.dlsc.animatorfx.editor.ui.MainWindow;
 import javafx.application.Application;
 import javafx.stage.Stage;
 
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 
 /**
@@ -23,7 +24,11 @@ public final class AnimatorApp extends Application {
         Path configDir = AppDirs.configDir();
         window = new MainWindow(stage, new SessionStore(configDir), new RecoveryStore(configDir.resolve("recovery")));
         for (String argument : getParameters().getUnnamed()) {
-            window.getFileActions().open(Path.of(argument));
+            try {
+                window.getFileActions().open(Path.of(argument));
+            } catch (InvalidPathException e) {
+                window.getNoticeBar().show("Could not open " + argument + ": not a valid file name.");
+            }
         }
         window.show();
     }

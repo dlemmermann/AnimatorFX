@@ -30,8 +30,9 @@ public final class NoticeBar extends VBox {
 
     /**
      * @param actionText the label of the action button, or {@code null} for a notice without an action
+     * @return dismisses the notice; does nothing when the notice is gone already
      */
-    public void show(String message, String actionText, Runnable action) {
+    public Runnable show(String message, String actionText, Runnable action) {
         HBox notice = new HBox();
         notice.getStyleClass().add("notice");
 
@@ -60,6 +61,7 @@ public final class NoticeBar extends VBox {
 
         getChildren().add(notice);
         setVisible(true);
+        return () -> dismiss(notice);
     }
 
     /**

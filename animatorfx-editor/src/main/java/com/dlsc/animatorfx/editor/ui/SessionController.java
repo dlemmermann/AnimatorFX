@@ -59,6 +59,11 @@ public final class SessionController {
     /** The content that the recovery copy of a document holds, by document id. */
     private final Map<String, AnimationFile> stored = new HashMap<>();
     private final Map<String, LocalTime> autosavedAt = new HashMap<>();
+    /** The documents whose "recovered" notice still offers to discard them. */
+    private final Map<EditorDocument, RecoveryNotice> recoveryNotices = new HashMap<>();
+
+    private record RecoveryNotice(Runnable dismiss, ChangeListener<AnimationFile> contentListener) {
+    }
     private WindowState normalBounds;
     private boolean closed;
 
@@ -141,6 +146,8 @@ public final class SessionController {
         workspace.getDocuments().forEach(this::track);
         autosaveTimer.play();
         updateStatus();
+        // restoring may have dropped documents; the stored session should not keep them until the next change
+        scheduleSave();
     }
 
     /**
@@ -274,15 +281,29 @@ public final class SessionController {
     private EditorDocument recovered(Recovered copy, Path file) {
         EditorDocument document = EditorDocument.recovered(copy.docId(), copy.file(), file);
         stored.put(document.getId(), document.getFileContent());
-        window.getNoticeBar().show("Unsaved changes to " + document.getTitle() + " were recovered.",
+        Runnable dismiss = window.getNoticeBar().show("Unsaved changes to " + document.getTitle() + " were recovered.",
                 "Discard recovered changes", () -> discardRecovered(document));
+        // Discarding is only offered for the recovered content itself: once the document is edited,
+        // saved or closed, the offer would throw away more than the recovered changes.
+        ChangeListener<AnimationFile> contentListener = (obs, oldContent, newContent) -> retireRecoveryNotice(document);
+        document.fileContentProperty().addListener(contentListener);
+        recoveryNotices.put(document, new RecoveryNotice(dismiss, contentListener));
         return document;
     }
 
+    private void retireRecoveryNotice(EditorDocument document) {
+        RecoveryNotice notice = recoveryNotices.remove(document);
+        if (notice != null) {
+            document.fileContentProperty().removeListener(notice.contentListener());
+            notice.dismiss().run();
+        }
+    }
+
     private void discardRecovered(EditorDocument document) {
-        if (!workspace.getDocuments().contains(document)) {
+        if (recoveryNotices.get(document) == null || !workspace.getDocuments().contains(document)) {
             return;
         }
+        retireRecoveryNotice(document);
         Path file = document.getPath();
         if (file != null && Files.exists(file)) {
             try {
@@ -350,22 +371,24 @@ public final class SessionController {
         view.showAllPropertiesProperty().removeListener(valueChanged);
         view.getExpandedLayerIds().removeListener(changed);
         document.dirtyProperty().removeListener(dirtyChanged);
+        retireRecoveryNotice(document);
         forget(document);
     }
 
     private void dirtyChanged() {
         for (EditorDocument document : workspace.getDocuments()) {
             if (!document.isDirty()) {
+                retireRecoveryNotice(document);
                 forget(document);
             }
         }
         updateStatus();
     }
 
+    /** Deletes the recovery copy even when this window did not write it: a stale copy would shadow the file on the next start. */
     private void forget(EditorDocument document) {
-        if (stored.remove(document.getId()) != null) {
-            recoveryStore.discard(document.getId());
-        }
+        stored.remove(document.getId());
+        recoveryStore.discard(document.getId());
         autosavedAt.remove(document.getId());
     }
 
