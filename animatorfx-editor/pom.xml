@@ -15,6 +15,9 @@
 
     <properties>
         <maven.compiler.release>${editor.java.release}</maven.compiler.release>
+        <!-- mvn javafx:run -Danimatorfx.configDir=<dir> -Danimatorfx.args="<file.afx> ..." -->
+        <animatorfx.configDir/>
+        <animatorfx.args/>
         <!-- TestFX brings OSGi onto the test class path; Ikonli then tries its OSGi resolver and needs to read it. -->
         <surefire.jvm.args>${javafx.headless.jvm.args} --add-reads org.kordamp.ikonli.core=ALL-UNNAMED</surefire.jvm.args>
     </properties>
@@ -98,6 +101,12 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <configuration>
                     <mainClass>com.dlsc.animatorfx.editor/com.dlsc.animatorfx.editor.AnimatorApp</mainClass>
+                    <options>
+                        <!-- empty = the per-user configuration directory -->
+                        <option>-Danimatorfx.configDir=${animatorfx.configDir}</option>
+                        <option>--enable-native-access=javafx.graphics</option>
+                    </options>
+                    <commandlineArgs>${animatorfx.args}</commandlineArgs>
                 </configuration>
             </plugin>
         </plugins>

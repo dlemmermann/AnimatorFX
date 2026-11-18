@@ -88,7 +88,7 @@ public final class RecoveryStore {
                 writeIndex(index);
             }
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "Could not delete the recovery copy of " + docId, e);
+            LOG.log(System.Logger.Level.WARNING, "Could not delete the recovery copy of " + docId + " (" + e + ")");
         }
     }
 
@@ -109,7 +109,7 @@ public final class RecoveryStore {
                     .sorted()
                     .forEach(ids::add);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "Could not list the recovery copies in " + dir, e);
+            LOG.log(System.Logger.Level.WARNING, "Could not list the recovery copies in " + dir + " (" + e + ")");
         }
         List<Recovered> out = new ArrayList<>();
         for (String id : ids) {
@@ -123,7 +123,7 @@ public final class RecoveryStore {
             AnimationFile file = AnimationIO.read(copyOf(docId));
             return Optional.of(new Recovered(docId, file, originalPath == null ? null : Path.of(originalPath)));
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "Recovery copy is unreadable: " + copyOf(docId), e);
+            LOG.log(System.Logger.Level.WARNING, "Recovery copy is unreadable: " + copyOf(docId) + " (" + e + ")");
             return Optional.empty();
         }
     }
@@ -152,7 +152,7 @@ public final class RecoveryStore {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "Recovery index is unreadable: " + file, e);
+            LOG.log(System.Logger.Level.WARNING, "Recovery index is unreadable: " + file + " (" + e + ")");
             index.clear();
         }
         return index;

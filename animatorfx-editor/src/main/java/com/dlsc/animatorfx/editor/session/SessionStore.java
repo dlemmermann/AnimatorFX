@@ -38,7 +38,7 @@ public final class SessionStore {
         try {
             return SessionState.fromJson(Json.parse(Files.readString(file, StandardCharsets.UTF_8)));
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "Session state is unreadable, using defaults: " + file, e);
+            LOG.log(System.Logger.Level.WARNING, "Session state is unreadable, using defaults: " + file + " (" + e + ")");
             moveAside();
             return SessionState.defaults();
         }
@@ -66,7 +66,7 @@ public final class SessionStore {
             }
             Files.move(file, target);
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "Could not rename the unreadable session state: " + file, e);
+            LOG.log(System.Logger.Level.WARNING, "Could not rename the unreadable session state: " + file + " (" + e + ")");
         }
     }
 }

@@ -468,6 +468,14 @@ public final class EditorDocument {
         title.set(file == null || file.getFileName() == null ? UNTITLED : file.getFileName().toString());
     }
 
+    /**
+     * Removes layers and keyframes that the document does not have from the selection. The
+     * document does this itself after every change of its content.
+     */
+    public void pruneSelection() {
+        pruneSelection(state.animation());
+    }
+
     private void pruneSelection(Animation current) {
         if (selection.layerIds().isEmpty() && selection.keyframes().isEmpty()) {
             return;

@@ -1,0 +1,512 @@
+/*
+ * AnimatorFX editor stylesheet, layered over AtlantaFX Primer Dark / Primer Light.
+ *
+ * Every colour is a looked-up colour defined on .root (dark) and overridden for the light theme,
+ * so the rules below are shared by both. Popups have a root of their own, hence ".light .root".
+ */
+
+.root {
+    -afx-bg: #0d1117;
+    -afx-panel: #151b23;
+    -afx-panel-alt: #1c232d;
+    -afx-line: #2a3340;
+    -afx-fg: #d7dee8;
+    -afx-muted: #7d8a9b;
+    -afx-accent: #4c9aff;
+    -afx-key: #ffb454;
+    -afx-playhead: #ff5c5c;
+    -afx-canvas: #090c10;
+
+    -afx-on-accent: #ffffff;
+    -afx-accent-soft: rgba(76, 154, 255, 0.16);
+    -afx-accent-bar: rgba(76, 154, 255, 0.45);
+    -afx-key-soft: rgba(255, 180, 84, 0.14);
+    -afx-key-bar: rgba(255, 180, 84, 0.30);
+    -afx-hover: rgba(125, 138, 155, 0.16);
+    -afx-grid: rgba(42, 51, 64, 0.55);
+    -afx-shadow: rgba(0, 0, 0, 0.45);
+
+    /* AtlantaFX follows the editor palette */
+    -color-bg-default: -afx-panel;
+    -color-bg-overlay: -afx-panel;
+    -color-bg-subtle: -afx-panel-alt;
+    -color-bg-inset: -afx-bg;
+    -color-border-default: -afx-line;
+    -color-border-muted: -afx-line;
+    -color-border-subtle: -afx-line;
+    -color-fg-default: -afx-fg;
+    -color-fg-muted: -afx-muted;
+    -color-fg-subtle: -afx-muted;
+    -color-accent-fg: -afx-accent;
+    -color-accent-emphasis: -afx-accent;
+    -color-accent-subtle: -afx-accent-soft;
+
+    -fx-font-size: 12px;
+}
+
+.root.light,
+.light .root {
+    -afx-bg: #f3f5f8;
+    -afx-panel: #ffffff;
+    -afx-panel-alt: #eef1f5;
+    -afx-line: #d5dbe3;
+    -afx-fg: #1d2733;
+    -afx-muted: #6b7888;
+    -afx-accent: #1f6feb;
+    -afx-key: #d9730d;
+    -afx-playhead: #e5484d;
+    -afx-canvas: #e4e8ee;
+
+    -afx-accent-soft: rgba(31, 111, 235, 0.12);
+    -afx-accent-bar: rgba(31, 111, 235, 0.40);
+    -afx-key-soft: rgba(217, 115, 13, 0.12);
+    -afx-key-bar: rgba(217, 115, 13, 0.28);
+    -afx-hover: rgba(107, 120, 136, 0.14);
+    -afx-grid: rgba(213, 219, 227, 0.75);
+    -afx-shadow: rgba(29, 39, 51, 0.18);
+}
+
+.main-window {
+    -fx-background-color: -afx-bg;
+}
+
+.ikonli-font-icon {
+    -fx-icon-size: 16;
+    -fx-icon-color: -afx-fg;
+}
+
+.tooltip {
+    -fx-font-size: 11px;
+}
+
+/* ---------------------------------------------------------------- toolbar */
+
+.toolbar {
+    -fx-background-color: -afx-panel;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 0 10 0 12;
+    -fx-spacing: 12;
+    -fx-alignment: center-left;
+    -fx-min-height: 40;
+    -fx-pref-height: 40;
+    -fx-max-height: 40;
+}
+
+.toolbar-group {
+    -fx-spacing: 8;
+    -fx-alignment: center-left;
+}
+
+.brand {
+    -fx-font-weight: bold;
+    -fx-text-fill: -afx-fg;
+    -fx-padding: 0 6 0 0;
+}
+
+.pill {
+    -fx-background-color: -afx-panel-alt;
+    -fx-background-radius: 4;
+    -fx-border-color: -afx-line;
+    -fx-border-radius: 4;
+    -fx-border-width: 1;
+    -fx-padding: 3 8 3 8;
+    -fx-text-fill: -afx-fg;
+    -fx-min-height: 26;
+    -fx-pref-height: 26;
+    -fx-max-height: 26;
+    -fx-alignment: center;
+}
+
+.pill.transport {
+    -fx-padding: 0 3 0 3;
+    -fx-spacing: 1;
+}
+
+.pill-toggle {
+    -fx-graphic-text-gap: 4;
+    -fx-text-fill: -afx-muted;
+}
+
+.pill-toggle .ikonli-font-icon {
+    -fx-icon-size: 14;
+    -fx-icon-color: -afx-muted;
+}
+
+.pill-toggle:hover {
+    -fx-background-color: -afx-hover, -afx-panel-alt;
+}
+
+.pill-toggle:selected {
+    -fx-background-color: -afx-accent-soft, -afx-panel-alt;
+    -fx-border-color: -afx-accent;
+    -fx-text-fill: -afx-accent;
+}
+
+.pill-toggle:selected .ikonli-font-icon {
+    -fx-icon-color: -afx-accent;
+}
+
+.icon-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 3;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
+    -fx-padding: 2 4 2 4;
+    -fx-min-width: -1;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+}
+
+.icon-button:hover {
+    -fx-background-color: -afx-hover;
+}
+
+.icon-button:pressed {
+    -fx-background-color: -afx-accent-soft;
+}
+
+.icon-button:disabled {
+    -fx-opacity: 0.4;
+}
+
+.icon-button.pill {
+    -fx-background-color: -afx-panel-alt;
+    -fx-border-width: 1;
+    -fx-padding: 3 6 3 6;
+    -fx-min-height: 26;
+    -fx-pref-height: 26;
+}
+
+.icon-button.pill:hover {
+    -fx-background-color: -afx-hover, -afx-panel-alt;
+}
+
+/* ---------------------------------------------------------- document tabs */
+
+.document-tabs {
+    -fx-spacing: 2;
+    -fx-alignment: center-left;
+}
+
+.document-tab {
+    -fx-alignment: center-left;
+    -fx-spacing: 6;
+    -fx-padding: 0 4 0 10;
+    -fx-min-height: 26;
+    -fx-max-height: 26;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-border-color: transparent;
+    -fx-border-width: 1;
+}
+
+.document-tab:hover {
+    -fx-background-color: -afx-hover;
+}
+
+.document-tab:selected {
+    -fx-background-color: -afx-panel-alt;
+    -fx-border-color: -afx-line;
+}
+
+.document-tab .document-title {
+    -fx-text-fill: -afx-muted;
+}
+
+.document-tab:selected .document-title {
+    -fx-text-fill: -afx-fg;
+}
+
+.dirty-dot {
+    -fx-background-color: -afx-accent;
+    -fx-background-radius: 3;
+    -fx-min-width: 6;
+    -fx-min-height: 6;
+    -fx-max-width: 6;
+    -fx-max-height: 6;
+}
+
+.tab-close {
+    -fx-padding: 1 2 1 2;
+    -fx-min-height: 18;
+    -fx-pref-height: 18;
+}
+
+.tab-close .ikonli-font-icon,
+.notice-dismiss .ikonli-font-icon {
+    -fx-icon-size: 12;
+    -fx-icon-color: -afx-muted;
+}
+
+#new-document .ikonli-font-icon {
+    -fx-icon-color: -afx-muted;
+}
+
+/* ------------------------------------------------------------- notice bar */
+
+.notice {
+    -fx-background-color: -afx-key-soft, -afx-panel;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 5 8 5 12;
+    -fx-spacing: 8;
+    -fx-alignment: center-left;
+}
+
+.notice > .ikonli-font-icon {
+    -fx-icon-color: -afx-key;
+    -fx-icon-size: 14;
+}
+
+.notice-message {
+    -fx-text-fill: -afx-fg;
+}
+
+.notice-action {
+    -fx-background-color: transparent;
+    -fx-border-color: -afx-key;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-text-fill: -afx-key;
+    -fx-padding: 2 8 2 8;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+}
+
+.notice-action:hover {
+    -fx-background-color: -afx-key-soft;
+}
+
+/* -------------------------------------------------------------- tool rail */
+
+.tool-rail {
+    -fx-background-color: -afx-panel;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 1 0 0;
+    -fx-padding: 8 0 8 0;
+    -fx-spacing: 4;
+    -fx-alignment: top-center;
+    -fx-min-width: 42;
+    -fx-pref-width: 42;
+    -fx-max-width: 42;
+}
+
+.tool-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 5;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+    -fx-min-width: 30;
+    -fx-min-height: 30;
+    -fx-pref-width: 30;
+    -fx-pref-height: 30;
+    -fx-max-width: 30;
+    -fx-max-height: 30;
+}
+
+.tool-button .ikonli-font-icon {
+    -fx-icon-size: 18;
+    -fx-icon-color: -afx-muted;
+}
+
+.tool-button:hover {
+    -fx-background-color: -afx-hover;
+}
+
+.tool-button:hover .ikonli-font-icon {
+    -fx-icon-color: -afx-fg;
+}
+
+.tool-button:selected {
+    -fx-background-color: -afx-accent;
+}
+
+.tool-button:selected .ikonli-font-icon {
+    -fx-icon-color: -afx-on-accent;
+}
+
+/* ------------------------------------------------------------ split panes */
+
+.split-pane {
+    -fx-background-color: -afx-line;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-border-width: 0;
+}
+
+.split-pane > .split-pane-divider {
+    -fx-background-color: -afx-line;
+    -fx-background-insets: 0;
+    -fx-padding: 0 0.5 0 0.5;
+}
+
+.split-pane:vertical > .split-pane-divider {
+    -fx-padding: 0.5 0 0.5 0;
+}
+
+.split-pane > .split-pane-divider > .horizontal-grabber,
+.split-pane > .split-pane-divider > .vertical-grabber {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+/* ----------------------------------------------------------------- canvas */
+
+.canvas-pane {
+    -fx-background-color: -afx-canvas,
+        linear-gradient(from 0px 0px to 20px 0px, repeat, -afx-grid 0%, -afx-grid 5%, transparent 5%, transparent 100%),
+        linear-gradient(from 0px 0px to 0px 20px, repeat, -afx-grid 0%, -afx-grid 5%, transparent 5%, transparent 100%);
+}
+
+.artboard {
+    -fx-background-color: -afx-line, -afx-panel;
+    -fx-background-insets: -1, 0;
+    -fx-effect: dropshadow(gaussian, -afx-shadow, 24, 0, 0, 6);
+}
+
+/* ------------------------------------------------------------- side panel */
+
+.side-panel {
+    -fx-background-color: -afx-panel;
+}
+
+.side-panel .tab-pane > .tab-header-area {
+    -fx-padding: 0 0 0 4;
+}
+
+.side-panel .tab-pane > .tab-header-area > .tab-header-background {
+    -fx-background-color: -afx-line, -afx-panel;
+    -fx-background-insets: 0, 0 0 1 0;
+}
+
+.side-panel .tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-padding: 7 10 7 10;
+}
+
+.side-panel .tab-pane > .tab-header-area > .headers-region > .tab .tab-label {
+    -fx-text-fill: -afx-muted;
+}
+
+.side-panel .tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
+    -fx-text-fill: -afx-fg;
+}
+
+.section {
+    -fx-padding: 10 12 12 12;
+    -fx-spacing: 8;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 0 1 0;
+}
+
+.section-title {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -afx-muted;
+}
+
+.hint,
+.field-label {
+    -fx-text-fill: -afx-muted;
+}
+
+.field-grid {
+    -fx-hgap: 10;
+    -fx-vgap: 5;
+}
+
+.field-label {
+    -fx-min-width: 70;
+}
+
+.value-field {
+    -fx-background-color: -afx-panel-alt;
+    -fx-background-radius: 3;
+    -fx-border-color: -afx-line;
+    -fx-border-radius: 3;
+    -fx-padding: 2 6 2 6;
+    -fx-text-fill: -afx-fg;
+    -fx-font-size: 11px;
+}
+
+/* --------------------------------------------------------------- timeline */
+
+.timeline-pane {
+    -fx-background-color: -afx-panel;
+}
+
+.timeline-names {
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 1 0 0;
+}
+
+.timeline-row {
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 0 1 0;
+    -fx-min-height: 24;
+    -fx-pref-height: 24;
+    -fx-max-height: 24;
+    -fx-text-fill: -afx-fg;
+}
+
+.timeline-row:selected {
+    -fx-background-color: -afx-accent-soft;
+}
+
+.timeline-row:slot {
+    -fx-text-fill: -afx-key;
+}
+
+.timeline-header {
+    -fx-background-color: -afx-panel-alt;
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 10px;
+    -fx-padding: 0 8 0 10;
+}
+
+.timeline-tick {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 10px;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 0 0 1;
+    -fx-padding: 0 0 0 4;
+}
+
+.layer-bar {
+    -fx-background-color: -afx-accent, -afx-panel, -afx-accent-bar;
+    -fx-background-insets: 0, 1, 1;
+    -fx-background-radius: 2, 1, 1;
+}
+
+.layer-bar:slot {
+    -fx-background-color: -afx-key, -afx-panel, -afx-key-bar;
+}
+
+.playhead,
+.playhead-head {
+    -fx-background-color: -afx-playhead;
+}
+
+.playhead-head {
+    -fx-shape: "M0 0 L9 0 L4.5 8 Z";
+}
+
+/* ------------------------------------------------------------- status bar */
+
+.status-bar {
+    -fx-background-color: -afx-panel-alt;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 0 12 0 12;
+    -fx-spacing: 16;
+    -fx-alignment: center-left;
+    -fx-min-height: 24;
+    -fx-pref-height: 24;
+    -fx-max-height: 24;
+}
+
+.status-bar .label {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 11px;
+}
