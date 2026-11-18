@@ -1,11 +1,10 @@
 package com.dlsc.animatorfx.editor.canvas;
 
+import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
-import com.dlsc.animatorfx.model.SlotLayer;
 
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,12 +45,7 @@ public final class LayerNames {
      * The first of "slot1", "slot2", … that no slot of the document uses.
      */
     public static String nextSlotName(Animation animation) {
-        Set<String> used = slotNames(animation);
-        int number = 1;
-        while (used.contains("slot" + number)) {
-            number++;
-        }
-        return "slot" + number;
+        return Commands.nextSlotName(Commands.slotNames(animation));
     }
 
     /**
@@ -70,17 +64,9 @@ public final class LayerNames {
         if (RESERVED.contains(name)) {
             return Optional.of("\u201c" + name + "\u201d is a Java keyword.");
         }
-        if (slotNames(animation).contains(name)) {
+        if (Commands.slotNames(animation).contains(name)) {
             return Optional.of("A slot named \u201c" + name + "\u201d already exists.");
         }
         return Optional.empty();
-    }
-
-    private static Set<String> slotNames(Animation animation) {
-        Set<String> names = new HashSet<>();
-        for (SlotLayer slot : Layers.slots(animation)) {
-            names.add(slot.slotName());
-        }
-        return names;
     }
 }

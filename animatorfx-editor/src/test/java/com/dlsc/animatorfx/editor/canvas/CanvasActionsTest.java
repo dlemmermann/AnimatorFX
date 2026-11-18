@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.editor.canvas;
 import com.dlsc.animatorfx.editor.canvas.tools.NewLayers;
 import com.dlsc.animatorfx.editor.canvas.tools.TextTool;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
+import com.dlsc.animatorfx.editor.doc.RoundTrip;
 import com.dlsc.animatorfx.editor.ui.Formats;
 import com.dlsc.animatorfx.editor.ui.PngEncoder;
 import com.dlsc.animatorfx.editor.ui.ToolKind;
@@ -96,6 +97,26 @@ class CanvasActionsTest extends CanvasTestBase {
         assertEquals("a", ids().get(0));
         assertEquals("a copy", layers().get(1).name());
         assertEquals(List.of(layers().get(1).id()), selection());
+    }
+
+    @Test
+    void duplicatedAndPastedSlotsCanBeSavedAndOpenedAgain() {
+        add(NewLayers.slot(doc.getAnimation(), "card", new Vec2(300, 300), new Vec2(50, 50)));
+        select(layers().get(0).id());
+
+        fire("menu-edit-duplicate");
+        fire("menu-edit-copy");
+        fire("menu-edit-paste");
+        fire("menu-edit-paste");
+        fire("menu-edit-select-all");
+        fire("menu-edit-group");
+        fire("menu-edit-duplicate");
+
+        List<String> names = com.dlsc.animatorfx.model.Layers.slots(doc.getAnimation()).stream()
+                .map(SlotLayer::slotName).toList();
+        assertEquals(8, names.size());
+        assertEquals(8, new java.util.HashSet<>(names).size(), names.toString());
+        RoundTrip.of(doc.getFileContent());
     }
 
     @Test
@@ -233,6 +254,7 @@ class CanvasActionsTest extends CanvasTestBase {
         assertEquals(Files.readAllBytes(file).length, other.getFileContent().assets().get(assetId).length);
         // the slot name is taken in the other document
         assertEquals("slot2", ((SlotLayer) other.getAnimation().layers().get(2)).slotName());
+        RoundTrip.of(other.getFileContent());
 
         run(other::undo);
         assertTrue(other.getAnimation().assets().isEmpty());

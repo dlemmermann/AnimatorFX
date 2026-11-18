@@ -117,6 +117,7 @@ class SidePanelViewsTest extends EditorUiTest {
         assertEquals(1, doc.getAnimation().assets().size());
         assertTrue(fx(assets::getMessage).contains("logo.png"));
         assertTrue(fx(assets::getMessage).contains("1 layer"));
+        com.dlsc.animatorfx.editor.doc.RoundTrip.of(doc.getFileContent());
 
         run(() -> doc.undo());
         layout();
@@ -126,6 +127,7 @@ class SidePanelViewsTest extends EditorUiTest {
         assertTrue(doc.getFileContent().assets().isEmpty());
         assertNull(fx(assets::getMessage));
         assertEquals("Remove Asset", doc.getUndoName());
+        com.dlsc.animatorfx.editor.doc.RoundTrip.of(doc.getFileContent());
         assertEquals(0, assetRows().size());
         run(() -> doc.undo());
         layout();

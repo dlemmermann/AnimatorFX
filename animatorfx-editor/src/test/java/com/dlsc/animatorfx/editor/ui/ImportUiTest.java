@@ -191,6 +191,11 @@ class ImportUiTest extends EditorUiTest {
         assertEquals(slots.size(), imported.getSlotPreviews().size());
 
         assertEquals(List.of("Imported login.fxml with 2 warnings."), fx(() -> window.getNoticeBar().getMessages()));
+
+        // imported slots stay unique when they are duplicated, so the document can be saved and opened again
+        run(() -> imported.execute(Commands.duplicateLayers(animation.layers().stream().map(Layer::id).toList())));
+        assertEquals(2 * slots.size(), Layers.slots(imported.getAnimation()).stream().map(SlotLayer::slotName).distinct().count());
+        com.dlsc.animatorfx.editor.doc.RoundTrip.of(imported.getFileContent());
         screenshot("task-10-fxml.png");
     }
 
@@ -239,6 +244,13 @@ class ImportUiTest extends EditorUiTest {
         run(doc::redo);
         assertEquals(2, doc.getAnimation().layers().size());
         assertEquals(1, doc.getAnimation().assets().size());
+
+        // the same file a second time: new layer and asset ids, and a document that can be opened again
+        picked.add(file);
+        fire("menu-file-import-svg-into");
+        assertEquals(3, doc.getAnimation().layers().size());
+        assertEquals(2, doc.getAnimation().assets().size());
+        com.dlsc.animatorfx.editor.doc.RoundTrip.of(doc.getFileContent());
     }
 
     @Test

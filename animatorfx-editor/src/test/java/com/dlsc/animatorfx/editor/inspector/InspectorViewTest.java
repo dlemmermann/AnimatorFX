@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.dlsc.animatorfx.editor.canvas.tools.NewLayers;
 import com.dlsc.animatorfx.editor.doc.Commands;
+import com.dlsc.animatorfx.editor.doc.RoundTrip;
 import com.dlsc.animatorfx.editor.inspector.fields.ColorField;
 import com.dlsc.animatorfx.editor.inspector.fields.GradientStopBar;
 import com.dlsc.animatorfx.editor.inspector.fields.KeyframeToggle;
@@ -785,6 +786,7 @@ class InspectorViewTest extends EditorUiTest {
         type(name, "header");
         assertEquals("header", ((SlotLayer) layer("s1")).slotName());
         assertEquals("Rename Slot", doc.getUndoName());
+        RoundTrip.of(doc.getAnimation());
 
         type(lookup("#" + SlotSection.WIDTH_ID), "120");
         assertEquals(120, ((SlotLayer) layer("s1")).width(), 1e-9);

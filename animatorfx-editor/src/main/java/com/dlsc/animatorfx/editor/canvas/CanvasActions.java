@@ -11,7 +11,6 @@ import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.ShapeLayer;
-import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Vec2;
 import javafx.collections.ObservableList;
@@ -269,35 +268,14 @@ public final class CanvasActions {
         Animation animation = doc().getAnimation();
         double offset = PASTE_OFFSET * clipboard.nextPaste();
         List<Layer> copies = new ArrayList<>();
-        Animation naming = animation;
+        Set<String> slotNames = Commands.slotNames(animation);
         for (Layer copy : Commands.freshCopies(clipboard.getLayers())) {
-            Layer placed = uniqueSlots(Commands.translated(copy, new Vec2(offset, offset)), naming);
-            copies.add(placed);
-            naming = Layers.insert(naming, null, naming.layers().size(), placed);
+            copies.add(Commands.uniqueSlots(Commands.translated(copy, new Vec2(offset, offset)), slotNames));
         }
         String parent = canvas.getEnteredGroupId();
         doc().execute(Commands.addLayers("Paste", parent, canvas.getGeometry().scope().size(), copies),
                 clipboard.getAssets());
         doc().getSelection().layerIds().setAll(copies.stream().map(Layer::id).toList());
-    }
-
-    private static Layer uniqueSlots(Layer layer, Animation animation) {
-        if (layer instanceof SlotLayer slot) {
-            return LayerNames.slotNameError(animation, slot.slotName()).isEmpty() ? slot
-                    : slot.withSlotName(LayerNames.nextSlotName(animation));
-        }
-        if (layer instanceof GroupLayer group) {
-            List<Layer> children = new ArrayList<>();
-            Animation naming = animation;
-            for (Layer child : group.children()) {
-                Layer unique = uniqueSlots(child, naming);
-                children.add(unique);
-                naming = Layers.insert(naming, null, naming.layers().size(),
-                        unique.withBase(unique.base().withId(UUID.randomUUID().toString())));
-            }
-            return group.withChildren(children);
-        }
-        return layer;
     }
 
     private static void collectTopMost(List<Layer> layers, Set<String> wanted, List<Layer> out) {

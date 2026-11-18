@@ -18,6 +18,7 @@ import com.dlsc.animatorfx.model.MotionPath;
 import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.PropertyRef;
 import com.dlsc.animatorfx.model.ShapeLayer;
+import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.Trim;
 import com.dlsc.animatorfx.model.Vec2;
@@ -80,7 +81,8 @@ public final class Commands {
     /**
      * Deep-copies the layers with fresh layer and keyframe ids and inserts each copy directly
      * above its original. A layer inside a group that is duplicated as well is not copied twice.
-     * Masks inside the copies point to the copied mask layer when that was duplicated too.
+     * Masks inside the copies point to the copied mask layer when that was duplicated too. A
+     * copied slot gets the next free slot name: slot names are unique in a document.
      */
     public static Command duplicateLayers(Collection<String> ids) {
         Set<String> wanted = new LinkedHashSet<>(ids);
@@ -94,8 +96,9 @@ public final class Commands {
                 }
             }
             Animation after = before;
+            Set<String> slotNames = slotNames(before);
             for (Layer original : originals) {
-                Layer copy = copy(original, newIds);
+                Layer copy = uniqueSlots(copy(original, newIds), slotNames);
                 copy = copy.withBase(copy.base().withName(original.name() + " copy"));
                 String parentId = Layers.parentOf(after, original.id()).map(Layer::id).orElse(null);
                 List<Layer> siblings = parentId == null ? after.layers()
@@ -104,6 +107,45 @@ public final class Commands {
             }
             return after;
         });
+    }
+
+    /** The slot names the document uses. */
+    public static Set<String> slotNames(Animation animation) {
+        Set<String> names = new HashSet<>();
+        for (SlotLayer slot : Layers.slots(animation)) {
+            names.add(slot.slotName());
+        }
+        return names;
+    }
+
+    /** The first of "slot1", "slot2", … that is not among the names. */
+    public static String nextSlotName(Set<String> used) {
+        int number = 1;
+        while (used.contains("slot" + number)) {
+            number++;
+        }
+        return "slot" + number;
+    }
+
+    /**
+     * The layer with every slot in it, at any depth, that has one of the names renamed to the
+     * next free slot name. The names of all its slots are added to the set, so that layers
+     * that are made unique one after the other do not collide with each other either.
+     */
+    public static Layer uniqueSlots(Layer layer, Set<String> used) {
+        if (layer instanceof SlotLayer slot) {
+            SlotLayer unique = used.contains(slot.slotName()) ? slot.withSlotName(nextSlotName(used)) : slot;
+            used.add(unique.slotName());
+            return unique;
+        }
+        if (layer instanceof GroupLayer group) {
+            List<Layer> children = new ArrayList<>();
+            for (Layer child : group.children()) {
+                children.add(uniqueSlots(child, used));
+            }
+            return group.withChildren(children);
+        }
+        return layer;
     }
 
     public static Command updateLayer(String name, String id, UnaryOperator<Layer> fn) {
@@ -121,21 +163,29 @@ public final class Commands {
      * keyframe at that time is added or updated (a static property becomes keyframed with that
      * single keyframe). With auto-key off, a static property gets a new static value and an
      * animated property gets its keyframe at that time updated, or a new keyframe when there is
-     * none. New keyframes ease linearly; an updated keyframe keeps its id and easing.
+     * none. New keyframes ease linearly; an updated keyframe keeps its id and easing. A time
+     * before 0 counts as 0: a file cannot hold keyframes at negative times.
      */
     public static Command setValueAt(String id, String key, double time, Object value, boolean autoKey) {
         Objects.requireNonNull(value, "value");
+        double at = keyTime(time);
         return command("Change " + label(key), a -> editLayer(a, id,
-                layer -> LayerProperties.set(layer, key, valueAt(LayerProperties.get(layer, key), time, value, autoKey))));
+                layer -> LayerProperties.set(layer, key, valueAt(LayerProperties.get(layer, key), at, value, autoKey))));
     }
 
     /**
      * Adds a keyframe with the value the property currently has at that time. Does nothing when
-     * there is a keyframe at that time already.
+     * there is a keyframe at that time already. A time before 0 counts as 0.
      */
     public static Command addKeyframe(String id, String key, double time) {
+        double at = keyTime(time);
         return command("Add Keyframe", a -> editLayer(a, id,
-                layer -> LayerProperties.set(layer, key, withSampledKeyframe(LayerProperties.get(layer, key), time))));
+                layer -> LayerProperties.set(layer, key, withSampledKeyframe(LayerProperties.get(layer, key), at))));
+    }
+
+    /** A time a keyframe can have: not negative, and 0 for a time that is no number. */
+    private static double keyTime(double time) {
+        return Double.isFinite(time) ? Math.max(0, time) : 0;
     }
 
     public static Command removeKeyframes(Collection<KeyframeRef> refs) {
@@ -468,7 +518,8 @@ public final class Commands {
      */
     public static double pasteTime(Animation animation, KeyframeCopy copy, double time) {
         double rate = animation.frameRate();
-        double anchor = rate > 0 ? Math.round(time * rate) / rate : time;
+        double from = keyTime(time);
+        double anchor = rate > 0 ? Math.round(from * rate) / rate : from;
         return Math.clamp(anchor + copy.offset(), 0, Math.max(0, animation.duration()));
     }
 
@@ -744,7 +795,7 @@ public final class Commands {
     }
 
     private static <T> Animatable<T> moved(Animatable<T> value, Set<String> ids, double delta) {
-        if (!value.isAnimated()) {
+        if (!value.isAnimated() || !Double.isFinite(delta)) {
             return value;
         }
         List<Keyframe<T>> moved = new ArrayList<>();
