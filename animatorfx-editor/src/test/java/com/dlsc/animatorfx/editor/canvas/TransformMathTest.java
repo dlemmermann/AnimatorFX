@@ -93,30 +93,41 @@ class TransformMathTest {
     }
 
     @Test
-    void rotationFollowsThePointerAroundThePosition() {
-        assertEquals(90, TransformMath.rotation(PLAIN, new Vec2(300, 100), new Vec2(200, 200), false), 1e-9);
+    void rotationFollowsThePointerAroundThePivot() {
+        Vec2 pivot = PLAIN.position();
 
-        Values turned = new Values(PLAIN.anchor(), PLAIN.position(), Vec2.ONE, 10, Vec2.ZERO);
-        assertEquals(100, TransformMath.rotation(turned, new Vec2(300, 100), new Vec2(200, 200), false), 1e-9);
-        assertEquals(-80, TransformMath.rotation(turned, new Vec2(300, 100), new Vec2(200, 0), false), 1e-9);
+        assertEquals(90, TransformMath.rotation(0, pivot, new Vec2(300, 100), new Vec2(200, 200)), 1e-9);
+        assertEquals(100, TransformMath.rotation(10, pivot, new Vec2(300, 100), new Vec2(200, 200)), 1e-9);
+        assertEquals(-80, TransformMath.rotation(10, pivot, new Vec2(300, 100), new Vec2(200, 0)), 1e-9);
     }
 
     @Test
-    void shiftSnapsTheRotationTo15Degrees() {
-        Vec2 at50Degrees = new Vec2(200 + Math.cos(Math.toRadians(50)), 100 + Math.sin(Math.toRadians(50)));
-
-        assertEquals(45, TransformMath.rotation(PLAIN, new Vec2(300, 100), at50Degrees, true), 1e-9);
-        assertEquals(50, TransformMath.rotation(PLAIN, new Vec2(300, 100), at50Degrees, false), 1e-9);
+    void snapAngleRoundsToTheStep() {
+        assertEquals(45, TransformMath.snapAngle(50, 15), 1e-9);
         assertEquals(-15, TransformMath.snapAngle(-11, 15), 1e-9);
+    }
+
+    private static Vec2 onCircle(double degrees) {
+        return new Vec2(200 + 100 * Math.cos(Math.toRadians(degrees)), 100 + 100 * Math.sin(Math.toRadians(degrees)));
     }
 
     @Test
     void rotationDoesNotJumpWhenThePointerCrossesTheHalfTurn() {
-        Values turned = new Values(PLAIN.anchor(), PLAIN.position(), Vec2.ONE, 170, Vec2.ZERO);
-        Vec2 start = new Vec2(200 + 100 * Math.cos(Math.toRadians(170)), 100 + 100 * Math.sin(Math.toRadians(170)));
-        Vec2 now = new Vec2(200 + 100 * Math.cos(Math.toRadians(190)), 100 + 100 * Math.sin(Math.toRadians(190)));
+        assertEquals(190, TransformMath.rotation(170, PLAIN.position(), onCircle(170), onCircle(190)), 1e-9);
+    }
 
-        assertEquals(190, TransformMath.rotation(turned, start, now, false), 1e-9);
+    @Test
+    void rotationAccumulatesPastHalfATurnAndPastAFullTurn() {
+        double rotation = 0;
+        for (int angle = 30; angle <= 420; angle += 30) {
+            rotation = TransformMath.rotation(rotation, PLAIN.position(), onCircle(angle - 30), onCircle(angle));
+        }
+        assertEquals(420, rotation, 1e-6);
+
+        for (int angle = 390; angle >= -210; angle -= 30) {
+            rotation = TransformMath.rotation(rotation, PLAIN.position(), onCircle(angle + 30), onCircle(angle));
+        }
+        assertEquals(-210, rotation, 1e-6);
     }
 
     @Test
@@ -165,5 +176,13 @@ class TransformMathTest {
         assertVec(247, 100, Quad.of(LOCAL, turned.matrix()).rotateHandle(22));
         assertEquals(true, quad.contains(new Vec2(151, 76)));
         assertEquals(false, quad.contains(new Vec2(149, 76)));
+
+        // a box scaled to nothing covers no point, not even the one it sits on
+        Values collapsed = new Values(PLAIN.anchor(), PLAIN.position(), Vec2.ZERO, 0, Vec2.ZERO);
+        Quad point = Quad.of(LOCAL, collapsed.matrix());
+        assertEquals(false, point.contains(new Vec2(200, 100)));
+        assertEquals(false, point.contains(new Vec2(10, 10)));
+        Values flat = new Values(PLAIN.anchor(), PLAIN.position(), new Vec2(1, 0), 0, Vec2.ZERO);
+        assertEquals(false, Quad.of(LOCAL, flat.matrix()).contains(new Vec2(200, 100)));
     }
 }

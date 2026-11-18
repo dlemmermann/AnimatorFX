@@ -68,7 +68,11 @@ public interface Tool {
         return Cursor.DEFAULT;
     }
 
-    /** Zoom, pan or the canvas size changed; inline controls reposition themselves here. */
+    /**
+     * The canvas was laid out: zoom, pan, size or the frame may have changed. Inline controls
+     * reposition themselves here. Called for every registered tool and the modal tool, also
+     * while they are not the one receiving input.
+     */
     default void viewChanged() {
     }
 }

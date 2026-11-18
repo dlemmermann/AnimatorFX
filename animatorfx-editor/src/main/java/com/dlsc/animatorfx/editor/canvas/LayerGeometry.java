@@ -238,6 +238,10 @@ public final class LayerGeometry {
             return false;
         }
         double[] toView = Matrices.multiply(parentToView, matrix(layer));
+        if (Matrices.invert(toView) == null) {
+            // scaled to nothing at this frame: there is nothing to hit, here or among the children
+            return false;
+        }
         if (layer instanceof GroupLayer group) {
             for (int i = group.children().size() - 1; i >= 0; i--) {
                 if (hits(group.children().get(i), viewPoint, toView)) {

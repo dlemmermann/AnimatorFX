@@ -90,18 +90,18 @@ public final class TransformMath {
     }
 
     /**
-     * The rotation after dragging the rotate handle from one point to another around the
-     * position of the layer.
+     * The rotation after the pointer went from one point to the next around a pivot: the angle
+     * between the two is added, taken the short way round. Applied from drag event to drag event
+     * this follows the pointer through any number of turns without a jump of 360°, which a
+     * keyframed rotation needs.
      *
-     * @param snap round the result to multiples of 15 degrees
+     * @param rotation the rotation before this step, in degrees
      */
-    public static double rotation(Values start, Vec2 startPointer, Vec2 pointer, boolean snap) {
-        Vec2 from = startPointer.minus(start.position());
-        Vec2 to = pointer.minus(start.position());
-        double delta = Math.toDegrees(Math.atan2(to.y(), to.x()) - Math.atan2(from.y(), from.x()));
-        delta = delta - 360 * Math.rint(delta / 360);
-        double rotation = clean(start.rotation() + delta);
-        return snap ? snapAngle(rotation, 15) : rotation;
+    public static double rotation(double rotation, Vec2 pivot, Vec2 from, Vec2 to) {
+        Vec2 a = from.minus(pivot);
+        Vec2 b = to.minus(pivot);
+        double delta = Math.toDegrees(Math.atan2(b.y(), b.x()) - Math.atan2(a.y(), a.x()));
+        return clean(rotation + delta - 360 * Math.rint(delta / 360));
     }
 
     public static double snapAngle(double degrees, double step) {

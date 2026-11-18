@@ -37,6 +37,8 @@ public final class ShapeTool implements Tool {
 
     private final CanvasView canvas;
     private final Kind kind;
+    /** Where the button went down, before snapping: a click is told from a drag by the distance from here. */
+    private Vec2 pressedAt;
     private Pointer start;
     private String parentId;
     private Vec2 startInParent;
@@ -55,6 +57,7 @@ public final class ShapeTool implements Tool {
         LayerGeometry geometry = canvas.getGeometry();
         canvas.getDocument().endGesture();
         targets = geometry.snapTargets(Set.of());
+        pressedAt = p.view();
         start = snapped(p);
         parentId = canvas.getEnteredGroupId();
         startInParent = geometry.viewToGroup(parentId, start.view());
@@ -77,7 +80,7 @@ public final class ShapeTool implements Tool {
 
     @Override
     public void dragged(Pointer p) {
-        if (!active || (layerId == null && Handles.distance(start.view(), p.view()) < DRAG_THRESHOLD)) {
+        if (!active || (layerId == null && Handles.distance(pressedAt, p.view()) < DRAG_THRESHOLD)) {
             return;
         }
         Pointer at = snapped(p);

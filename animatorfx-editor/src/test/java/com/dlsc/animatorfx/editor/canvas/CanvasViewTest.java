@@ -377,6 +377,91 @@ class CanvasViewTest extends CanvasTestBase {
     }
 
     @Test
+    void pressingAltDuringAScaleDragPutsThePositionBack() {
+        add(rect("a", 100, 100, 200, 120));
+        select("a");
+
+        pressView(view(300, 220), Keys.CONTROL);
+        dragView(view(400, 280), Keys.CONTROL);
+        assertVec(1.5, 1.5, scale("a"));
+        assertVec(250, 190, position("a"));
+        dragView(view(400, 280), new Keys(false, true, true));
+        releaseView(view(400, 280), new Keys(false, true, true));
+
+        assertVec(2, 2, scale("a"));
+        assertVec(200, 160, position("a"));
+        run(doc::undo);
+        assertVec(1, 1, scale("a"));
+        assertVec(200, 160, position("a"));
+    }
+
+    @Test
+    void aLayerScaledToNothingIsNotHitAndDoesNotBlockWhatIsBeneath() {
+        SlotLayer slot = NewLayers.slot(doc.getAnimation(), "button", new Vec2(200, 160), new Vec2(80, 40));
+        Layer collapsed = transformed(slot, slot.base().transform().withScale(Animatable.of(Vec2.ZERO)));
+        TextLayer text = NewLayers.text(doc.getAnimation(), new Vec2(200, 160), "Title");
+        Layer noText = transformed(text, text.base().transform().withScale(Animatable.of(Vec2.ZERO)));
+        add(rect("a", 100, 100, 200, 120), collapsed, noText);
+
+        click(150, 130);
+        assertEquals(List.of("a"), selection());
+        click(200, 160);
+        assertEquals(List.of("a"), selection(), "not even on the point the collapsed layers sit on");
+        click(600, 500);
+        assertTrue(selection().isEmpty());
+        move(600, 500);
+        assertNull(canvas.getOverlay().getHover());
+    }
+
+    @Test
+    void theRotateHandleCanTurnTheLayerPastHalfATurn() {
+        add(rect("a", 100, 100, 200, 120));
+        select("a");
+        Vec2 handle = fx(() -> canvas.getGeometry().quad("a").orElseThrow().rotateHandle(Handles.ROTATE_DISTANCE));
+        Vec2 centre = view(200, 160);
+
+        pressView(handle, Keys.NONE);
+        for (int turned = 30; turned <= 270; turned += 30) {
+            double angle = Math.toRadians(-90 + turned);
+            dragView(new Vec2(centre.x() + 150 * Math.cos(angle), centre.y() + 150 * Math.sin(angle)), Keys.NONE);
+        }
+        Vec2 end = new Vec2(centre.x() - 150, centre.y());
+        releaseView(end, Keys.NONE);
+
+        assertEquals(270, layer("a").base().transform().rotation().at(0), 1e-3);
+    }
+
+    @Test
+    void aClickWithOnePixelOfJitterNextToASnapLineStillMakesTheDefaultShape() {
+        tool(ToolKind.RECTANGLE);
+
+        press(3, 300);
+        drag(4, 300);
+        release(4, 300);
+
+        assertVec(100, 100, size(layers().get(0)));
+        assertVec(0, 300, position(layers().get(0).id()));
+    }
+
+    @Test
+    void theTextEditorOpenedFromTheSelectToolFollowsPanAndZoom() {
+        TextLayer text = NewLayers.text(doc.getAnimation(), new Vec2(200, 150), "Title");
+        add(text);
+        run(() -> ((TextTool) canvas.getTool(ToolKind.TEXT)).edit(text.id()));
+        layout();
+        TextField editor = (TextField) lookup("#" + TextTool.EDITOR_ID);
+        assertEquals(ToolKind.SELECT, canvas.getActiveTool());
+        double x = editor.getLayoutX();
+        double y = editor.getLayoutY();
+
+        run(() -> canvas.panBy(30, -20));
+        layout();
+
+        assertEquals(x + 30, editor.getLayoutX(), 1e-6);
+        assertEquals(y - 20, editor.getLayoutY(), 1e-6);
+    }
+
+    @Test
     void theRotateHandleTurnsTheLayerAndShiftSnapsTo15Degrees() {
         add(rect("a", 100, 100, 200, 120));
         select("a");

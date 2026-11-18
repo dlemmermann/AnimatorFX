@@ -67,8 +67,21 @@ public record Quad(Vec2 topLeft, Vec2 topRight, Vec2 bottomRight, Vec2 bottomLef
         return distance(topLeft, bottomLeft);
     }
 
+    /**
+     * Whether the point is inside or on the edge. A quad without area, such as the box of a
+     * layer scaled to zero, contains nothing.
+     */
     public boolean contains(Vec2 p) {
         List<Vec2> c = corners();
+        double doubleArea = 0;
+        for (int i = 0; i < 4; i++) {
+            Vec2 a = c.get(i);
+            Vec2 b = c.get((i + 1) % 4);
+            doubleArea += a.x() * b.y() - b.x() * a.y();
+        }
+        if (Math.abs(doubleArea) < 1e-9) {
+            return false;
+        }
         boolean positive = false;
         boolean negative = false;
         for (int i = 0; i < 4; i++) {

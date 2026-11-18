@@ -577,7 +577,11 @@ public final class CanvasView extends Region {
         world.resizeRelocate(0, 0, animation.width(), animation.height());
         view.resizeRelocate(0, 0, animation.width(), animation.height());
         overlay.refresh();
-        currentTool().viewChanged();
+        // every tool: an inline editor can be open while another tool is the active one
+        tools.values().forEach(Tool::viewChanged);
+        if (modalTool != null) {
+            modalTool.viewChanged();
+        }
     }
 
     /**

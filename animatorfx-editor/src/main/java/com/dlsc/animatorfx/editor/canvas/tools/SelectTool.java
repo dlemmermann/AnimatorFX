@@ -82,7 +82,11 @@ public final class SelectTool implements Tool {
     private double[] viewToParent;
     private Handle handle;
     private Vec2 grabOffset = Vec2.ZERO;
-    private Vec2 startInParent;
+    private Vec2 lastInParent;
+    /** The rotation that follows the pointer exactly; what is written may be this snapped to 15°. */
+    private double rotation;
+    /** Whether this scale drag has written a position, which from then on must be kept up to date. */
+    private boolean positionWritten;
 
     public SelectTool(CanvasView canvas) {
         this.canvas = canvas;
@@ -189,7 +193,9 @@ public final class SelectTool implements Tool {
         local = geometry.localBox(layer);
         startQuad = quad;
         grabOffset = grabbed.minus(p.view());
-        startInParent = Matrices.apply(viewToParent, p.view());
+        lastInParent = Matrices.apply(viewToParent, p.view());
+        rotation = startValues.rotation();
+        positionWritten = false;
         targets = geometry.snapTargets(Set.of(id));
         return true;
     }
@@ -310,8 +316,12 @@ public final class SelectTool implements Tool {
                 Matrices.apply(viewToParent, view), p.alt(), p.shift());
         List<Command> commands = new ArrayList<>();
         commands.add(canvas.valueCommand(layerId, SCALE, scaled.scale()));
-        if (Handles.distance(scaled.position(), startValues.position()) > 1e-9) {
+        // Commands of a gesture apply to the document as the previous drag event left it. Once a
+        // position has been written, it has to be written again when it returns to the start
+        // (alt pressed during the drag); before that, leaving it out keeps auto-key from keying it.
+        if (positionWritten || Handles.distance(scaled.position(), startValues.position()) > 1e-9) {
             commands.add(canvas.valueCommand(layerId, POSITION, scaled.position()));
+            positionWritten = true;
         }
         doc().executeCoalesced(gestureKey, Commands.all("Scale", commands.toArray(Command[]::new)));
     }
@@ -324,10 +334,11 @@ public final class SelectTool implements Tool {
     }
 
     private void rotate(Pointer p) {
-        double rotation = TransformMath.rotation(startValues, startInParent,
-                Matrices.apply(viewToParent, p.view()), p.shift());
-        doc().executeCoalesced(gestureKey,
-                Commands.all("Rotate", canvas.valueCommand(layerId, ROTATION, rotation)));
+        Vec2 now = Matrices.apply(viewToParent, p.view());
+        rotation = TransformMath.rotation(rotation, startValues.position(), lastInParent, now);
+        lastInParent = now;
+        double value = p.shift() ? TransformMath.snapAngle(rotation, 15) : rotation;
+        doc().executeCoalesced(gestureKey, Commands.all("Rotate", canvas.valueCommand(layerId, ROTATION, value)));
     }
 
     private void moveAnchor(Pointer p) {

@@ -126,7 +126,7 @@ public final class SlotTool implements Tool {
         field.focusedProperty().addListener((obs, was, focused) -> {
             if (!focused && prompt == opened) {
                 // a valid name is taken as typed; anything else gives the slot up
-                if (LayerNames.slotNameError(canvas.getDocument().getAnimation(), field.getText()).isEmpty()) {
+                if (LayerNames.slotNameError(canvas.getDocument().getAnimation(), name()).isEmpty()) {
                     accept();
                 } else {
                     cancel();
@@ -172,10 +172,15 @@ public final class SlotTool implements Tool {
         }
     }
 
+    /** The name as typed, without blanks around it; this is what is validated and used. */
+    private String name() {
+        return field.getText().trim();
+    }
+
     /** Creates the slot when the name in the prompt is valid; shows what is wrong otherwise. */
     private void accept() {
         EditorDocument doc = canvas.getDocument();
-        String name = field.getText().trim();
+        String name = name();
         Optional<String> problem = LayerNames.slotNameError(doc.getAnimation(), name);
         if (problem.isPresent()) {
             showError(problem.get());
