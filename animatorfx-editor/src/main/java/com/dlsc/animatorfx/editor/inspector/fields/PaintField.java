@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.inspector.fields;
 
+import com.dlsc.animatorfx.editor.canvas.tools.NewLayers;
 import com.dlsc.animatorfx.editor.doc.PropertyUnits;
 import com.dlsc.animatorfx.model.Paint;
 import com.dlsc.animatorfx.model.Rgba;
@@ -34,7 +35,6 @@ public final class PaintField extends VBox {
     public static final String LINEAR = "Linear";
     public static final String RADIAL = "Radial";
 
-    private static final Rgba DEFAULT_COLOR = Rgba.parse("#4C9AFF");
 
     private final ComboBox<String> type = new ComboBox<>();
     private final ColorField solid = new ColorField();
@@ -53,7 +53,8 @@ public final class PaintField extends VBox {
     private final HBox radiusRow = row("Radius", radius);
 
     private Paint value;
-    private Rgba lastColor = DEFAULT_COLOR;
+    /** The colour a paint without one becomes: the last solid colour shown, at first that of new shapes. */
+    private Rgba lastColor = NewLayers.SHAPE_COLOR;
     private Vec2 extent = new Vec2(100, 100);
     private boolean updating;
     private BiConsumer<Paint, Boolean> onChange = (paint, adjusting) -> {
