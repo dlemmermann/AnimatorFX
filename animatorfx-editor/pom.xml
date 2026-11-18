@@ -15,6 +15,8 @@
 
     <properties>
         <maven.compiler.release>${editor.java.release}</maven.compiler.release>
+        <!-- TestFX brings OSGi onto the test class path; Ikonli then tries its OSGi resolver and needs to read it. -->
+        <surefire.jvm.args>${javafx.headless.jvm.args} --add-reads org.kordamp.ikonli.core=ALL-UNNAMED</surefire.jvm.args>
     </properties>
 
     <!-- Pins every (also transitive) JavaFX artifact to the editor JavaFX version. -->
@@ -72,5 +74,32 @@
             <groupId>org.kordamp.ikonli</groupId>
             <artifactId>ikonli-material2-pack</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testfx</groupId>
+            <artifactId>testfx-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testfx</groupId>
+            <artifactId>openjfx-monocle</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.dlsc.animatorfx.editor/com.dlsc.animatorfx.editor.AnimatorApp</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

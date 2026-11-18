@@ -6,4 +6,7 @@ module com.dlsc.animatorfx.editor {
     requires atlantafx.base;
     requires org.kordamp.ikonli.javafx;
     requires org.kordamp.ikonli.material2;
+
+    exports com.dlsc.animatorfx.editor.doc;
+    exports com.dlsc.animatorfx.editor.session;
 }
