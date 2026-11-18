@@ -1618,3 +1618,201 @@
     -fx-text-fill: -afx-muted;
     -fx-font-size: 11px;
 }
+
+/* ---------------------------------------------------------------- dialogs */
+
+/*
+ * The GemsFX DialogPane above the window content. Its own stylesheet is written for Modena and
+ * AtlantaFX styles ".dialog-pane" for the dialogs of JavaFX, so everything is set here.
+ */
+
+.editor-dialogs.dialog-pane {
+    -fx-background: -afx-panel;
+    -fx-text-background-color: -afx-fg;
+    -fx-accent: -afx-accent;
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+/* the veil over the window: the darkest tone of the palette in both themes */
+.root {
+    -afx-veil: #05070a;
+    -afx-veil-opacity: 0.55;
+}
+
+.root.light,
+.light .root {
+    -afx-veil: #1d2733;
+    -afx-veil-opacity: 0.32;
+}
+
+.editor-dialogs.dialog-pane > .glass-pane {
+    -fx-background-color: -afx-veil;
+    -fx-blocking-opacity: -afx-veil-opacity;
+}
+
+.editor-dialogs.dialog-pane > .content-pane {
+    -fx-background-color: -afx-line, -afx-panel;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 7, 6;
+    -fx-padding: 1;
+    -fx-effect: dropshadow(gaussian, -afx-shadow, 28, 0, 0, 8);
+}
+
+.editor-dialogs.dialog-pane > .content-pane > .glass-pane {
+    -fx-background-color: -afx-veil;
+    -fx-background-radius: 7;
+}
+
+.editor-dialogs.dialog-pane > .content-pane > .vbox > .header {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-padding: 16 18 0 18;
+    -fx-spacing: 10;
+    -fx-alignment: top-left;
+}
+
+.editor-dialogs.dialog-pane > .content-pane > .vbox > .header > .title {
+    -fx-text-fill: -afx-fg;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 0;
+}
+
+.editor-dialogs .dialog-icon {
+    -fx-icon-size: 18;
+    -fx-icon-color: -afx-accent;
+}
+
+.editor-dialogs .content-pane.warning .dialog-icon {
+    -fx-icon-color: -afx-key;
+}
+
+.editor-dialogs .content-pane.error .dialog-icon {
+    -fx-icon-color: -afx-playhead;
+}
+
+.editor-dialogs.dialog-pane > .content-pane > .vbox > .content.padding {
+    -fx-padding: 6 18 0 46;
+}
+
+.editor-dialogs.dialog-pane > .content-pane.no-icon > .vbox > .content.padding {
+    -fx-padding: 18 18 0 18;
+}
+
+.editor-dialogs .content .message {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 12px;
+}
+
+.editor-dialogs.dialog-pane > .content-pane > .vbox > .footer {
+    -fx-background-color: transparent;
+    -fx-background-radius: 0;
+    -fx-padding: 16 18 16 18;
+}
+
+.editor-dialogs .footer .button {
+    -fx-background-color: -afx-line, -afx-panel-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4, 3;
+    -fx-border-width: 0;
+    -fx-text-fill: -afx-fg;
+    -fx-font-size: 12px;
+    -fx-padding: 0 14 0 14;
+    -fx-min-width: 76;
+    -fx-min-height: 26;
+    -fx-pref-height: 26;
+    -fx-max-height: 26;
+}
+
+.editor-dialogs .footer .button:hover {
+    -fx-background-color: -afx-line, -afx-hover, -afx-panel-alt;
+    -fx-background-insets: 0, 1, 1;
+    -fx-background-radius: 4, 3, 3;
+}
+
+.editor-dialogs .footer .button:focused {
+    -fx-background-color: -afx-accent, -afx-panel-alt;
+}
+
+.editor-dialogs .footer .button:default {
+    -fx-background-color: -afx-accent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 4;
+    -fx-text-fill: -afx-on-accent;
+}
+
+.editor-dialogs .footer .button:default:hover {
+    -fx-background-color: derive(-afx-accent, 12%);
+}
+
+.editor-dialogs .footer .button:default:focused {
+    -fx-background-color: -afx-accent-bar, -afx-panel, -afx-accent;
+    -fx-background-insets: -3, -1, 0;
+    -fx-background-radius: 7, 5, 4;
+}
+
+.editor-dialogs .footer .button:disabled {
+    -fx-opacity: 0.4;
+}
+
+/* about */
+
+.editor-dialogs .about {
+    -fx-spacing: 16;
+    -fx-alignment: top-left;
+}
+
+.editor-dialogs .about-text {
+    -fx-spacing: 2;
+}
+
+.editor-dialogs .about-name {
+    -fx-text-fill: -afx-fg;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.editor-dialogs .about-version {
+    -fx-text-fill: -afx-fg;
+    -fx-padding: 0 0 8 0;
+}
+
+.editor-dialogs .about-runtime {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 11px;
+    -fx-padding: 8 0 0 0;
+}
+
+/* import warnings */
+
+.editor-dialogs .warnings {
+    -fx-spacing: 10;
+}
+
+.editor-dialogs #import-warnings {
+    -fx-background-color: -afx-line, -afx-bg;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4, 3;
+    -fx-border-width: 0;
+    -fx-text-fill: -afx-fg;
+    -fx-font-size: 11px;
+    -fx-highlight-fill: -afx-accent-bar;
+    -fx-highlight-text-fill: -afx-fg;
+    -fx-padding: 1;
+}
+
+.editor-dialogs #import-warnings:focused {
+    -fx-background-color: -afx-accent, -afx-bg;
+}
+
+.editor-dialogs #import-warnings .content {
+    -fx-background-color: transparent;
+    -fx-padding: 8 10 8 10;
+}
+
+.editor-dialogs #import-warnings .scroll-pane {
+    -fx-background-color: transparent;
+}
