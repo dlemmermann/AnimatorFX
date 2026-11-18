@@ -236,6 +236,8 @@ class SidePanelViewsTest extends EditorUiTest {
         assertTrue(fx(() -> secondName.getError().isPresent()));
         run(() -> Event.fireEvent(secondName, new ActionEvent()));
         assertEquals("marker1", doc.getAnimation().markers().get(1).name());
+        // a taken name is refused in the Document tab too: the document can be opened again
+        com.dlsc.animatorfx.editor.doc.RoundTrip.of(doc.getAnimation());
         run(() -> canvas.requestFocus());
 
         run(() -> ((ButtonBase) second.lookup(".marker-remove")).fire());

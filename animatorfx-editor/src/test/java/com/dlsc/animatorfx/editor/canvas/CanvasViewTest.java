@@ -747,6 +747,7 @@ class CanvasViewTest extends CanvasTestBase {
         assertNull(lookup("#" + SlotTool.NAME_FIELD_ID));
         assertFalse(lookup(".overlay-preview").isVisible());
         assertEquals("Add Slot", doc.getUndoName());
+        com.dlsc.animatorfx.editor.doc.RoundTrip.of(doc.getAnimation());
     }
 
     @Test

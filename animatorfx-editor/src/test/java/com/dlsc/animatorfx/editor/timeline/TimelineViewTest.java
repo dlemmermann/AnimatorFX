@@ -631,6 +631,7 @@ class TimelineViewTest extends EditorUiTest {
         assertFalse(field.isVisible());
         assertEquals("intro", doc.getAnimation().markers().get(0).name());
         assertEquals("Rename Marker", doc.getUndoName());
+        com.dlsc.animatorfx.editor.doc.RoundTrip.of(doc.getAnimation());
 
         // delete the selected marker with the lane focused
         click(lane, x(2.25), 8);
