@@ -168,8 +168,17 @@ final class MenuBarFactory {
                 shortcut(KeyCode.CLOSE_BRACKET, KeyCombination.SHIFT_DOWN), a -> a.reorder(Commands.Order.FRONT));
         MenuItem back = onLayers("menu-edit-send-to-back", "Send to Back",
                 shortcut(KeyCode.OPEN_BRACKET, KeyCombination.SHIFT_DOWN), a -> a.reorder(Commands.Order.BACK));
+        MenuItem editPath = onLayers("menu-edit-edit-path", "Edit Path", null, a -> {
+            List<String> ids = workspace.getActiveDocument().getSelection().layerIds();
+            if (ids.size() == 1 && !window.getCanvasView().editPath(ids.get(0))) {
+                window.getCanvasView().notice("Only a path layer can be edited point by point."
+                        + " Convert the shape to a path first.");
+            }
+        });
+        MenuItem convert = onLayers("menu-edit-convert-to-path", "Convert to Path", null, CanvasActions::convertToPath);
         // these need selected layers; cut and copy stay enabled because they also serve text inputs
-        List<MenuItem> needSelection = List.of(duplicate, delete, group, ungroup, forward, backward, front, back);
+        List<MenuItem> needSelection = List.of(duplicate, delete, group, ungroup, forward, backward, front, back,
+                editPath, convert);
         bindToDocument(doc -> needSelection.forEach(item ->
                         item.disableProperty().bind(Bindings.isEmpty(doc.getSelection().layerIds()))),
                 () -> needSelection.forEach(MenuBarFactory::unbindDisabled));
@@ -183,7 +192,9 @@ final class MenuBarFactory {
                 new SeparatorMenuItem(),
                 group, ungroup,
                 new SeparatorMenuItem(),
-                forward, backward, front, back);
+                forward, backward, front, back,
+                new SeparatorMenuItem(),
+                editPath, convert);
         return menu;
     }
 

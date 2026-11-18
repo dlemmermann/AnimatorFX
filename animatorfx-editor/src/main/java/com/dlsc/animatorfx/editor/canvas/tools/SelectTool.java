@@ -5,6 +5,7 @@ import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.canvas.Handle;
 import com.dlsc.animatorfx.editor.canvas.Handles;
 import com.dlsc.animatorfx.editor.canvas.LayerGeometry;
+import com.dlsc.animatorfx.editor.canvas.PathOps;
 import com.dlsc.animatorfx.editor.canvas.Quad;
 import com.dlsc.animatorfx.editor.canvas.Snapper;
 import com.dlsc.animatorfx.editor.canvas.TransformMath;
@@ -17,9 +18,13 @@ import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
+import com.dlsc.animatorfx.model.MotionPath;
+import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.Vec2;
 import javafx.collections.ObservableList;
 import javafx.scene.Cursor;
+import javafx.scene.control.MenuItem;
+import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 
 import java.util.ArrayList;
@@ -43,6 +48,11 @@ import java.util.function.Predicate;
  * scales about the anchor, shift keeps the aspect ratio), a rotate handle above the top edge
  * (shift snaps to 15°) and its anchor point, which moves with alt held.</li>
  * <li>Moves and scales snap to the artboard and to other layers unless Control is held.</li>
+ * <li>A layer on a motion path gets its position from the path: moving it moves the whole path,
+ * and it scales about its anchor.</li>
+ * <li>A layer that masks another one is not drawn and cannot be clicked; once selected in the
+ * timeline it shows its outline and can be dragged by it.</li>
+ * <li>A double-click on a path layer, or Enter with one selected, starts path editing.</li>
  * </ul>
  *
  * Several selected layers can be moved together; scaling and rotating work on one layer.
@@ -59,8 +69,11 @@ public final class SelectTool implements Tool {
 
     private enum Mode {IDLE, PENDING, MOVE, SCALE, ROTATE, ANCHOR, MARQUEE}
 
-    /** A layer that moves with the drag: where it started and how view distances turn into its parent's. */
-    private record Mover(String id, Vec2 start, double[] viewToParent) {
+    /**
+     * A layer that moves with the drag: where it started and how view distances turn into its
+     * parent's. A layer on a motion path moves by its path, the path it started with.
+     */
+    private record Mover(String id, Vec2 start, double[] viewToParent, PathData motionPath) {
     }
 
     private final CanvasView canvas;
@@ -87,6 +100,7 @@ public final class SelectTool implements Tool {
     private double rotation;
     /** Whether this scale drag has written a position, which from then on must be kept up to date. */
     private boolean positionWritten;
+    private boolean onMotionPath;
 
     public SelectTool(CanvasView canvas) {
         this.canvas = canvas;
@@ -115,7 +129,7 @@ public final class SelectTool implements Tool {
         if (selection.size() == 1 && grabHandle(p, selection.get(0))) {
             return;
         }
-        Optional<String> hit = geometry.layerAt(p.view());
+        Optional<String> hit = layerAt(p.view());
         if (p.clicks() >= 2 && hit.isPresent()) {
             Layer layer = geometry.layer(hit.get()).orElseThrow();
             for (Predicate<Layer> handler : List.copyOf(canvas.getDoubleClickHandlers())) {
@@ -131,7 +145,7 @@ public final class SelectTool implements Tool {
         }
         if (hit.isEmpty() && canvas.getEnteredGroupId() != null) {
             canvas.enterGroup(null);
-            hit = geometry.layerAt(p.view());
+            hit = layerAt(p.view());
         }
         if (hit.isEmpty()) {
             marqueeBase = p.shift() ? List.copyOf(selection) : List.of();
@@ -156,6 +170,23 @@ public final class SelectTool implements Tool {
         }
         clickedId = id;
         mode = Mode.PENDING;
+    }
+
+    /**
+     * The layer under the pointer. A selected layer that masks another one is not drawn, so it
+     * is taken by the box that the overlay shows for it, also where the masked layer is beneath.
+     */
+    private Optional<String> layerAt(Vec2 view) {
+        LayerGeometry geometry = canvas.getGeometry();
+        for (String id : selection()) {
+            Layer layer = geometry.layer(id).orElse(null);
+            if (layer != null && geometry.isMask(id) && !layer.base().locked() && layer.base().visible()
+                    && geometry.scope().contains(layer)
+                    && geometry.quad(id).filter(quad -> quad.contains(view)).isPresent()) {
+                return Optional.of(id);
+            }
+        }
+        return geometry.layerAt(view);
     }
 
     /** Starts a scale, rotate or anchor drag when the pointer is on a handle of the layer. */
@@ -196,6 +227,7 @@ public final class SelectTool implements Tool {
         lastInParent = Matrices.apply(viewToParent, p.view());
         rotation = startValues.rotation();
         positionWritten = false;
+        onMotionPath = layer.base().motionPath() != null;
         targets = geometry.snapTargets(Set.of(id));
         return true;
     }
@@ -254,7 +286,9 @@ public final class SelectTool implements Tool {
             if (inverse == null) {
                 continue;
             }
-            list.add(new Mover(layer.id(), layer.base().transform().position().at(canvas.getTime()), inverse));
+            MotionPath motion = layer.base().motionPath();
+            list.add(new Mover(layer.id(), layer.base().transform().position().at(canvas.getTime()), inverse,
+                    motion == null ? null : motion.path()));
             ids.add(layer.id());
             Box bounds = geometry.viewBounds(layer.id()).orElse(null);
             if (bounds != null) {
@@ -287,9 +321,18 @@ public final class SelectTool implements Tool {
         List<Command> commands = new ArrayList<>();
         for (Mover mover : movers) {
             Vec2 inParent = tidy(Matrices.applyLinear(mover.viewToParent(), delta), snapped);
-            commands.add(canvas.valueCommand(mover.id(), POSITION, mover.start().plus(inParent)));
+            commands.add(mover.motionPath() == null
+                    ? canvas.valueCommand(mover.id(), POSITION, mover.start().plus(inParent))
+                    : motionPathCommand(mover.id(), PathOps.translate(mover.motionPath(), inParent)));
         }
         doc().executeCoalesced(gestureKey, Commands.all("Move", commands.toArray(Command[]::new)));
+    }
+
+    private static Command motionPathCommand(String id, PathData path) {
+        return Commands.updateLayer("Move", id, layer -> {
+            MotionPath motion = layer.base().motionPath();
+            return motion == null ? layer : layer.withBase(layer.base().withMotionPath(motion.withPath(path)));
+        });
     }
 
     /**
@@ -312,14 +355,15 @@ public final class SelectTool implements Tool {
             guides = result.guides();
         }
         canvas.getOverlay().setGuides(guides);
+        // on a motion path the position is not the layer's to change: it scales about its anchor
         TransformMath.Scaled scaled = TransformMath.scale(startValues, local, handle,
-                Matrices.apply(viewToParent, view), p.alt(), p.shift());
+                Matrices.apply(viewToParent, view), p.alt() || onMotionPath, p.shift());
         List<Command> commands = new ArrayList<>();
         commands.add(canvas.valueCommand(layerId, SCALE, scaled.scale()));
         // Commands of a gesture apply to the document as the previous drag event left it. Once a
         // position has been written, it has to be written again when it returns to the start
         // (alt pressed during the drag); before that, leaving it out keeps auto-key from keying it.
-        if (positionWritten || Handles.distance(scaled.position(), startValues.position()) > 1e-9) {
+        if (!onMotionPath && (positionWritten || Handles.distance(scaled.position(), startValues.position()) > 1e-9)) {
             commands.add(canvas.valueCommand(layerId, POSITION, scaled.position()));
             positionWritten = true;
         }
@@ -420,6 +464,9 @@ public final class SelectTool implements Tool {
         if (event.isShortcutDown() || event.isAltDown() || mode != Mode.IDLE) {
             return false;
         }
+        if (event.getCode() == KeyCode.ENTER) {
+            return selection().size() == 1 && canvas.editPath(selection().get(0));
+        }
         double step = event.isShiftDown() ? 10 : 1;
         Vec2 delta = switch (event.getCode()) {
             case LEFT -> new Vec2(-step, 0);
@@ -444,9 +491,11 @@ public final class SelectTool implements Tool {
             String parent = Layers.parentOf(animation, layer.id()).map(Layer::id).orElse(null);
             double[] inverse = Matrices.invert(geometry.groupToDocument(parent));
             if (inverse != null) {
+                Vec2 inParent = Matrices.applyLinear(inverse, delta);
+                MotionPath motion = layer.base().motionPath();
                 Vec2 position = layer.base().transform().position().at(canvas.getTime());
-                commands.add(canvas.valueCommand(layer.id(), POSITION,
-                        position.plus(Matrices.applyLinear(inverse, delta))));
+                commands.add(motion == null ? canvas.valueCommand(layer.id(), POSITION, position.plus(inParent))
+                        : motionPathCommand(layer.id(), PathOps.translate(motion.path(), inParent)));
             }
         }
         if (!commands.isEmpty()) {
@@ -454,6 +503,35 @@ public final class SelectTool implements Tool {
             doc().executeCoalesced(List.of("nudge", List.copyOf(selection())),
                     Commands.all("Nudge", commands.toArray(Command[]::new)));
         }
+    }
+
+    /**
+     * Edit Path for a path layer and Convert to Path for the other shapes. A secondary click on
+     * a layer that is not selected selects it first.
+     */
+    @Override
+    public List<MenuItem> menuItems(Pointer p) {
+        if (mode != Mode.IDLE) {
+            return List.of();
+        }
+        layerAt(p.view()).filter(id -> !selection().contains(id)).ifPresent(id -> selection().setAll(id));
+        List<MenuItem> items = new ArrayList<>();
+        if (selection().size() == 1 && canvas.getGeometry().layer(selection().get(0))
+                .filter(layer -> CanvasView.isPathLayer(layer) && !layer.base().locked()).isPresent()) {
+            String id = selection().get(0);
+            items.add(menuItem("canvas-menu-edit-path", "Edit Path", () -> canvas.editPath(id)));
+        }
+        if (canvas.getActions().canConvertToPath()) {
+            items.add(menuItem("canvas-menu-convert-to-path", "Convert to Path", canvas.getActions()::convertToPath));
+        }
+        return items;
+    }
+
+    private static MenuItem menuItem(String id, String text, Runnable action) {
+        MenuItem item = new MenuItem(text);
+        item.setId(id);
+        item.setOnAction(e -> action.run());
+        return item;
     }
 
     @Override
@@ -476,7 +554,7 @@ public final class SelectTool implements Tool {
         if (onHandle != null) {
             return onHandle;
         }
-        Optional<String> hit = canvas.getGeometry().layerAt(p.view());
+        Optional<String> hit = layerAt(p.view());
         return hit.isPresent() && selection().contains(hit.get()) ? Cursor.MOVE : Cursor.DEFAULT;
     }
 

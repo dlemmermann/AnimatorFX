@@ -5,8 +5,12 @@ import com.dlsc.animatorfx.editor.doc.Matrices;
 import com.dlsc.animatorfx.editor.ui.Formats;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
+import com.dlsc.animatorfx.model.MotionPath;
+import com.dlsc.animatorfx.model.PathData;
+import com.dlsc.animatorfx.model.PathMeasure;
 import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.Vec2;
+import com.dlsc.animatorfx.player.render.PathConverter;
 import javafx.geometry.Bounds;
 import javafx.geometry.VPos;
 import javafx.scene.Group;
@@ -15,8 +19,10 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.Pane;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
+import javafx.scene.shape.Path;
 import javafx.scene.shape.Polygon;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.transform.Rotate;
 import javafx.scene.text.Text;
 
 import java.util.ArrayList;
@@ -29,7 +35,8 @@ import java.util.function.Supplier;
 /**
  * What the canvas draws above the artboard, in view pixels, so it keeps its size at any zoom and
  * never becomes part of the document: slot rectangles, the hover outline, the selection with its
- * handles, snap guides, the marquee and the feedback of the tools.
+ * handles, the motion path of the selected layer (a dashed line with a dot at its start and an
+ * arrow at its end), snap guides, the marquee and the feedback of the tools.
  *
  * <p>The nodes are created once and moved on every {@link #refresh()}; the canvas refreshes
  * during its layout. Everything is styled by style class in {@code editor.css}
@@ -64,6 +71,11 @@ public final class Overlay extends Pane {
     private final Group anchor = new Group();
     private final Map<Handle, Rectangle> handles = new EnumMap<>(Handle.class);
     private final Label readout = new Label();
+    private final Path motionPath = new Path();
+    private final Circle motionStart = new Circle(3);
+    private final Polygon motionArrow = new Polygon(0.0, 0.0, -9.0, -4.0, -9.0, 4.0);
+    private final Rotate motionArrowAngle = new Rotate();
+    private final Group motion = new Group(motionPath, motionStart, motionArrow);
 
     private String hoverId;
     private Box marqueeBox;
@@ -96,7 +108,12 @@ public final class Overlay extends Pane {
         }
         readout.getStyleClass().addAll("overlay-readout", "mono");
         readout.setVisible(false);
-        getChildren().addAll(slots, groupOutline, hoverOutline, outlines, selectionOutline, rotateStem,
+        motionPath.getStyleClass().add("overlay-motion-path");
+        motionStart.getStyleClass().add("overlay-motion-start");
+        motionArrow.getStyleClass().add("overlay-motion-arrow");
+        motionArrow.getTransforms().add(motionArrowAngle);
+        motion.setVisible(false);
+        getChildren().addAll(slots, groupOutline, hoverOutline, outlines, motion, selectionOutline, rotateStem,
                 handleNodes, rotateHandle, anchor, preview, guides, marquee, readout, decorations);
         refresh();
     }
@@ -209,8 +226,10 @@ public final class Overlay extends Pane {
             }
         }
         show(selectionOutline, enclosing);
-        refreshHandles(single, single == null ? null : geometry.layer(selected.get(0)).orElse(null));
+        Layer only = selected.size() == 1 ? geometry.layer(selected.get(0)).orElse(null) : null;
+        refreshHandles(single, single == null ? null : only);
         refreshReadout(enclosing);
+        refreshMotionPath(only);
 
         show(preview, previewQuad);
         marquee.setVisible(marqueeBox != null);
@@ -274,6 +293,31 @@ public final class Overlay extends Pane {
         Vec2 anchorAt = anchorPoint(layer);
         anchor.setLayoutX(crisp(anchorAt.x()));
         anchor.setLayoutY(crisp(anchorAt.y()));
+    }
+
+    /** The motion path of the one selected layer, which lives in the coordinates of the layer's parent. */
+    private void refreshMotionPath(Layer layer) {
+        MotionPath path = layer == null ? null : layer.base().motionPath();
+        boolean shown = path != null && path.path().contours().stream().anyMatch(c -> c.vertices().size() >= 2);
+        motion.setVisible(shown);
+        if (!shown) {
+            return;
+        }
+        PathData view = PathOps.transform(path.path(), canvas.getGeometry().parentToView(layer.id()));
+        PathConverter.write(view, motionPath.getElements());
+        PathMeasure measure = new PathMeasure(view);
+        Vec2 from = measure.pointAt(0);
+        Vec2 to = measure.pointAt(1);
+        motionStart.setCenterX(from.x());
+        motionStart.setCenterY(from.y());
+        motionArrow.setLayoutX(to.x());
+        motionArrow.setLayoutY(to.y());
+        motionArrowAngle.setAngle(measure.angleAt(1));
+    }
+
+    /** Whether the motion path of the selected layer is showing. */
+    public boolean isMotionPathShown() {
+        return motion.isVisible();
     }
 
     /** The size of the selection in document pixels, and its angle when it is turned, below its box. */

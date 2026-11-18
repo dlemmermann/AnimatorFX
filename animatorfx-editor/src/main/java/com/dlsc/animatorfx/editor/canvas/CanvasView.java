@@ -1,6 +1,10 @@
 package com.dlsc.animatorfx.editor.canvas;
 
 import com.dlsc.animatorfx.editor.canvas.tools.ImageTool;
+import com.dlsc.animatorfx.editor.canvas.tools.MotionPathTool;
+import com.dlsc.animatorfx.editor.canvas.tools.PathEditTool;
+import com.dlsc.animatorfx.editor.canvas.tools.PathTarget;
+import com.dlsc.animatorfx.editor.canvas.tools.PenTool;
 import com.dlsc.animatorfx.editor.canvas.tools.Pointer;
 import com.dlsc.animatorfx.editor.canvas.tools.SelectTool;
 import com.dlsc.animatorfx.editor.canvas.tools.ShapeTool;
@@ -14,8 +18,10 @@ import com.dlsc.animatorfx.editor.doc.Matrices;
 import com.dlsc.animatorfx.editor.doc.ViewState;
 import com.dlsc.animatorfx.editor.ui.ToolKind;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Layer;
+import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.Vec2;
 import com.dlsc.animatorfx.player.AnimationView;
 import com.dlsc.animatorfx.player.Fit;
@@ -30,6 +36,8 @@ import javafx.beans.value.ChangeListener;
 import javafx.event.EventHandler;
 import javafx.scene.Cursor;
 import javafx.scene.Scene;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -100,6 +108,7 @@ public final class CanvasView extends Region {
 
     private final List<Predicate<Layer>> doubleClickHandlers = new ArrayList<>();
 
+    private final ContextMenu contextMenu = new ContextMenu();
     private Tool modalTool;
     private Consumer<String> notifier = message -> {
     };
@@ -155,6 +164,7 @@ public final class CanvasView extends Region {
         tools.put(ToolKind.LINE, new ShapeTool(this, ShapeTool.Kind.LINE));
         tools.put(ToolKind.POLYGON, new ShapeTool(this, ShapeTool.Kind.POLYGON));
         tools.put(ToolKind.STAR, new ShapeTool(this, ShapeTool.Kind.STAR));
+        tools.put(ToolKind.PEN, new PenTool(this));
         tools.put(ToolKind.TEXT, new TextTool(this));
         tools.put(ToolKind.IMAGE, new ImageTool(this));
         tools.put(ToolKind.SLOT, new SlotTool(this));
@@ -178,6 +188,7 @@ public final class CanvasView extends Region {
                 newScene.addEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
             }
         });
+        doubleClickHandlers.add(layer -> editPath(layer.id()));
         installPointer();
         installDrop();
     }
@@ -336,6 +347,11 @@ public final class CanvasView extends Region {
         return modalTool;
     }
 
+    /** The menu of a secondary click; its items come from {@link Tool#menuItems} of the tool in charge. */
+    public ContextMenu getContextMenu() {
+        return contextMenu;
+    }
+
     /** Receives messages for the user, such as why something could not be ungrouped. */
     public void setNotifier(Consumer<String> notifier) {
         this.notifier = Objects.requireNonNull(notifier, "notifier");
@@ -418,6 +434,57 @@ public final class CanvasView extends Region {
         boolean group = geometry.layer(groupIdOrNull).orElse(null) instanceof GroupLayer;
         enteredGroupId.set(group ? groupIdOrNull : null);
         requestLayout();
+    }
+
+    // ------------------------------------------------------------------ paths
+
+    /** Whether the layer is a shape whose geometry is a Bezier path, which can be edited point by point. */
+    public static boolean isPathLayer(Layer layer) {
+        return layer instanceof ShapeLayer shape && shape.geometry() instanceof Geometry.PathGeometry;
+    }
+
+    /**
+     * Enters path editing for a path layer, which becomes the selection.
+     *
+     * @return whether the layer is an unlocked path layer
+     */
+    public boolean editPath(String layerId) {
+        Layer layer = geometry.layer(layerId).orElse(null);
+        if (layer == null || !isPathLayer(layer) || layer.base().locked()) {
+            return false;
+        }
+        return editPath(PathTarget.geometry(layerId));
+    }
+
+    /**
+     * Enters path editing for the motion path of a layer.
+     *
+     * @return whether the layer has a motion path
+     */
+    public boolean editMotionPath(String layerId) {
+        Layer layer = geometry.layer(layerId).orElse(null);
+        return layer != null && layer.base().motionPath() != null && editPath(PathTarget.motionPath(layerId));
+    }
+
+    private boolean editPath(PathTarget target) {
+        setActiveTool(ToolKind.SELECT);
+        if (!getDocument().getSelection().layerIds().equals(List.of(target.layerId()))) {
+            getDocument().getSelection().layerIds().setAll(target.layerId());
+        }
+        setModalTool(new PathEditTool(this, target));
+        return true;
+    }
+
+    /** Starts drawing a motion path for a layer, which becomes the selection. */
+    public void drawMotionPath(String layerId) {
+        if (geometry.layer(layerId).isEmpty()) {
+            return;
+        }
+        setActiveTool(ToolKind.SELECT);
+        if (!getDocument().getSelection().layerIds().equals(List.of(layerId))) {
+            getDocument().getSelection().layerIds().setAll(layerId);
+        }
+        setModalTool(new MotionPathTool(this, layerId));
     }
 
     // ------------------------------------------------------------------ playback
@@ -677,6 +744,20 @@ public final class CanvasView extends Region {
                 currentTool().exited();
             }
         });
+        setOnContextMenuRequested(event -> {
+            if (getDocument() == null || toolHasPointer || panning) {
+                return;
+            }
+            Pointer at = new Pointer(new Vec2(event.getX(), event.getY()), false, false, false, 1);
+            List<MenuItem> items = currentTool().menuItems(at);
+            contextMenu.hide();
+            if (!items.isEmpty()) {
+                contextMenu.getItems().setAll(items);
+                contextMenu.show(this, event.getScreenX(), event.getScreenY());
+            }
+            requestLayout();
+            event.consume();
+        });
         setOnScroll(event -> {
             if (getDocument() == null) {
                 return;
@@ -752,7 +833,8 @@ public final class CanvasView extends Region {
                 yield true;
             }
             case DELETE, BACK_SPACE -> {
-                if (!event.isShortcutDown()) {
+                // a tool that edits points removes points; otherwise the selected layers go
+                if (!event.isShortcutDown() && !currentTool().keyPressed(event)) {
                     actions.delete();
                 }
                 yield !event.isShortcutDown();

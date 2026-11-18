@@ -337,9 +337,9 @@ public final class PathOps {
             Vec2 other = which == Tangent.IN ? v.out() : v.in();
             double length = length(relative);
             if (mode == TangentMode.SYMMETRIC) {
-                other = relative.times(-1);
+                other = scaled(relative, -1);
             } else if (mode == TangentMode.ALIGNED && length > 0) {
-                other = relative.times(-length(other) / length);
+                other = scaled(relative, -length(other) / length);
             }
             return which == Tangent.IN ? new Vertex(v.point(), relative, other) : new Vertex(v.point(), other, relative);
         });
@@ -378,7 +378,7 @@ public final class PathOps {
         Vec2 direction = chord.times(1 / chordLength);
         double outLength = distance(point, next == null ? previous : next) / 3;
         double inLength = distance(point, previous == null ? next : previous) / 3;
-        return withVertex(path, ref, new Vertex(point, direction.times(-inLength), direction.times(outLength)));
+        return withVertex(path, ref, new Vertex(point, scaled(direction, -inLength), scaled(direction, outLength)));
     }
 
     // ------------------------------------------------------------------ contours, whole paths
@@ -460,6 +460,11 @@ public final class PathOps {
         List<Contour> contours = new ArrayList<>(path.contours());
         contours.set(index, contour);
         return new PathData(contours);
+    }
+
+    /** The vector times a factor, without negative zeros, which would not equal a plain zero. */
+    public static Vec2 scaled(Vec2 v, double factor) {
+        return new Vec2(v.x() * factor + 0.0, v.y() * factor + 0.0);
     }
 
     private static boolean isZero(Vec2 v) {

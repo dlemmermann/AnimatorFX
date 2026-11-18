@@ -5,10 +5,12 @@ import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
+import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Vec2;
@@ -126,6 +128,36 @@ public final class CanvasActions {
         LayerGeometry geometry = canvas.getGeometry();
         List<String> ids = geometry.scope().stream().filter(geometry::isSelectable).map(Layer::id).toList();
         doc().getSelection().layerIds().setAll(ids);
+    }
+
+    // ------------------------------------------------------------------ paths
+
+    /** Whether a selected layer is a rectangle, ellipse, line, polygon or star, which can become a path. */
+    public boolean canConvertToPath() {
+        if (doc() == null) {
+            return false;
+        }
+        Animation animation = doc().getAnimation();
+        return selected().stream().anyMatch(id -> Layers.find(animation, id)
+                .filter(layer -> layer instanceof ShapeLayer shape && !(shape.geometry() instanceof Geometry.PathGeometry))
+                .isPresent());
+    }
+
+    /**
+     * Turns the selected primitive shapes into path layers with the same outline, as one undo
+     * step. Refuses with a notice when one of them has geometry keyframes, which would be lost.
+     */
+    public void convertToPath() {
+        List<String> ids = selected();
+        if (ids.isEmpty()) {
+            return;
+        }
+        Optional<String> obstacle = Commands.convertObstacle(doc().getAnimation(), ids);
+        if (obstacle.isPresent()) {
+            canvas.notice(obstacle.get());
+            return;
+        }
+        doc().execute(Commands.convertToPath(ids, canvas.getTime()));
     }
 
     // ------------------------------------------------------------------ structure

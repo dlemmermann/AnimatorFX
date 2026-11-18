@@ -299,6 +299,11 @@ public final class LayerGeometry {
         }
     }
 
+    /** Whether another layer uses this one as its mask, so that it is not drawn itself. */
+    public boolean isMask(String layerId) {
+        return maskIds().contains(layerId);
+    }
+
     private Set<String> maskIds() {
         Animation animation = animation();
         if (animation != maskSource) {

@@ -1,12 +1,15 @@
 package com.dlsc.animatorfx.editor.canvas.tools;
 
+import com.dlsc.animatorfx.editor.canvas.Box;
 import com.dlsc.animatorfx.editor.canvas.LayerNames;
+import com.dlsc.animatorfx.editor.canvas.PathOps;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.LayerBase;
 import com.dlsc.animatorfx.model.Paint;
+import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
@@ -81,6 +84,34 @@ public final class NewLayers {
         return new ShapeLayer(base(animation, "Line", half(delta), from.plus(half(delta))),
                 new Geometry.Line(Animatable.of(Vec2.ZERO), Animatable.of(delta)),
                 Animatable.of(new Paint.None()), stroke, null);
+    }
+
+    private static Stroke lineStroke() {
+        return new Stroke(Animatable.of(new Paint.Solid(SHAPE_COLOR)), Animatable.of(LINE_WIDTH),
+                Stroke.Cap.ROUND, Stroke.Join.ROUND, 10, List.of(), Animatable.of(0.0));
+    }
+
+    /**
+     * A path layer from vertices in parent coordinates: closed with the fill of new shapes and no
+     * stroke, open with the stroke of a new line and no fill.
+     *
+     * @param centred {@code true} for a finished path: its coordinates start at the top-left of
+     *                its box and the anchor is in the middle of the box, as for the other shapes.
+     *                {@code false} while the path is drawn: the layer sits on the first vertex,
+     *                which so stays put while vertices are added. Both look the same.
+     */
+    public static ShapeLayer path(String id, String name, double duration, List<PathData.Vertex> vertices,
+                                  boolean closed, boolean centred) {
+        PathData inParent = new PathData(List.of(new PathData.Contour(vertices, closed)));
+        Box box = PathOps.bounds(inParent);
+        Vec2 origin = centred && box != null ? new Vec2(box.minX(), box.minY()) : vertices.get(0).point();
+        Vec2 anchor = centred && box != null ? new Vec2(box.width() / 2, box.height() / 2) : Vec2.ZERO;
+        Transform transform = Transform.IDENTITY.withAnchor(Animatable.of(anchor))
+                .withPosition(Animatable.of(origin.plus(anchor)));
+        LayerBase base = LayerBase.create(name, duration).withId(id).withTransform(transform);
+        Geometry geometry = new Geometry.PathGeometry(Animatable.of(PathOps.translate(inParent, origin.times(-1))));
+        return closed ? new ShapeLayer(base, geometry, fill(), null, null)
+                : new ShapeLayer(base, geometry, Animatable.of(new Paint.None()), lineStroke(), null);
     }
 
     public static TextLayer text(Animation animation, Vec2 topLeft, String text) {

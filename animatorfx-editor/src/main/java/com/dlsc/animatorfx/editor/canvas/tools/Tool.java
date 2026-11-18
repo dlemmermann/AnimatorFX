@@ -1,7 +1,10 @@
 package com.dlsc.animatorfx.editor.canvas.tools;
 
 import javafx.scene.Cursor;
+import javafx.scene.control.MenuItem;
 import javafx.scene.input.KeyEvent;
+
+import java.util.List;
 
 /**
  * What the canvas does with the pointer and the keyboard. A tool is registered for a
@@ -61,6 +64,13 @@ public interface Tool {
      */
     default boolean cancel() {
         return false;
+    }
+
+    /**
+     * The items of the context menu for a secondary click at the pointer; no items, no menu.
+     */
+    default List<MenuItem> menuItems(Pointer pointer) {
+        return List.of();
     }
 
     /** The cursor to show at the pointer. */

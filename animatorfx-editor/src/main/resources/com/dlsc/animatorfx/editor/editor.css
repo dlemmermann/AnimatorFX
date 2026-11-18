@@ -478,6 +478,76 @@
     -fx-stroke-width: 1;
 }
 
+/* The motion path of the selected layer. */
+
+.overlay-motion-path {
+    -fx-fill: transparent;
+    -fx-stroke: -afx-key;
+    -fx-stroke-width: 1;
+    -fx-stroke-dash-array: 5 4;
+    -fx-stroke-line-cap: butt;
+}
+
+.overlay-motion-start {
+    -fx-fill: -afx-panel;
+    -fx-stroke: -afx-key;
+    -fx-stroke-width: 1.5;
+}
+
+.overlay-motion-arrow {
+    -fx-fill: -afx-key;
+}
+
+/* Path editing and the pen: vertices are squares like the selection handles, tangent handles are round. */
+
+.path-outline {
+    -fx-fill: transparent;
+    -fx-stroke: -afx-accent;
+    -fx-stroke-width: 1;
+}
+
+.path-rubber-band {
+    -fx-fill: transparent;
+    -fx-stroke: -afx-accent;
+    -fx-stroke-width: 1;
+    -fx-stroke-dash-array: 4 3;
+    -fx-opacity: 0.8;
+}
+
+.path-vertex {
+    -fx-fill: -afx-on-accent;
+    -fx-stroke: -afx-accent;
+    -fx-stroke-width: 1;
+}
+
+.path-vertex.selected {
+    -fx-fill: -afx-accent;
+    -fx-stroke: -afx-on-accent;
+}
+
+.path-tangent-line {
+    -fx-stroke: -afx-accent;
+    -fx-stroke-width: 1;
+}
+
+.path-tangent-handle {
+    -fx-fill: -afx-on-accent;
+    -fx-stroke: -afx-accent;
+    -fx-stroke-width: 1;
+}
+
+.path-close-ring {
+    -fx-fill: -afx-accent-soft;
+    -fx-stroke: -afx-accent;
+    -fx-stroke-width: 1.5;
+}
+
+.path-insert-point {
+    -fx-fill: -afx-accent;
+    -fx-stroke: -afx-on-accent;
+    -fx-stroke-width: 1;
+}
+
 /* Inline controls of the tools. */
 
 .canvas-text-editor {
