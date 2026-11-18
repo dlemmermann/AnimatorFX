@@ -36,7 +36,8 @@ import java.util.Optional;
 /**
  * The main window in the motion-tool layout: toolbar with the document tabs at the top, tool rail
  * at the left, canvas in the centre, tabbed side panel at the right, timeline at the bottom and
- * the status bar below it.
+ * the status bar below it. Above all of it lies the layer in which the dialogs show, inside
+ * the window.
  *
  * <p>Canvas, side panel and timeline each sit in their own slot. Their current content
  * ({@link CanvasView}, {@link SidePanel}, {@link TimelineView}) follows the active document
@@ -52,6 +53,7 @@ public final class MainWindow {
     private final Theme theme = new Theme();
     private final Workspace workspace = new Workspace();
     private final NoticeBar noticeBar = new NoticeBar();
+    private final DialogLayer dialogLayer = new DialogLayer();
     private final Dialogs dialogs;
     private final FileActions fileActions;
     private final ImportActions importActions;
@@ -81,20 +83,20 @@ public final class MainWindow {
     private final ChangeListener<Object> layoutChanged = (obs, oldValue, newValue) -> onLayoutChanged.run();
 
     /**
-     * Builds the window with the dialogs of the platform and restores the session from the stores.
+     * Builds the window with the dialogs of the application and restores the session from the stores.
      */
     public MainWindow(Stage stage, SessionStore sessionStore, RecoveryStore recoveryStore) {
         this(stage, sessionStore, recoveryStore, null);
     }
 
     /**
-     * @param dialogs the dialogs of the file actions; {@code null} for the dialogs of the platform
+     * @param dialogs the dialogs of the file actions; {@code null} for the dialogs of the application
      */
     public MainWindow(Stage stage, SessionStore sessionStore, RecoveryStore recoveryStore, Dialogs dialogs) {
         this.stage = stage;
-        this.dialogs = dialogs != null ? dialogs : new SystemDialogs(theme);
+        this.dialogs = dialogs != null ? dialogs : new SystemDialogs(dialogLayer);
         fileActions = new FileActions(workspace, this.dialogs, noticeBar, () -> stage);
-        importActions = new ImportActions(workspace, noticeBar, theme, () -> stage);
+        importActions = new ImportActions(workspace, noticeBar, this.dialogs, () -> stage);
         toolBar = new ToolBarView(new DocumentTabs(workspace, fileActions::close, fileActions::newDocument), theme);
 
         canvasSlot.setMinSize(0, 0);
@@ -117,10 +119,12 @@ public final class MainWindow {
             menuBar.setPrefHeight(0);
             menuBar.setMaxHeight(0);
         }
-        BorderPane root = new BorderPane(mainSplit);
-        root.getStyleClass().add("main-window");
-        root.setTop(new VBox(menuBar, toolBar, noticeBar));
-        root.setBottom(statusBar);
+        BorderPane content = new BorderPane(mainSplit);
+        content.getStyleClass().add("main-window");
+        content.setTop(new VBox(menuBar, toolBar, noticeBar));
+        content.setBottom(statusBar);
+        // the dialog layer covers everything, an in-window menu bar included
+        StackPane root = new StackPane(content, dialogLayer.getPane());
         // no scene size: the stage is sized by the session before it shows
         scene = new Scene(root);
         theme.install(scene);
@@ -199,6 +203,14 @@ public final class MainWindow {
 
     public Dialogs getDialogs() {
         return dialogs;
+    }
+
+    /**
+     * Whether a dialog is showing inside the window. Meanwhile the keyboard belongs to the
+     * dialog, and neither shortcuts nor menu items act on the document.
+     */
+    public boolean isDialogShowing() {
+        return dialogLayer.isShowing();
     }
 
     public SessionController getSession() {
@@ -356,6 +368,7 @@ public final class MainWindow {
         toolBar.playingProperty().bind(canvasView.playingProperty());
         toolBar.setOnPlayPause(canvasView::togglePlayback);
         canvasView.setNotifier(noticeBar::show);
+        canvasView.setKeyboardTaken(this::isDialogShowing);
         timelineView.setNotifier(noticeBar::show);
         sidePanel.getInspector().section(MotionPathSection.class)
                 .ifPresent(section -> section.setActions(canvasView::drawMotionPath, canvasView::editMotionPath));
@@ -397,12 +410,12 @@ public final class MainWindow {
     }
 
     /**
-     * A tool key pressed without modifiers selects the tool, unless the user is typing text or
-     * is in the middle of drawing or editing a path.
+     * A tool key pressed without modifiers selects the tool, unless a dialog is showing, the user
+     * is typing text or is in the middle of drawing or editing a path.
      */
     private void installToolShortcuts() {
         scene.addEventHandler(KeyEvent.KEY_PRESSED, event -> {
-            if (event.isShortcutDown() || event.isControlDown() || event.isAltDown() || event.isMetaDown()
+            if (isDialogShowing() || event.isShortcutDown() || event.isControlDown() || event.isAltDown() || event.isMetaDown()
                     || scene.getFocusOwner() instanceof TextInputControl || canvasView.blocksToolShortcuts()) {
                 return;
             }
@@ -415,13 +428,13 @@ public final class MainWindow {
 
     private void installFileDrop() {
         scene.setOnDragOver(event -> {
-            if (event.getDragboard().hasFiles() && event.getDragboard().getFiles().stream().anyMatch(MainWindow::isDroppable)) {
+            if (!isDialogShowing() && event.getDragboard().hasFiles() && event.getDragboard().getFiles().stream().anyMatch(MainWindow::isDroppable)) {
                 event.acceptTransferModes(TransferMode.COPY);
             }
             event.consume();
         });
         scene.setOnDragDropped(event -> {
-            event.setDropCompleted(event.getDragboard().hasFiles() && openDropped(event.getDragboard().getFiles()));
+            event.setDropCompleted(!isDialogShowing() && event.getDragboard().hasFiles() && openDropped(event.getDragboard().getFiles()));
             event.consume();
         });
     }

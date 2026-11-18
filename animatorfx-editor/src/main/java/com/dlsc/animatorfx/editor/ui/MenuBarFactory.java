@@ -35,10 +35,16 @@ import java.util.function.Consumer;
  * key. The Edit items therefore look at the focus first: while a text input has it, Undo, Redo,
  * Cut, Copy, Paste and Select All act on that text, and the other items do nothing. Otherwise Cut,
  * Copy and Paste act on the selected keyframes when there are any, and on the layers when not.
+ *
+ * <p>For the same reason the items look at the dialog layer: while a dialog is showing inside the
+ * window, an item does nothing, except that the text items still serve a focused text input (the
+ * list of import warnings can be copied from), the theme can be switched, the panels of the
+ * View menu can be shown and hidden, and Quit quits.
  */
 final class MenuBarFactory {
 
     static final boolean MAC = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
+    static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
 
     private final MainWindow window;
     private final Workspace workspace;
@@ -76,7 +82,7 @@ final class MenuBarFactory {
                 item("menu-file-import-image", "Image…", null, () -> window.getCanvasView().getActions().chooseImage()));
 
         // macOS has Quit in the application menu, where it ends the application the same way
-        MenuItem quit = item("menu-file-quit", "Quit", shortcut(KeyCode.Q), Platform::exit);
+        MenuItem quit = always("menu-file-quit", "Quit", shortcut(KeyCode.Q), Platform::exit);
         quit.setVisible(!MAC);
         SeparatorMenuItem quitSeparator = new SeparatorMenuItem();
         quitSeparator.setVisible(!MAC);
@@ -112,7 +118,11 @@ final class MenuBarFactory {
             for (Path file : workspace.getRecentFiles()) {
                 MenuItem item = new MenuItem(file.getFileName() + "  —  " + file.toAbsolutePath().getParent());
                 item.setMnemonicParsing(false);
-                item.setOnAction(e -> files.open(file));
+                item.setOnAction(e -> {
+                    if (!window.isDialogShowing()) {
+                        files.open(file);
+                    }
+                });
                 items.add(item);
             }
             if (items.isEmpty()) {
@@ -258,11 +268,11 @@ final class MenuBarFactory {
     /** An item that edits the focused text input when there is one, and the document otherwise. */
     private MenuItem textAware(String id, String text, KeyCombination accelerator,
                                Consumer<TextInputControl> onText, Runnable onDocument) {
-        return item(id, text, accelerator, () -> {
+        return always(id, text, accelerator, () -> {
             TextInputControl focused = focusedText();
             if (focused != null) {
                 onText.accept(focused);
-            } else if (workspace.getActiveDocument() != null) {
+            } else if (!window.isDialogShowing() && workspace.getActiveDocument() != null) {
                 onDocument.run();
             }
         });
@@ -318,7 +328,7 @@ final class MenuBarFactory {
         Menu menu = new Menu("Help");
         menu.setId("menu-help");
         menu.getItems().add(item("menu-help-about", "About AnimatorFX", null,
-                () -> window.getDialogs().showAbout(window.getStage())));
+                () -> window.getDialogs().showAbout()));
         return menu;
     }
 
@@ -349,7 +359,16 @@ final class MenuBarFactory {
                 () -> commandName.getValue() == null ? verb : verb + " " + commandName.getValue(), commandName);
     }
 
-    private static MenuItem item(String id, String text, KeyCombination accelerator, Runnable action) {
+    /** An item that does nothing while a dialog is showing. */
+    private MenuItem item(String id, String text, KeyCombination accelerator, Runnable action) {
+        return always(id, text, accelerator, () -> {
+            if (!window.isDialogShowing()) {
+                action.run();
+            }
+        });
+    }
+
+    private static MenuItem always(String id, String text, KeyCombination accelerator, Runnable action) {
         MenuItem item = new MenuItem(text);
         item.setId(id);
         if (accelerator != null) {

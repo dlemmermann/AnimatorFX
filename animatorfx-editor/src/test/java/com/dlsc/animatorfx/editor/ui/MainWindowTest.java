@@ -37,6 +37,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,7 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class MainWindowTest {
 
-    /** Answers the dialogs from queues; an empty queue means "cancelled". */
+    /** Answers the dialogs from queues, at once; an empty queue means "cancelled". */
     private static final class StubDialogs implements Dialogs {
 
         final Deque<Path> openAnswers = new ArrayDeque<>();
@@ -73,19 +74,23 @@ class MainWindowTest {
         }
 
         @Override
-        public CloseChoice confirmClose(javafx.stage.Window owner, String documentTitle) {
+        public CompletableFuture<CloseChoice> confirmClose(String documentTitle) {
             closePrompts++;
             CloseChoice answer = closeAnswers.poll();
-            return answer == null ? CloseChoice.CANCEL : answer;
+            return CompletableFuture.completedFuture(answer == null ? CloseChoice.CANCEL : answer);
         }
 
         @Override
-        public boolean confirmRevert(javafx.stage.Window owner, String documentTitle) {
-            return true;
+        public CompletableFuture<Boolean> confirmRevert(String documentTitle) {
+            return CompletableFuture.completedFuture(true);
         }
 
         @Override
-        public void showAbout(javafx.stage.Window owner) {
+        public void showAbout() {
+        }
+
+        @Override
+        public void showWarnings(String title, List<String> lines) {
         }
     }
 
@@ -444,7 +449,7 @@ class MainWindowTest {
         MainWindow window = restartWithARecoveredUntitledDocument();
 
         dialogs.closeAnswers.add(Dialogs.CloseChoice.DISCARD);
-        assertTrue(fx(() -> window.getFileActions().close()));
+        assertTrue(fx(() -> window.getFileActions().close().getNow(false)));
 
         assertTrue(fx(() -> window.getNoticeBar().getMessages().isEmpty()));
     }
@@ -803,12 +808,12 @@ class MainWindowTest {
             document.execute(Commands.addLayer(null, 0, rect("a")));
 
             dialogs.closeAnswers.add(Dialogs.CloseChoice.CANCEL);
-            assertFalse(window.getFileActions().close(document));
+            assertFalse(window.getFileActions().close(document).getNow(true));
             assertSame(document, window.getWorkspace().getActiveDocument());
 
             dialogs.closeAnswers.add(Dialogs.CloseChoice.SAVE);
             dialogs.saveAnswers.add(dir.resolve("closed.afx"));
-            assertTrue(window.getFileActions().close(document));
+            assertTrue(window.getFileActions().close(document).getNow(false));
             assertTrue(Files.exists(dir.resolve("closed.afx")));
             assertEquals(2, dialogs.closePrompts);
 
@@ -818,7 +823,7 @@ class MainWindowTest {
 
             next.execute(Commands.addLayer(null, 0, rect("b")));
             dialogs.closeAnswers.add(Dialogs.CloseChoice.DISCARD);
-            assertTrue(window.getFileActions().close(next));
+            assertTrue(window.getFileActions().close(next).getNow(false));
             assertEquals(3, dialogs.closePrompts);
         });
     }
@@ -832,7 +837,7 @@ class MainWindowTest {
             assertEquals(2, window.getWorkspace().getDocuments().size());
             assertEquals(2, window.getScene().getRoot().lookupAll(".document-tab").size());
 
-            assertTrue(window.getFileActions().close(window.getWorkspace().getActiveDocument()));
+            assertTrue(window.getFileActions().close(window.getWorkspace().getActiveDocument()).getNow(false));
 
             assertEquals(0, dialogs.closePrompts);
             assertEquals(1, window.getWorkspace().getDocuments().size());

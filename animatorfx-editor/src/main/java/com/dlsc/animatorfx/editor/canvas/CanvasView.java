@@ -60,6 +60,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -133,6 +134,7 @@ public final class CanvasView extends Region {
     };
     private final EventHandler<KeyEvent> spaceFilter = this::handleSpace;
     private final EventHandler<KeyEvent> keyHandler = this::handleKey;
+    private BooleanSupplier keyboardTaken = () -> false;
 
     public CanvasView() {
         getStyleClass().addAll("canvas-pane", "canvas-view");
@@ -358,6 +360,14 @@ public final class CanvasView extends Region {
     /** The menu of a secondary click; its items come from {@link Tool#menuItems} of the tool in charge. */
     public ContextMenu getContextMenu() {
         return contextMenu;
+    }
+
+    /**
+     * Tells when the keyboard belongs to something else in the window, such as a dialog: the
+     * canvas then leaves Space and its other keys alone, as it does while the user is typing.
+     */
+    public void setKeyboardTaken(BooleanSupplier taken) {
+        keyboardTaken = Objects.requireNonNull(taken, "taken");
     }
 
     /** Receives messages for the user, such as why something could not be ungrouped. */
@@ -801,9 +811,10 @@ public final class CanvasView extends Region {
 
     // ------------------------------------------------------------------ keyboard
 
+    /** Whether the keyboard is not the canvas's: the user is typing text, or a dialog has it. */
     private boolean typing() {
         Scene scene = getScene();
-        return scene != null && scene.getFocusOwner() instanceof TextInputControl;
+        return keyboardTaken.getAsBoolean() || (scene != null && scene.getFocusOwner() instanceof TextInputControl);
     }
 
     /** Space held and dragged pans; space tapped plays or pauses. Not while typing. */

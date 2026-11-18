@@ -7,11 +7,16 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /**
  * New, open, save, save as, revert and close. Failures are reported in the notice bar. The
  * workspace never stays empty: closing the last document opens a new untitled one.
+ *
+ * <p>Close and revert ask before unsaved changes are lost. The question shows inside the window
+ * and does not block, so both return a future: it is completed on the JavaFX application thread
+ * once the user has answered, and at once when there was nothing to ask.
  */
 public final class FileActions {
 
@@ -130,49 +135,70 @@ public final class FileActions {
 
     /**
      * Reloads the active document from its file, after asking when it has unsaved changes.
+     *
+     * @return whether the document was reverted
      */
-    public void revert() {
+    public CompletableFuture<Boolean> revert() {
         EditorDocument document = workspace.getActiveDocument();
         if (document == null || document.getPath() == null) {
-            return;
+            return CompletableFuture.completedFuture(false);
         }
-        if (document.isDirty() && !dialogs.confirmRevert(owner.get(), document.getTitle())) {
-            return;
+        if (!document.isDirty()) {
+            return CompletableFuture.completedFuture(reload(document));
         }
+        return reported(dialogs.confirmRevert(document.getTitle())
+                .thenApply(confirmed -> confirmed && isOpen(document) && reload(document)));
+    }
+
+    private boolean reload(EditorDocument document) {
         try {
             document.revert();
+            return true;
         } catch (IOException | RuntimeException e) {
             notices.show("Could not revert " + document.getTitle() + ": " + reason(e));
+            return false;
         }
     }
 
-    public boolean close() {
+    public CompletableFuture<Boolean> close() {
         EditorDocument document = workspace.getActiveDocument();
-        return document != null && close(document);
+        return document == null ? CompletableFuture.completedFuture(false) : close(document);
     }
 
     /**
-     * Closes the document. A dirty document asks first: Save, Don't Save or Cancel.
+     * Closes the document. A dirty document asks first: Save, Don't Save or Cancel. With Save
+     * the document closes only if it could be saved.
      *
      * @return whether the document was closed
      */
-    public boolean close(EditorDocument document) {
-        if (document.isDirty()) {
-            switch (dialogs.confirmClose(owner.get(), document.getTitle())) {
-                case SAVE -> {
-                    if (!save(document)) {
-                        return false;
-                    }
-                }
-                case DISCARD -> {
-                }
-                case CANCEL -> {
-                    return false;
-                }
-            }
+    public CompletableFuture<Boolean> close(EditorDocument document) {
+        if (!document.isDirty()) {
+            discard(document);
+            return CompletableFuture.completedFuture(true);
         }
-        discard(document);
-        return true;
+        return reported(dialogs.confirmClose(document.getTitle()).thenApply(choice -> {
+            if (choice == Dialogs.CloseChoice.CANCEL || !isOpen(document)
+                    || (choice == Dialogs.CloseChoice.SAVE && !save(document))) {
+                return false;
+            }
+            discard(document);
+            return true;
+        }));
+    }
+
+    private boolean isOpen(EditorDocument document) {
+        return workspace.getDocuments().contains(document);
+    }
+
+    /** What goes wrong after an answer has no caller to throw to: it goes where uncaught exceptions go. */
+    private static <T> CompletableFuture<T> reported(CompletableFuture<T> future) {
+        future.whenComplete((result, error) -> {
+            if (error != null) {
+                Thread thread = Thread.currentThread();
+                thread.getUncaughtExceptionHandler().uncaughtException(thread, error);
+            }
+        });
+        return future;
     }
 
     /**

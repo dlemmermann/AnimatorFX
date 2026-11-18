@@ -38,7 +38,7 @@ import java.util.function.Supplier;
 /**
  * File ▸ Import: SVG, Lottie and FXML files become new untitled documents, and an SVG can also
  * be placed into the active document. What an importer had to leave out is summed up in a
- * notice whose action lists the warnings; a file that cannot be imported is reported in a notice.
+ * notice whose action lists the warnings, as often as wanted; a file that cannot be imported is reported in a notice.
  */
 public final class ImportActions {
 
@@ -75,11 +75,11 @@ public final class ImportActions {
     private BiConsumer<String, List<String>> warningsViewer;
     private Path lastDirectory;
 
-    ImportActions(Workspace workspace, NoticeBar notices, Theme theme, Supplier<Window> owner) {
+    ImportActions(Workspace workspace, NoticeBar notices, Dialogs dialogs, Supplier<Window> owner) {
         this.workspace = workspace;
         this.notices = notices;
         this.owner = owner;
-        this.warningsViewer = (title, warnings) -> WarningsDialog.show(owner.get(), theme, title, warnings);
+        this.warningsViewer = dialogs::showWarnings;
     }
 
     /**
@@ -222,7 +222,8 @@ public final class ImportActions {
         }
         String summary = "Imported " + file.getFileName() + " with " + warnings.size()
                 + (warnings.size() == 1 ? " warning." : " warnings.");
-        notices.show(summary, "Show warnings", () -> warningsViewer.accept(summary, warnings));
+        // the notice stays, so that the warnings can be looked at again
+        notices.show(summary, "Show warnings", () -> warningsViewer.accept(summary, warnings), false);
     }
 
     private static String baseName(Path file) {

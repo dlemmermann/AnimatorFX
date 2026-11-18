@@ -153,6 +153,111 @@ class ScreenshotHarness {
     }
 
     /**
+     * The dialogs of the editor above the same document: the question of closing in both themes,
+     * About, and the warnings of an import in both themes. Add
+     * {@code -Danimatorfx.screenshots.dialogs=true}; the files are {@code task-12-close-dark.png},
+     * {@code -close-light}, {@code -about-dark}, {@code -warnings-dark} and {@code -warnings-light}.
+     */
+    @Test
+    @EnabledIfSystemProperty(named = DIR_PROPERTY + ".dialogs", matches = "true")
+    void renderDialogs() throws Exception {
+        Path out = Path.of(System.getProperty(DIR_PROPERTY));
+        String prefix = System.getProperty(DIR_PROPERTY + ".prefix", "task-12");
+        Files.createDirectories(out);
+        Path config = Files.createTempDirectory(out, "config-");
+
+        FxToolkit.registerPrimaryStage();
+        window = fx(() -> {
+            MainWindow w = new MainWindow(new Stage(), new SessionStore(config),
+                    new RecoveryStore(config.resolve("recovery")));
+            w.getStage().setWidth(1360);
+            w.getStage().setHeight(960);
+            w.show();
+            return w;
+        });
+        canvas = window.getCanvasView();
+        timeline = window.getTimelineView();
+        inspector = window.getSidePanel().getInspector();
+        doc = window.getWorkspace().getActiveDocument();
+        try {
+            settle();
+            fx(() -> {
+                window.applyLayout(new SessionState.Layout(0.775, 0.615, false, false, SidePanel.INSPECTOR));
+                return null;
+            });
+            settle();
+            buildScene();
+            animate();
+
+            javafx.application.Platform.runLater(() -> window.getFileActions().close());
+            dialogShots(out, prefix + "-close", Theme.Mode.DARK, Theme.Mode.LIGHT);
+            closeDialog("Cancel");
+
+            fx(() -> {
+                window.menuItem("menu-help-about").fire();
+                return null;
+            });
+            dialogShots(out, prefix + "-about", Theme.Mode.DARK);
+            closeDialog("Close");
+
+            fx(() -> {
+                window.getNoticeBar().show("Imported onboarding.json with 8 warnings.", "Show warnings", () -> {
+                }, false);
+                window.getDialogs().showWarnings("Imported onboarding.json with 8 warnings.", List.of(
+                        "Expressions are not supported (3 properties use their static value)",
+                        "Layer effects are not supported: Gaussian Blur on \"glow\" was ignored",
+                        "Track mattes of type luma are approximated with an alpha mask (2 layers)",
+                        "Text is placed approximately: the baseline is estimated without the font (4 texts)",
+                        "Merge paths are not supported (1 shape group)",
+                        "Time remapping is not supported: \"loop\" plays at its own speed",
+                        "Image asset img_3.png is missing from the file and was left out",
+                        "Repeater offsets other than 0 are ignored (1 repeater)"));
+                return null;
+            });
+            dialogShots(out, prefix + "-warnings", Theme.Mode.DARK, Theme.Mode.LIGHT);
+            closeDialog("Close");
+        } finally {
+            fx(() -> {
+                window.shutdown();
+                window.getStage().hide();
+                return null;
+            });
+            try (var files = Files.walk(config)) {
+                files.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+            }
+        }
+    }
+
+    private void dialogShots(Path out, String name, Theme.Mode... modes) throws Exception {
+        for (Theme.Mode mode : modes) {
+            fx(() -> {
+                window.getTheme().setMode(mode);
+                return null;
+            });
+            Thread.sleep(1200);
+            settle();
+            WritableImage image = fx(() -> {
+                SnapshotParameters parameters = new SnapshotParameters();
+                parameters.setTransform(Transform.scale(SCALE, SCALE));
+                return window.getScene().getRoot().snapshot(parameters, null);
+            });
+            Path file = out.resolve(name + "-" + mode.name().toLowerCase() + ".png");
+            Files.write(file, PngEncoder.encode(image));
+            System.out.println("Wrote " + file);
+        }
+    }
+
+    private void closeDialog(String buttonText) throws Exception {
+        fx(() -> {
+            window.getScene().getRoot().lookupAll(".dialog-pane > .content-pane .footer .button").stream()
+                    .map(ButtonBase.class::cast).filter(b -> b.getText().equals(buttonText)).findFirst()
+                    .orElseThrow().fire();
+            return null;
+        });
+        settle();
+    }
+
+    /**
      * A card that shows what this editor can author: an orb with a drop shadow and a blur, a
      * gradient masked by a star, a wave drawn with the pen whose stroke is trimmed, a triangle on
      * a motion path, and a closed shape drawn with the pen.

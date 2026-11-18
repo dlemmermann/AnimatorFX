@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * Non-modal notices below the toolbar. Each notice can be dismissed and may offer one action,
- * which also dismisses it. The bar takes no space while it is empty.
+ * which usually dismisses it too. The bar takes no space while it is empty.
  */
 public final class NoticeBar extends VBox {
 
@@ -33,6 +33,15 @@ public final class NoticeBar extends VBox {
      * @return dismisses the notice; does nothing when the notice is gone already
      */
     public Runnable show(String message, String actionText, Runnable action) {
+        return show(message, actionText, action, true);
+    }
+
+    /**
+     * @param actionText      the label of the action button, or {@code null} for a notice without an action
+     * @param dismissOnAction whether the action dismisses the notice; when not, it can be used again
+     * @return dismisses the notice; does nothing when the notice is gone already
+     */
+    public Runnable show(String message, String actionText, Runnable action, boolean dismissOnAction) {
         HBox notice = new HBox();
         notice.getStyleClass().add("notice");
 
@@ -48,7 +57,9 @@ public final class NoticeBar extends VBox {
             button.getStyleClass().add("notice-action");
             button.setFocusTraversable(false);
             button.setOnAction(e -> {
-                dismiss(notice);
+                if (dismissOnAction) {
+                    dismiss(notice);
+                }
                 action.run();
             });
             notice.getChildren().add(button);

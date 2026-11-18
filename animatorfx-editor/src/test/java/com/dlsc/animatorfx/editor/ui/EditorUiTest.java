@@ -22,6 +22,7 @@ import com.dlsc.animatorfx.model.Vec2;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Callable;
 import javafx.event.Event;
 import javafx.event.EventType;
@@ -59,17 +60,21 @@ public abstract class EditorUiTest {
         }
 
         @Override
-        public CloseChoice confirmClose(Window owner, String documentTitle) {
-            return CloseChoice.DISCARD;
+        public CompletableFuture<CloseChoice> confirmClose(String documentTitle) {
+            return CompletableFuture.completedFuture(CloseChoice.DISCARD);
         }
 
         @Override
-        public boolean confirmRevert(Window owner, String documentTitle) {
-            return true;
+        public CompletableFuture<Boolean> confirmRevert(String documentTitle) {
+            return CompletableFuture.completedFuture(true);
         }
 
         @Override
-        public void showAbout(Window owner) {
+        public void showAbout() {
+        }
+
+        @Override
+        public void showWarnings(String title, List<String> lines) {
         }
     }
 
