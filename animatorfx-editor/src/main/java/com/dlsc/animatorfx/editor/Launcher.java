@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor;
 
+import com.dlsc.animatorfx.editor.audio.AudioDiagnosis;
 import javafx.application.Application;
 
 /**
@@ -12,6 +13,9 @@ public final class Launcher {
     }
 
     public static void main(String[] args) {
+        if (AudioDiagnosis.requested(args)) {
+            System.exit(AudioDiagnosis.run(System.out));
+        }
         Application.launch(AnimatorApp.class, args);
     }
 }

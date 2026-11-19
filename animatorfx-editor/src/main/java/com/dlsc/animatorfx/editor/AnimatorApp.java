@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor;
 
+import com.dlsc.animatorfx.editor.audio.AudioDiagnosis;
 import com.dlsc.animatorfx.editor.session.AppDirs;
 import com.dlsc.animatorfx.editor.session.RecoveryStore;
 import com.dlsc.animatorfx.editor.session.SessionStore;
@@ -41,6 +42,10 @@ public final class AnimatorApp extends Application {
     }
 
     public static void main(String[] args) {
+        if (AudioDiagnosis.requested(args)) {
+            // no window: reports whether JavaFX media works in this runtime, see AudioDiagnosis
+            System.exit(AudioDiagnosis.run(System.out));
+        }
         launch(args);
     }
 }

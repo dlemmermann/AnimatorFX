@@ -126,7 +126,7 @@
                 <configuration>
                     <mainClass>com.dlsc.animatorfx.sample/com.dlsc.animatorfx.sample.SampleApp</mainClass>
                     <options>
-                        <option>--enable-native-access=javafx.graphics</option>
+                        <option>--enable-native-access=javafx.graphics,javafx.media</option>
                         <option>-Danimatorfx.sample.muted=${animatorfx.sample.muted}</option>
                     </options>
                 </configuration>
