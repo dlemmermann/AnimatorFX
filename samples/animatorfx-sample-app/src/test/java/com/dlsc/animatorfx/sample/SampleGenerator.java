@@ -2,6 +2,8 @@ package com.dlsc.animatorfx.sample;
 
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
@@ -17,6 +19,7 @@ import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.Stroke;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Transform;
@@ -25,6 +28,7 @@ import com.dlsc.animatorfx.model.Vec2;
 import com.dlsc.animatorfx.model.io.AnimationFile;
 import com.dlsc.animatorfx.model.io.AnimationIO;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,11 +36,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Builds the sample animations of {@code samples/animations} with the model API, so that they are
  * always valid for the current format. Layer and keyframe ids are fixed, which makes the output
- * reproducible: {@link SampleFilesTest} checks that the committed files match.
+ * reproducible: {@link SampleFilesTest} checks that the committed files match. The sounds are
+ * synthesised here as well (sine partials, written as 16 bit mono WAV), so the samples ship no
+ * audio from anywhere else.
  * <p>
  * To write the files again after a change:
  * {@code mvn -pl samples/animatorfx-sample-app test -Dtest=SampleFilesTest -Danimatorfx.samples.write=true}
@@ -60,8 +67,13 @@ final class SampleGenerator {
     /** Handle length of a cubic approximating a quarter circle of radius 1. */
     private static final double KAPPA = 0.5522847498;
 
+    /** Samples per second of the generated sounds. */
+    static final int SAMPLE_RATE = 22_050;
+
     private final String name;
     private final double duration;
+    private final List<Asset> assets = new ArrayList<>();
+    private final Map<String, byte[]> sounds = new LinkedHashMap<>();
     private int keys;
 
     private SampleGenerator(String name, double duration) {
@@ -76,21 +88,32 @@ final class SampleGenerator {
     /** The samples by file name without extension, in display order. */
     static Map<String, Animation> all() {
         Map<String, Animation> samples = new LinkedHashMap<>();
-        samples.put("loader", new SampleGenerator("loader", 1.8).loader());
-        samples.put("success", new SampleGenerator("success", 2.6).success());
-        samples.put("morph", new SampleGenerator("morph", 3.6).morph());
-        samples.put("card", new SampleGenerator("card", 2.6).card());
-        samples.put("orbit", new SampleGenerator("orbit", 4).orbit());
-        samples.put("attention", new SampleGenerator("attention", 0.8).attention());
+        files().forEach((name, file) -> samples.put(name, file.animation()));
+        return samples;
+    }
+
+    /** The samples with the content of their assets, which are the generated sounds. */
+    static Map<String, AnimationFile> files() {
+        Map<String, AnimationFile> samples = new LinkedHashMap<>();
+        samples.put("loader", new SampleGenerator("loader", 1.8).file(SampleGenerator::loader));
+        samples.put("success", new SampleGenerator("success", 2.6).file(SampleGenerator::success));
+        samples.put("morph", new SampleGenerator("morph", 3.6).file(SampleGenerator::morph));
+        samples.put("card", new SampleGenerator("card", 2.6).file(SampleGenerator::card));
+        samples.put("orbit", new SampleGenerator("orbit", 4).file(SampleGenerator::orbit));
+        samples.put("attention", new SampleGenerator("attention", 0.8).file(SampleGenerator::attention));
         return samples;
     }
 
     static void writeAll(Path directory) throws IOException {
         Files.createDirectories(directory);
-        for (Map.Entry<String, Animation> sample : all().entrySet()) {
-            AnimationIO.write(new AnimationFile(sample.getValue(), Map.of()),
-                    directory.resolve(sample.getKey() + ".afx"));
+        for (Map.Entry<String, AnimationFile> sample : files().entrySet()) {
+            AnimationIO.write(sample.getValue(), directory.resolve(sample.getKey() + ".afx"));
         }
+    }
+
+    private AnimationFile file(Function<SampleGenerator, Animation> build) {
+        Animation animation = build.apply(this);
+        return new AnimationFile(animation.withAssets(assets), sounds);
     }
 
     /** A spinner: the arc grows and shrinks while it travels, and ends exactly where it began. */
@@ -145,7 +168,19 @@ final class SampleGenerator {
                 key(1.3, Vec2.ONE, SINE_IN_OUT), key(1.75, breathe, SINE_IN_OUT), key(2.2, Vec2.ONE, Easing.LINEAR))));
         Layer badge = new GroupLayer(badgeBase, List.of(disc, check));
 
-        return document(240, 240, List.of(new Marker("intro", 0, 1.3), new Marker("success", 1.3, 2.6)), ring, badge);
+        // a soft rising tone under the badge as it pops in, faded in and out by volume keyframes
+        String rise = sound("rise", "rise.wav", rise());
+        Layer swell = new AudioLayer(base("swell", "Swell").withOutPoint(0.6), rise, 0,
+                keys(key(0, 0.0, EASE_OUT), key(0.2, 0.8, Easing.LINEAR), key(0.35, 0.8, EASE_IN_OUT),
+                        key(0.6, 0.0, Easing.LINEAR)),
+                Animatable.of(0.0), false, false);
+        // the chime sounds the moment the settled state begins
+        Marker settled = new Marker("success", 1.3, 2.6);
+        SoundCue chime = new SoundCue(id("cue-chime"), "Chime", settled.start(), sound("chime", "chime.wav", chime()),
+                1, false);
+
+        return document(240, 240, List.of(new Marker("intro", 0, 1.3), settled), ring, badge, swell)
+                .withCues(List.of(chime));
     }
 
     /** Play, pause and stop morph into each other; every form is two contours of four vertices. */
@@ -323,7 +358,107 @@ final class SampleGenerator {
                 .withScale(keys(
                         key(0, Vec2.ONE, EASE_OUT), key(0.2, swell, SINE_IN_OUT), key(0.7, Vec2.ONE, Easing.LINEAR)));
         Layer target = new SlotLayer(base("target", "Target slot").withTransform(wiggle), "target", 120, 36, rest);
-        return document(160, 80, List.of(), target);
+        SoundCue tick = new SoundCue(id("cue-tick"), "Tick", 0, sound("tick", "tick.wav", tick()), 1, false);
+        return document(160, 80, List.of(), target).withCues(List.of(tick));
+    }
+
+    /** Adds a sound to the document that is being built and returns the id of its asset. */
+    private String sound(String localId, String fileName, double[] samples) {
+        String id = id(localId);
+        assets.add(new Asset(id, Asset.Kind.AUDIO, "assets/" + id + ".wav", fileName));
+        sounds.put(id, wav(samples));
+        return id;
+    }
+
+    /**
+     * A bell-like chime of about 0.6 s: a note with its fifth and its octave, each dying away
+     * faster than the one below it. Peak at -12 dBFS.
+     */
+    static double[] chime() {
+        double[] samples = new double[(int) (0.6 * SAMPLE_RATE)];
+        double[][] partials = {{880, 1, 6}, {1320, 0.5, 8}, {1760, 0.3, 11}};
+        for (int i = 0; i < samples.length; i++) {
+            double t = (double) i / SAMPLE_RATE;
+            for (double[] partial : partials) {
+                samples[i] += partial[1] * StrictMath.sin(2 * StrictMath.PI * partial[0] * t)
+                        * StrictMath.exp(-partial[2] * t);
+            }
+        }
+        return shaped(samples, 0.004, 0.04, 0.25);
+    }
+
+    /** A soft tick of 0.08 s: one low partial that dies away at once. Peak at -15 dBFS. */
+    static double[] tick() {
+        double[] samples = new double[(int) (0.08 * SAMPLE_RATE)];
+        for (int i = 0; i < samples.length; i++) {
+            double t = (double) i / SAMPLE_RATE;
+            samples[i] = StrictMath.sin(2 * StrictMath.PI * 660 * t) * StrictMath.exp(-55 * t);
+        }
+        return shaped(samples, 0.002, 0.01, 0.18);
+    }
+
+    /** A tone of 0.6 s that glides up an octave, from 220 to 440 Hz. Peak at -14 dBFS. */
+    static double[] rise() {
+        double[] samples = new double[(int) (0.6 * SAMPLE_RATE)];
+        double seconds = (double) samples.length / SAMPLE_RATE;
+        for (int i = 0; i < samples.length; i++) {
+            double t = (double) i / SAMPLE_RATE;
+            // the phase is the integral of the frequency 220 * 2^(t / seconds)
+            double phase = 2 * StrictMath.PI * 220 * seconds / StrictMath.log(2)
+                    * (StrictMath.pow(2, t / seconds) - 1);
+            samples[i] = StrictMath.sin(phase) + 0.25 * StrictMath.sin(2 * phase);
+        }
+        return shaped(samples, 0.03, 0.05, 0.2);
+    }
+
+    /** Fades both ends linearly, so that the sound neither starts nor stops with a click, and sets the peak. */
+    private static double[] shaped(double[] samples, double fadeIn, double fadeOut, double peak) {
+        int in = (int) (fadeIn * SAMPLE_RATE);
+        int out = (int) (fadeOut * SAMPLE_RATE);
+        double largest = 0;
+        for (int i = 0; i < samples.length; i++) {
+            double gain = Math.min(1, Math.min((double) i / in, (double) (samples.length - 1 - i) / out));
+            samples[i] *= gain;
+            largest = Math.max(largest, Math.abs(samples[i]));
+        }
+        for (int i = 0; i < samples.length; i++) {
+            samples[i] *= peak / largest;
+        }
+        return samples;
+    }
+
+    /** A WAV file: 16 bit, mono, {@link #SAMPLE_RATE}. */
+    static byte[] wav(double[] samples) {
+        int dataLength = samples.length * 2;
+        ByteArrayOutputStream out = new ByteArrayOutputStream(44 + dataLength);
+        ascii(out, "RIFF");
+        littleEndian(out, 36 + dataLength, 4);
+        ascii(out, "WAVEfmt ");
+        littleEndian(out, 16, 4);
+        littleEndian(out, 1, 2);
+        littleEndian(out, 1, 2);
+        littleEndian(out, SAMPLE_RATE, 4);
+        littleEndian(out, SAMPLE_RATE * 2, 4);
+        littleEndian(out, 2, 2);
+        littleEndian(out, 16, 2);
+        ascii(out, "data");
+        littleEndian(out, dataLength, 4);
+        for (double sample : samples) {
+            littleEndian(out, (int) Math.round(sample * 32767), 2);
+        }
+        return out.toByteArray();
+    }
+
+    private static void ascii(ByteArrayOutputStream out, String text) {
+        for (int i = 0; i < text.length(); i++) {
+            out.write(text.charAt(i));
+        }
+    }
+
+    private static void littleEndian(ByteArrayOutputStream out, int value, int bytes) {
+        for (int i = 0; i < bytes; i++) {
+            out.write(value >> 8 * i);
+        }
     }
 
     private Animation document(double width, double height, List<Marker> markers, Layer... layers) {
