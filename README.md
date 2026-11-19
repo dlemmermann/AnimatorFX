@@ -514,9 +514,15 @@ effects, blend modes, 3D layers, audio, curved motion between position keyframes
 luma and inverted mattes. Trim applies to strokes only.
 
 > The Lottie conversion is implemented from the format's documentation and tested against small
-> hand-written files. It has **not** been validated against real After Effects exports or
-> compared with a reference Lottie player; conventions such as skew direction, shadow direction
-> and blur factors may be off.
+> hand-written files. It has **not** been validated against real After Effects exports;
+> conventions such as skew direction, shadow direction and blur factors may be off.
+>
+> `LottieOracleTest` renders those hand-written files a second time with the
+> [Lottie4J](https://github.com/lottie4j/lottie4j) player (a test dependency only: the importer and the runtime
+> do not use it) and compares the pictures. The two do not agree everywhere yet: the test
+> records how far apart they are per file and fails when an import gets worse. Gradients are the
+> largest known difference, and it is not established which side is right. Set the environment
+> variable `LOTTIE_ORACLE_DUMP` to a directory to get both pictures of every compared frame.
 
 **FXML → slots.** The file is loaded without its controller; every node with an `fx:id` becomes a
 slot at its laid-out bounds, and the editor shows a picture of the node as the slot's preview.

@@ -62,6 +62,12 @@
             <artifactId>animatorfx-player</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Renders the same Lottie file as the reference; no production code depends on it. -->
+        <dependency>
+            <groupId>com.lottie4j</groupId>
+            <artifactId>fxplayer</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
