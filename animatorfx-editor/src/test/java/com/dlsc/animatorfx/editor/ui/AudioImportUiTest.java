@@ -4,6 +4,7 @@ import com.dlsc.animatorfx.editor.audio.TestSounds;
 import com.dlsc.animatorfx.model.Asset;
 import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Layer;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testfx.util.WaitForAsyncUtils;
@@ -101,6 +102,39 @@ class AudioImportUiTest extends EditorUiTest {
 
         assertEquals(List.of("a", "b"), doc.getAnimation().layers().stream().map(Layer::name).toList());
         assertEquals(2, doc.getAnimation().assets().size());
+    }
+
+    @Test
+    void aCompressedSoundIsImportedOnceTheMediaStackKnowsItsLength() throws Exception {
+        // at a usual sample rate: the length the media stack reports includes the padding of the
+        // encoder, which is a third of a second at 8 kHz and a few hundredths at 44.1 kHz
+        Path wav = dir.resolve("voice.wav");
+        Files.write(wav, TestSounds.wav(TestSounds.sine(0.8, 44100, 440, 0.5), 44100, 1, 16, false));
+        Path m4a = dir.resolve("voice.m4a");
+        boolean converted;
+        try {
+            Process process = new ProcessBuilder("afconvert", "-f", "m4af", "-d", "aac", wav.toString(), m4a.toString())
+                    .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            converted = process.waitFor(20, TimeUnit.SECONDS) && process.exitValue() == 0;
+        } catch (IOException e) {
+            converted = false;
+        }
+        Assumptions.assumeTrue(converted, "afconvert is not available");
+        picked.add(m4a);
+        run(() -> doc.setPlayhead(1.0));
+
+        importAudio();
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> !doc.getAnimation().layers().isEmpty());
+
+        AudioLayer layer = (AudioLayer) doc.getAnimation().layers().get(0);
+        assertEquals("voice", layer.name());
+        assertEquals("assets/" + layer.assetId() + ".m4a", doc.getAnimation().assets().get(0).path());
+        assertEquals(1.0, layer.base().inPoint(), 1e-9);
+        assertEquals(1.8, layer.base().outPoint(), 0.12);
+        assertEquals(List.of(), notices());
+        run(doc::undo);
+        assertTrue(doc.getAnimation().assets().isEmpty());
+        assertFalse(doc.isCanUndo());
     }
 
     @Test
