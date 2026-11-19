@@ -33,11 +33,18 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -84,10 +91,32 @@ class SampleFilesTest {
         for (String id : generated.assets().keySet()) {
             assertArrayEquals(generated.assets().get(id), committed.assets().get(id), hint + ": " + id);
         }
-        // and the file itself, byte for byte: writing is reproducible
+        // and what is in the archives, entry by entry. Not the archives themselves: how the entries
+        // are compressed is up to the zip library of the JDK that wrote them.
         ByteArrayOutputStream written = new ByteArrayOutputStream();
         AnimationIO.write(generated, written);
-        assertArrayEquals(written.toByteArray(), Files.readAllBytes(DIRECTORY.resolve(name + ".afx")), hint);
+        Map<String, byte[]> expected = entries(new ByteArrayInputStream(written.toByteArray()));
+        Map<String, byte[]> actual;
+        try (InputStream in = Files.newInputStream(DIRECTORY.resolve(name + ".afx"))) {
+            actual = entries(in);
+        }
+        assertEquals(new ArrayList<>(expected.keySet()), new ArrayList<>(actual.keySet()), hint);
+        assertEquals(new String(expected.get("animation.json"), StandardCharsets.UTF_8),
+                new String(actual.get("animation.json"), StandardCharsets.UTF_8), hint);
+        for (String entry : expected.keySet()) {
+            assertArrayEquals(expected.get(entry), actual.get(entry), hint + ": " + entry);
+        }
+    }
+
+    /** The uncompressed content of every entry of a zip archive, in the order of the archive. */
+    private static Map<String, byte[]> entries(InputStream archive) throws IOException {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+        try (ZipInputStream zip = new ZipInputStream(archive)) {
+            for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                entries.put(entry.getName(), zip.readAllBytes());
+            }
+        }
+        return entries;
     }
 
     @ParameterizedTest

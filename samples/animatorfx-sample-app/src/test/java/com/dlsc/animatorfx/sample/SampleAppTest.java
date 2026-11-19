@@ -13,10 +13,14 @@ import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
@@ -36,6 +40,15 @@ class SampleAppTest {
 
     private Stage stage;
     private SampleBrowser browser;
+
+    /**
+     * The application starts with its sound off, however this test is launched. The build sets
+     * the property as well, but a run from an IDE does not go through the build.
+     */
+    @BeforeAll
+    static void startSilent() {
+        System.setProperty(SampleApp.MUTED_PROPERTY, "true");
+    }
 
     @BeforeEach
     void show() throws Exception {
@@ -190,7 +203,6 @@ class SampleAppTest {
 
     @Test
     void theApplicationStartsSilentWhenAskedTo() throws Exception {
-        // set for this build by the pom, so that no test of this module makes a sound
         assertTrue(Boolean.getBoolean(SampleApp.MUTED_PROPERTY));
         Fx.run(() -> {
             assertTrue(browser.isMuted());
@@ -239,6 +251,7 @@ class SampleAppTest {
 
     @Test
     void closingTheWindowDisposesTheViewsForGood() throws Exception {
+        Set<Path> before = soundDirectories();
         // sound on, at volume 0: real media players and extracted files, and still nothing to hear
         Fx.run(() -> {
             browser.setVolume(0);
@@ -247,18 +260,30 @@ class SampleAppTest {
         });
         AnimationView view = browser.getShowcase("success").getView();
         await(() -> view.getStatus() == AnimationPlayer.Status.PLAYING && view.getCurrentTime() > 0.05);
-        await(() -> soundDirectories() > 0);
-        int before = soundDirectories();
+        // only the directories that appeared during this test count: other AnimatorFX processes
+        // keep theirs in the same place
+        Set<Path> created = new HashSet<>();
+        await(() -> {
+            created.addAll(soundDirectories());
+            created.removeAll(before);
+            return !created.isEmpty();
+        });
         Fx.run(() -> stage.close());
         // the temporary files of the extracted sounds go with the window
-        await(() -> soundDirectories() < before);
+        await(() -> created.stream().noneMatch(Files::exists));
     }
 
     /** The private directories the runtime extracts sounds into, see the player's Javadoc. */
-    private static int soundDirectories() {
-        java.io.File[] found = new java.io.File(System.getProperty("java.io.tmpdir"))
+    private static Set<Path> soundDirectories() {
+        File[] found = new File(System.getProperty("java.io.tmpdir"))
                 .listFiles((directory, name) -> name.startsWith("animatorfx-audio"));
-        return found == null ? 0 : found.length;
+        Set<Path> directories = new HashSet<>();
+        if (found != null) {
+            for (File file : found) {
+                directories.add(file.toPath());
+            }
+        }
+        return directories;
     }
 
     @Test

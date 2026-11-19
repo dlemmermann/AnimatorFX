@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.audio.EditorAudio;
 import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
@@ -46,6 +47,12 @@ import org.testfx.util.WaitForAsyncUtils;
  * and helpers that drive any node of it with mouse and key events at node coordinates.
  */
 public abstract class EditorUiTest {
+
+    static {
+        // The build runs the editor's tests with this property; a run from an IDE does not go
+        // through the build and must be just as silent.
+        System.setProperty(EditorAudio.PROPERTY, "off");
+    }
 
     private static final class NoDialogs implements Dialogs {
 

@@ -104,7 +104,8 @@ class MediaAudioOutputTest {
     @Test
     void anAnimationWithSoundPlaysToItsEndWhetherOrNotAudioWorks() {
         AnimationPlayer player = player();
-        player.setVolume(0.05);
+        // inaudible: nothing here depends on the loudness
+        player.setVolume(0);
 
         player.play();
         assertTrue(await(() -> player.getStatus() == Status.STOPPED, 10), "the animation finishes");
@@ -142,8 +143,7 @@ class MediaAudioOutputTest {
         assertEquals(0.3, output.duration("tone").getAsDouble(), 0.02);
         assertFalse(output.failedAssets().contains("tone"));
 
-        // one audible pass, well under half a second at a low volume
-        player.setVolume(0.05);
+        // one more pass, still inaudible
         player.setCycleCount(1);
         player.play();
         assertTrue(await(() -> player.getStatus() == Status.STOPPED, 10));
