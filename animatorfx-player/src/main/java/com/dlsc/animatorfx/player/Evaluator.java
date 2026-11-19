@@ -129,6 +129,8 @@ public final class Evaluator {
         private final Stroke stroke;
         private final Trim trim;
         private final Animatable<Double> fontSize;
+        private final Animatable<Double> volume;
+        private final Animatable<Double> balance;
 
         // Each of these is null when the value is animated and has to be sampled.
         private final Placement placement;
@@ -168,6 +170,8 @@ public final class Evaluator {
             this.stroke = stroke;
             this.trim = trim;
             this.fontSize = fontSize;
+            volume = layer instanceof AudioLayer audio ? audio.volume() : null;
+            balance = layer instanceof AudioLayer audio ? audio.balance() : null;
 
             Transform transform = base.transform();
             boolean placementAnimated = animated(transform.anchor(), transform.position(), transform.scale(),
@@ -189,7 +193,8 @@ public final class Evaluator {
             boolean anythingAnimated = placementAnimated || geometryAnimated || trimAnimated || effectsAnimated
                     || base.opacity().isAnimated() || (fill != null && fill.isAnimated())
                     || (stroke != null && animated(stroke.paint(), stroke.width(), stroke.dashOffset()))
-                    || (fontSize != null && fontSize.isAnimated());
+                    || (fontSize != null && fontSize.isAnimated())
+                    || (volume != null && animated(volume, balance));
             shown = anythingAnimated ? null : compute(0, true);
             hidden = anythingAnimated ? null : shown.withVisible(false);
         }
@@ -224,7 +229,8 @@ public final class Evaluator {
                     stroke == null ? 0 : stroke.dashOffset().at(time),
                     fontSize == null ? 0 : fontSize.at(time),
                     effects != null ? effects : effects(time),
-                    placed.position(), placed.scale(), placed.rotation());
+                    placed.position(), placed.scale(), placed.rotation(),
+                    volume == null ? 1 : volume.at(time), balance == null ? 0 : balance.at(time));
         }
 
         private Placement place(double time) {

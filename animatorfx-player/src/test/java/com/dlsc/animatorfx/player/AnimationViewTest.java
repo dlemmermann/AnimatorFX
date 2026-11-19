@@ -358,4 +358,22 @@ class AnimationViewTest {
             stage.hide();
         }
     }
+
+    @Test
+    void soundSettingsAndScrubbingAreThePlayers() {
+        view.setAnimation(moving());
+
+        assertSame(player.mutedProperty(), view.mutedProperty());
+        assertSame(player.volumeProperty(), view.volumeProperty());
+        assertFalse(view.isMuted());
+        assertEquals(1, view.getVolume(), EPS);
+
+        view.setMuted(true);
+        view.setVolume(0.3);
+        view.scrub(1.5);
+
+        assertTrue(player.isMuted());
+        assertEquals(0.3, player.getVolume(), EPS);
+        assertEquals(1.5, player.getCurrentTime(), EPS);
+    }
 }

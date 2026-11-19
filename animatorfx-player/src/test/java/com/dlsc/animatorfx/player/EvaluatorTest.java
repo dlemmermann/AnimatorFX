@@ -265,4 +265,30 @@ class EvaluatorTest {
         assertFalse(Evaluator.sample(animation, 0.25).get("snd").visible());
         assertFalse(Evaluator.sample(animation, 1.5).get("snd").visible());
     }
+
+    @Test
+    void audioLayerStateCarriesTheSampledVolumeAndBalance() {
+        Animation animation = doc(new AudioLayer(base("snd"), "asset", 0, keys(0, 0.0, 2, 1.0),
+                keys(0, -1.0, 2, 1.0), false, false), rect("r", 10, 10));
+
+        LayerState state = Evaluator.sample(animation, 0.5).get("snd");
+
+        assertEquals(0.25, state.volume(), EPS);
+        assertEquals(-0.5, state.balance(), EPS);
+        LayerState visual = Evaluator.sample(animation, 0.5).get("r");
+        assertEquals(1, visual.volume());
+        assertEquals(0, visual.balance());
+    }
+
+    @Test
+    void aStaticAudioLayerSharesItsStateBetweenFrames() {
+        Animation animation = doc(new AudioLayer(base("snd"), "asset", 0, Animatable.of(0.4), Animatable.of(0.5),
+                false, false));
+
+        LayerState state = Evaluator.sample(animation, 0.5).get("snd");
+
+        assertEquals(0.4, state.volume(), EPS);
+        assertEquals(0.5, state.balance(), EPS);
+        assertSame(state, Evaluator.sample(animation, 1.5).get("snd"));
+    }
 }

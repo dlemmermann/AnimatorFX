@@ -4,9 +4,14 @@ import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Marker;
 import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.io.AnimationFile;
 import com.dlsc.animatorfx.player.internal.Clock;
 import com.dlsc.animatorfx.player.internal.SlotBinding;
+import com.dlsc.animatorfx.player.internal.audio.AudioEngine;
+import com.dlsc.animatorfx.player.internal.audio.AudioOutput;
+import com.dlsc.animatorfx.player.internal.audio.AudioSchedule;
+import com.dlsc.animatorfx.player.internal.audio.MediaAudioOutput;
 import javafx.animation.AnimationTimer;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
@@ -36,6 +41,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
+import java.util.function.Function;
 
 /**
  * Plays an animation document without showing it: it owns the clock, samples the document and
@@ -45,6 +51,11 @@ import java.util.function.DoubleConsumer;
  * <p>
  * Playback runs over the <em>active range</em>: the whole document, or the range of a marker
  * after {@link #playMarker(String)}. One traversal of the range is a cycle.
+ * <p>
+ * Audio layers and sound cues of the document sound while the player is playing forward; see
+ * {@link #mutedProperty()} and {@link #volumeProperty()}. Sound needs the {@code javafx.media}
+ * module; where audio is not available the animation plays silently. Call {@link #dispose()}
+ * when a player that played sound is no longer needed.
  * <p>
  * Use on the JavaFX application thread only.
  */
@@ -128,6 +139,12 @@ public class AnimationPlayer {
     private int epoch;
     private Runnable bindingsListener;
 
+    private Function<AnimationFile, AudioOutput> audioOutputFactory;
+    /** The sound of the current animation; {@code null} until needed and for a document without sound. */
+    private AudioEngine audio;
+    /** Whether the current animation has audio layers or sound cues. */
+    private boolean hasSound;
+
     /**
      * Creates a player without an animation.
      */
@@ -150,6 +167,12 @@ public class AnimationPlayer {
     AnimationPlayer(Clock clock, System.Logger logger) {
         this.clock = clock;
         this.logger = logger;
+    }
+
+    /** A player whose sound goes to the given output, whatever the animation. */
+    AnimationPlayer(Clock clock, System.Logger logger, AudioOutput output) {
+        this(clock, logger);
+        audioOutputFactory = file -> output;
     }
 
     private final ObjectProperty<AnimationFile> animation = new SimpleObjectProperty<>(this, "animation") {
@@ -268,6 +291,48 @@ public class AnimationPlayer {
 
     public final void setAutoReverse(boolean value) {
         autoReverse.set(value);
+    }
+
+    private final BooleanProperty muted = new SimpleBooleanProperty(this, "muted");
+
+    /**
+     * Whether the sound of the animation is switched off: audio layers are silent and sound
+     * cues are skipped. A change while playing takes effect with the next frame; a cue that
+     * already sounds plays to its end.
+     *
+     * @return the muted property
+     */
+    public final BooleanProperty mutedProperty() {
+        return muted;
+    }
+
+    public final boolean isMuted() {
+        return muted.get();
+    }
+
+    public final void setMuted(boolean value) {
+        muted.set(value);
+    }
+
+    private final DoubleProperty volume = new SimpleDoubleProperty(this, "volume", 1);
+
+    /**
+     * The volume of the animation's sound, {@code 0..1}; every audio layer and sound cue is
+     * scaled by it. Values outside the range are limited to it when applied. A change while
+     * playing takes effect with the next frame; a cue that already sounds keeps its volume.
+     *
+     * @return the volume property
+     */
+    public final DoubleProperty volumeProperty() {
+        return volume;
+    }
+
+    public final double getVolume() {
+        return volume.get();
+    }
+
+    public final void setVolume(double value) {
+        volume.set(value);
     }
 
     private final ReadOnlyObjectWrapper<Status> status = new ReadOnlyObjectWrapper<>(this, "status", Status.STOPPED);
@@ -425,6 +490,61 @@ public class AnimationPlayer {
     }
 
     /**
+     * Moves to a time like {@link #seek(double)} and, unless the player is playing or
+     * {@link #mutedProperty() muted}, lets the audio layers at that time sound for about a tenth
+     * of a second. Sound cues do not fire. For tooling: dragging a playhead.
+     */
+    public void scrub(double seconds) {
+        seek(seconds);
+        if (getStatus() != Status.PLAYING && !isMuted()) {
+            AudioEngine engine = audio();
+            if (engine != null) {
+                engine.scrub(getFrame(), masterVolume());
+            }
+        }
+    }
+
+    /**
+     * Stops all sound and releases the media resources and temporary files of the current
+     * animation. The player stays usable: sound comes back when it is needed again. Replacing
+     * the animation does the same for the previous one. Has no effect on a player that made no
+     * sound yet.
+     */
+    public void dispose() {
+        if (audio != null) {
+            audio.dispose();
+            audio = null;
+        }
+    }
+
+    /**
+     * For tooling and tests, not for applications: replaces what makes the sound of this player
+     * audible. The factory is asked once per animation, when sound is first needed, and never for
+     * an animation without audio layers and sound cues; it may return {@code null} for silence.
+     * {@code null} as the factory restores JavaFX media. The output of the current animation is
+     * disposed.
+     */
+    public void setAudioOutputFactory(Function<AnimationFile, AudioOutput> factory) {
+        dispose();
+        audioOutputFactory = factory;
+    }
+
+    /** The sound of the current animation, or {@code null} if it has none. */
+    private AudioEngine audio() {
+        if (audio == null && hasSound) {
+            Function<AnimationFile, AudioOutput> factory = audioOutputFactory != null ? audioOutputFactory
+                    : document -> new MediaAudioOutput(document, logger);
+            audio = new AudioEngine(getAnimation(), factory, logger);
+        }
+        return audio;
+    }
+
+    private double masterVolume() {
+        double value = getVolume();
+        return Double.isNaN(value) ? 1 : Math.max(0, Math.min(1, value));
+    }
+
+    /**
      * Plays the range of a marker from its start (from its end when the rate is negative),
      * respecting cycle count and auto reverse.
      *
@@ -548,6 +668,8 @@ public class AnimationPlayer {
 
     private void animationChanged(AnimationFile file) {
         epoch++;
+        dispose();
+        hasSound = file != null && AudioEngine.hasAudio(file.animation());
         slots.clear();
         if (file != null) {
             collectSlots(file.animation().layers());
@@ -639,6 +761,9 @@ public class AnimationPlayer {
                 clock.stop();
             }
         }
+        if (!run && audio != null) {
+            audio.silence();
+        }
     }
 
     private boolean hasInPlaceBindings() {
@@ -656,6 +781,9 @@ public class AnimationPlayer {
         }
         warnUnboundSlots();
         if (currentTime.isBound()) {
+            if (audio != null) {
+                audio.silence();
+            }
             return;
         }
         if (!(rangeEnd > rangeStart)) {
@@ -668,16 +796,20 @@ public class AnimationPlayer {
         double remaining = elapsed;
         boolean finished = false;
         List<Marker> reached = new ArrayList<>();
+        AudioEngine sound = audio();
+        List<SoundCue> cues = new ArrayList<>();
         for (int i = 0; i < MAX_CYCLES_PER_TICK && remaining > 0 && speed != 0 && !Double.isNaN(speed); i++) {
             double velocity = reversed ? -speed : speed;
             boolean forward = velocity > 0;
             double target = time + velocity * remaining;
             double boundary = forward ? rangeEnd : rangeStart;
             if (forward ? target < boundary : target > boundary) {
+                collectCues(sound, time, target, speed, cues);
                 collectMarkers(time, target, forward, reached);
                 time = target;
                 break;
             }
+            collectCues(sound, time, boundary, speed, cues);
             collectMarkers(time, boundary, forward, reached);
             remaining -= (boundary - time) / velocity;
             time = boundary;
@@ -702,6 +834,12 @@ public class AnimationPlayer {
             currentTime.set(time);
         } finally {
             ticking = false;
+        }
+        if (sound != null && sound == audio && epoch == current) {
+            if (!finished) {
+                sound.playing(getFrame(), speed, reversed, isMuted(), masterVolume());
+            }
+            sound.cues(cues, isMuted(), masterVolume());
         }
         for (Marker marker : reached) {
             if (epoch != current) {
@@ -733,6 +871,17 @@ public class AnimationPlayer {
         Comparator<Marker> order = Comparator.comparingDouble(Marker::start);
         out.subList(first, out.size()).sort(forward ? order : order.reversed());
         markersAtTimeFired = true;
+    }
+
+    /**
+     * Adds the sound cues on the way from one time to another, with the rule of
+     * {@link #collectMarkers} for the beginning. Call before it. Only playback that runs forward
+     * at a positive rate fires cues.
+     */
+    private void collectCues(AudioEngine sound, double from, double to, double speed, List<SoundCue> out) {
+        if (sound != null && speed > 0 && !reversed) {
+            out.addAll(AudioSchedule.crossed(getAnimation().animation(), from, to, !markersAtTimeFired));
+        }
     }
 
     private void finish() {
