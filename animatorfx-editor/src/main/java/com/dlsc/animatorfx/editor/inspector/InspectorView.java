@@ -1,5 +1,10 @@
 package com.dlsc.animatorfx.editor.inspector;
 
+import com.dlsc.animatorfx.editor.audio.SoundPreview;
+import com.dlsc.animatorfx.editor.audio.WaveformCache;
+import com.dlsc.animatorfx.editor.inspector.sections.AudioSection;
+import com.dlsc.animatorfx.editor.inspector.sections.CueSection;
+import javafx.beans.WeakInvalidationListener;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.inspector.fields.NumberField;
 import com.dlsc.animatorfx.editor.inspector.sections.EasingSection;
@@ -28,9 +33,9 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 /**
- * The Inspector tab: the properties of the selected layers and keyframes, as an ordered list of
- * {@link InspectorSection}s. A section shows while it applies to the selection; without a
- * selected layer there is only a hint.
+ * The Inspector tab: the properties of the selected layers and keyframes, or of the selected
+ * sound cues, as an ordered list of {@link InspectorSection}s. A section shows while it applies
+ * to the selection; without a selected layer or cue there is only a hint.
  *
  * <p>The sections are built once. A change of the document or the selection decides which of
  * them show and updates their values; a move of the playhead only updates the values.
@@ -53,8 +58,10 @@ public final class InspectorView extends StackPane {
         NumberField.endOpenAdjustment();
         updateValues();
     };
+    private final InvalidationListener infoArrived = obs -> updateValues();
     private final InvalidationListener selection = obs -> {
         NumberField.endOpenAdjustment();
+        SoundPreview.shared().stop();
         refresh();
     };
 
@@ -79,19 +86,24 @@ public final class InspectorView extends StackPane {
         });
         sections.addAll(new EasingSection(), new LayerSection(), new TransformSection(), new GeometrySection(),
                 new FillSection(), new StrokeSection(), new TrimSection(), new TextSection(), new ImageSection(),
-                new SlotSection(), new EffectsSection(), new MaskSection(), new MotionPathSection());
+                new AudioSection(), new CueSection(), new SlotSection(), new EffectsSection(), new MaskSection(), new MotionPathSection());
 
+        // the length of a sound may become known after the section shows
+        WaveformCache.shared().revisionProperty().addListener(new WeakInvalidationListener(infoArrived));
         document.addListener((obs, oldDoc, newDoc) -> {
             if (oldDoc != null) {
                 oldDoc.animationProperty().removeListener(refresh);
                 oldDoc.getSelection().layerIds().removeListener(selection);
+                oldDoc.getSelection().cueIds().removeListener(selection);
                 oldDoc.getSelection().keyframes().removeListener(refresh);
                 oldDoc.playheadProperty().removeListener(tick);
             }
+            SoundPreview.shared().stop();
             context = newDoc == null ? null : new InspectorContext(newDoc);
             if (newDoc != null) {
                 newDoc.animationProperty().addListener(refresh);
                 newDoc.getSelection().layerIds().addListener(selection);
+                newDoc.getSelection().cueIds().addListener(selection);
                 newDoc.getSelection().keyframes().addListener(refresh);
                 newDoc.playheadProperty().addListener(tick);
             }
@@ -139,7 +151,7 @@ public final class InspectorView extends StackPane {
 
     /** Decides which sections show for the selection and updates them. */
     private void refresh() {
-        boolean selection = context != null && !context.layers().isEmpty();
+        boolean selection = context != null && (!context.layers().isEmpty() || !context.cues().isEmpty());
         empty.setVisible(!selection);
         scroll.setVisible(selection);
         // a locked layer is unlocked before it is edited; the Layer section keeps its lock toggle usable

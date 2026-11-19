@@ -5,6 +5,7 @@ import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.RoundTrip;
 import com.dlsc.animatorfx.editor.inspector.AssetsView;
 import com.dlsc.animatorfx.editor.inspector.InspectorSection;
+import com.dlsc.animatorfx.editor.inspector.sections.AudioSection;
 import com.dlsc.animatorfx.editor.inspector.sections.LayerSection;
 import com.dlsc.animatorfx.editor.timeline.TimelineRow;
 import com.dlsc.animatorfx.model.Animatable;
@@ -170,13 +171,13 @@ class AudioLayersInEditorTest extends CanvasTestBase {
     }
 
     @Test
-    void theInspectorShowsOnlyTheLayerSectionForAnAudioLayer() {
+    void theInspectorShowsNoVisualSectionForAnAudioLayer() {
         addSound();
         add(audio("music"), rect("a", 100, 100, 100, 100));
 
         select("music");
         List<InspectorSection> visible = fx(() -> window.getSidePanel().getInspector().getVisibleSections());
-        assertEquals(List.of(LayerSection.class), visible.stream().map(Object::getClass).toList());
+        assertEquals(List.of(LayerSection.class, AudioSection.class), visible.stream().map(Object::getClass).toList());
 
         select("music", "a");
         visible = fx(() -> window.getSidePanel().getInspector().getVisibleSections());

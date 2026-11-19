@@ -13,6 +13,8 @@ import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.LayerProperties;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.PropertyRef;
+import com.dlsc.animatorfx.model.SoundCue;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -21,8 +23,8 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
- * What the inspector sections work on: the document, its selected layers and keyframes and the
- * time at the playhead, plus the edits that sections make. Every edit applies to all selected
+ * What the inspector sections work on: the document, its selected layers and keyframes (or its
+ * selected sound cues) and the time at the playhead, plus the edits that sections make. Every edit applies to all selected
  * layers that it concerns and is one undo step; animatable values are written through
  * {@link Commands#setValueAt} with the auto-key setting of the document.
  */
@@ -59,6 +61,15 @@ public final class InspectorContext {
             resolvedIds = List.copyOf(ids);
         }
         return layers;
+    }
+
+    /** The selected sound cues, in the order of the document. */
+    public List<SoundCue> cues() {
+        Set<String> ids = document.getSelection().cueIds();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return document.getAnimation().cues().stream().filter(cue -> ids.contains(cue.id())).toList();
     }
 
     public List<KeyframeRef> keyframes() {
@@ -198,6 +209,15 @@ public final class InspectorContext {
             if (type.isInstance(layer)) {
                 commands.add(Commands.updateLayer(name, layer.id(), l -> type.isInstance(l) ? change.apply(type.cast(l)) : l));
             }
+        }
+        run(Commands.batch(name, commands), gestureKey);
+    }
+
+    /** Changes every selected sound cue with a function, as one undo step. */
+    public void editCues(String name, UnaryOperator<SoundCue> change, Object gestureKey) {
+        List<Command> commands = new ArrayList<>();
+        for (SoundCue cue : cues()) {
+            commands.add(Commands.updateCue(name, cue.id(), change));
         }
         run(Commands.batch(name, commands), gestureKey);
     }

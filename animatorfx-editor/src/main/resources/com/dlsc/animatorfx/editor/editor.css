@@ -994,6 +994,18 @@
 
 /* A check box at the size of the inspector text. */
 
+/* a value that is shown, not edited: the length and format of a sound */
+.field-readout {
+    -fx-text-fill: -afx-muted;
+    -fx-font-size: 10.5px;
+    -fx-padding: 4 0 0 1;
+}
+
+.check-row {
+    -fx-spacing: 16;
+    -fx-alignment: center-left;
+}
+
 .section-check {
     -fx-font-size: 11px;
     -fx-text-fill: -afx-fg;
@@ -1272,6 +1284,16 @@
 .asset-detail {
     -fx-text-fill: -afx-muted;
     -fx-font-size: 10px;
+}
+
+.asset-waveform {
+    -fx-fill: -afx-wave;
+    -fx-stroke: null;
+}
+
+.asset-sound-icon {
+    -fx-icon-size: 16;
+    -fx-icon-color: -afx-audio;
 }
 
 .font-sample {
