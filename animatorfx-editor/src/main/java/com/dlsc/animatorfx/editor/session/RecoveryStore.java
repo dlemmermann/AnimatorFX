@@ -26,7 +26,7 @@ import java.util.stream.Stream;
  * Recovery copies of dirty documents: one {@code <docId>.afx} per document plus {@code index.json},
  * which remembers the file each copy belongs to.
  */
-public final class RecoveryStore {
+public class RecoveryStore {
 
     /**
      * @param originalPath the file the document belongs to, or {@code null} for an untitled document
