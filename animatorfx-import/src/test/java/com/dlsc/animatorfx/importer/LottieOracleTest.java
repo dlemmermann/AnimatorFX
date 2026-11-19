@@ -77,7 +77,7 @@ class LottieOracleTest {
         FxToolkit.registerPrimaryStage();
     }
 
-    private static <T> T onFxThread(Callable<T> action) throws Exception {
+    static <T> T onFxThread(Callable<T> action) throws Exception {
         try {
             return WaitForAsyncUtils.asyncFx(action).get();
         } catch (ExecutionException e) {
@@ -94,7 +94,7 @@ class LottieOracleTest {
     }
 
     /** The picture of one frame as our player draws it. */
-    private static WritableImage ours(com.dlsc.animatorfx.model.io.AnimationFile file, double time) {
+    static WritableImage ours(com.dlsc.animatorfx.model.io.AnimationFile file, double time) {
         Animation animation = file.animation();
         AnimationView view = new AnimationView(file);
         view.setFit(Fit.CONTAIN);
@@ -107,7 +107,7 @@ class LottieOracleTest {
     }
 
     /** The picture of one frame as Lottie4J draws it. */
-    private static WritableImage reference(com.lottie4j.core.model.animation.Animation animation, double frame) {
+    static WritableImage reference(com.lottie4j.core.model.animation.Animation animation, double frame) {
         LottiePlayer player = new LottiePlayer(animation, animation.width(), animation.height());
         player.setBackgroundColor(Color.TRANSPARENT);
         // a picture of its own canvas, without the adaptive scaling that trades resolution for speed

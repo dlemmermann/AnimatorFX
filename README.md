@@ -30,6 +30,7 @@ animations it creates inside JavaFX applications.
 - [The editor](#the-editor)
 - [The `.afx` format](#the-afx-format)
 - [Importers](#importers)
+- [Export to Lottie](#export-to-lottie)
 - [Known limitations](#known-limitations)
 - [Project layout](#project-layout)
 - [Development](#development)
@@ -64,6 +65,7 @@ animations it creates inside JavaFX applications.
 - Inspector with a keyframe toggle on every animatable property and a cubic-bezier easing editor.
 - Auto-key, undo/redo, copy/paste of layers and keyframes, groups.
 - Import of SVG, Lottie JSON (with embedded sounds) and FXML.
+- Export to Lottie: a dotLottie archive or Lottie JSON, with a report of what Lottie cannot hold.
 - Dark and light theme, or follow the system.
 - Dialogs that show inside the window (GemsFX `DialogPane`) instead of opening windows of their own.
 - Session restore and crash recovery.
@@ -74,7 +76,7 @@ animations it creates inside JavaFX applications.
 |---|---|---|---|
 | `animatorfx-model` | `com.dlsc.animatorfx.model` | Immutable document model, interpolation, easing, `.afx` reader and writer | `java.base` |
 | `animatorfx-player` | `com.dlsc.animatorfx.player` | Evaluator, renderer, `AnimationPlayer`, `AnimationView`, slot binding, sound | model, `javafx.controls`, `javafx.media` |
-| `animatorfx-import` | `com.dlsc.animatorfx.importer` | SVG, Lottie and FXML importers | model, `javafx.fxml` |
+| `animatorfx-import` | `com.dlsc.animatorfx.importer` | SVG, Lottie and FXML importers, Lottie export | model, `javafx.fxml` |
 | `animatorfx-editor` | `com.dlsc.animatorfx.editor` | The authoring tool | model, player, import, `javafx.media`, `java.desktop`, AtlantaFX, Ikonli, GemsFX |
 | `animatorfx-sample-app` | `com.dlsc.animatorfx.sample` | Sample application (in `samples/`) | player |
 
@@ -524,6 +526,14 @@ importer skipped is listed behind the *Show warnings* action of the notice, whic
 is dismissed, so the list can be opened again and copied. See
 [Importers](#importers).
 
+### Export
+
+*File ▸ Export ▸ Lottie…* writes the current document as a dotLottie archive (`.lottie`), or as
+plain Lottie JSON when the file name ends with `.json`. The document itself stays an `.afx`
+document: Lottie cannot hold everything it can, so this is an export and no second way of saving.
+What was left out or approximated is listed behind the *Show warnings* action of the notice. See
+[Export to Lottie](#export-to-lottie).
+
 ### Themes
 
 Dark, light, or follow the system: the toolbar button toggles, *View ▸ Theme* has all three.
@@ -713,6 +723,44 @@ The FXML is not stored in the `.afx` file. FXML that needs its controller or cla
 on the editor's module path cannot be imported. The preview pictures are not saved and are gone
 after reopening the document.
 
+## Export to Lottie
+
+`LottieExporter` (in `animatorfx-import`) converts a document to the Lottie model of
+[Lottie4J](https://github.com/lottie4j/lottie4j), which also writes the file:
+
+```java
+try (OutputStream out = Files.newOutputStream(Path.of("animation.lottie"))) {
+    List<String> warnings = LottieExporter.writeDotLottie(AnimationIO.read(Path.of("animation.afx")), out);
+}
+```
+
+`writeJson` writes plain Lottie JSON, `convert` returns the Lottie4J `Animation`. Like the
+importers, the export never fails on what it cannot express; it reports a warning.
+
+How a document is laid out in Lottie:
+
+- **Shapes** become shape layers. Rectangles and ellipses stay rectangles and ellipses; lines,
+  polygons and stars are written as the path the player draws.
+- **Groups** become null layers their children are parented to. Opacity, effects, in and out point
+  and visibility of a group are handed down to the layers inside, as they do not travel along a
+  Lottie parent. A group with an opacity therefore looks different where its layers overlap.
+- **Masks** become alpha track mattes, written right above the masked layer and named by `tp`. A
+  group that is a mask becomes a precomposition.
+- **Keyframes** keep their times and easings.
+- **Motion paths** become one position keyframe per frame.
+- **Images and sounds** are embedded as data URIs. Audio layers and sound cues become Lottie audio
+  layers.
+- **The background colour** goes into the manifest of the dotLottie archive; plain Lottie JSON has
+  no place for it.
+
+Not exported: slots, glow, the spread of a drop shadow, skew along y, the balance and looping of a
+sound, font files, animated or gradient text colours. Paths and paints whose structure changes
+between keyframes (another number of points or colours) are written without animation. Text is
+placed by an estimated baseline, as it is on import.
+
+`LottieExporterTest` exports the importer's test files, reads them back and compares the pictures,
+and renders the exported files with the Lottie4J player as well.
+
 ## Known limitations
 
 Out of scope by design:
@@ -721,7 +769,7 @@ Out of scope by design:
 - Video layers.
 - Recording, editing or processing sound (effects, per-channel mixing beyond balance).
 - State machines and input-driven animations.
-- Export to Lottie, GIF or video.
+- Export to GIF or video.
 - 3D transforms.
 - Collaboration and cloud storage.
 - Undo history across restarts.
@@ -779,7 +827,7 @@ Gaps in what is there:
 ```
 animatorfx-model/      document records, interpolation, easing, .afx I/O (no JavaFX)
 animatorfx-player/     Evaluator, Renderer, AnimationPlayer, AnimationView, slot binding
-animatorfx-import/     SvgImporter, LottieImporter, FxmlImporter
+animatorfx-import/     SvgImporter, LottieImporter, FxmlImporter, LottieExporter
 animatorfx-editor/     the editor; src/package holds the application icon and its generator
 samples/
   animations/          the sample .afx files

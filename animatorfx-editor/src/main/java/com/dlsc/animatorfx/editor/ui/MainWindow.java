@@ -60,6 +60,7 @@ public final class MainWindow {
     private final Dialogs dialogs;
     private final FileActions fileActions;
     private final ImportActions importActions;
+    private final ExportActions exportActions;
     private final ToolBarView toolBar;
     private final ToolRail toolRail = new ToolRail();
     private final StatusBar statusBar = new StatusBar();
@@ -100,6 +101,7 @@ public final class MainWindow {
         this.dialogs = dialogs != null ? dialogs : new SystemDialogs(dialogLayer);
         fileActions = new FileActions(workspace, this.dialogs, noticeBar, () -> stage);
         importActions = new ImportActions(workspace, noticeBar, this.dialogs, () -> stage);
+        exportActions = new ExportActions(workspace, noticeBar, this.dialogs, () -> stage);
         toolBar = new ToolBarView(new DocumentTabs(workspace, fileActions::close, fileActions::newDocument), theme);
 
         canvasSlot.setMinSize(0, 0);
@@ -226,6 +228,10 @@ public final class MainWindow {
 
     public ImportActions getImportActions() {
         return importActions;
+    }
+
+    public ExportActions getExportActions() {
+        return exportActions;
     }
 
     public Dialogs getDialogs() {

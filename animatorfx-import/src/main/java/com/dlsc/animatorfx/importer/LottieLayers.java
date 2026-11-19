@@ -42,7 +42,7 @@ import java.util.UUID;
 final class LottieLayers {
 
     /** As in the SVG importer: the ascent as a share of the font size. */
-    private static final double ASCENT = 0.8;
+    static final double ASCENT = 0.8;
 
     /** One layer of a composition on its way to the model. */
     private static final class Unit {
