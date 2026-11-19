@@ -41,7 +41,7 @@ final class LottieSounds {
             Map.entry("aac", "aac"), Map.entry("x-aac", "aac"), Map.entry("aacp", "aac"));
 
     /** Levels of the left and the right channel that stand for full volume. */
-    private static final double[] FULL = {0, 0};
+    private static final double[] FULL = {100, 100};
     /** Stands for levels that are no numbers. */
     private static final double[] UNKNOWN = {};
 
@@ -74,8 +74,9 @@ final class LottieSounds {
     /**
      * The audio layer for a Lottie layer of type 6. It sounds from the in point {@code ip} to
      * the out point {@code op}. The sound itself begins at the start time {@code st} of the
-     * layer: what lies between that and the in point is the clip offset. Transform, parent,
-     * masks and mattes mean nothing to a sound and are left out.
+     * layer: what lies between that and the in point is the clip offset, and a layer that is in
+     * before its sound starts begins at the start time instead. Transform, parent, masks and
+     * mattes mean nothing to a sound and are left out.
      *
      * @return {@code null}, with a warning, if the sound is not embedded in the file or cannot be used
      */
@@ -91,7 +92,12 @@ final class LottieSounds {
         double out = LottieJson.has(json, "op")
                 ? clamp(properties.time(LottieJson.number(json, "op", 0), frameOffset)) : duration;
         double start = properties.time(LottieJson.number(json, "st", 0), frameOffset);
-        double clipOffset = Limits.usable(start) ? Math.max(0, in - start) : 0;
+        double clipOffset = 0;
+        if (Limits.usable(start)) {
+            // the sound cannot be heard before it starts
+            in = Math.max(in, Math.min(start, Math.max(in, out)));
+            clipOffset = Math.max(0, in - start);
+        }
         LayerBase base = LayerBase.create(name, duration)
                 .withVisible(!LottieJson.flag(json, "hd")).withInPoint(in).withOutPoint(Math.max(in, out));
         return new AudioLayer(base, sound.assetId(), clipOffset, volume(json, frameOffset), Animatable.of(0.0), false,
@@ -103,9 +109,9 @@ final class LottieSounds {
     }
 
     /**
-     * The audio levels {@code au.lv} are {@code [left, right]} in decibels, 0 being the sound as
-     * it is. The model has one volume from 0 to 1: the louder channel decides, and levels above
-     * 0 dB are limited to full volume.
+     * The audio levels {@code au.lv} are {@code [left, right]} in percent, 100 being the sound
+     * as it is, which is how lottie-web reads them. The model has one volume from 0 to 1: the
+     * louder channel decides, and levels above 100 are limited to full volume.
      */
     private Animatable<Double> volume(Object json, double frameOffset) {
         Object levels = get(get(json, "au"), "lv");
@@ -141,9 +147,8 @@ final class LottieSounds {
     }
 
     private static double gain(double[] levels) {
-        double decibels = levels.length > 1 ? Math.max(levels[0], levels[1]) : levels[0];
-        double gain = Math.pow(10, decibels / 20);
-        return Double.isNaN(gain) ? 1 : Math.clamp(gain, 0.0, 1.0);
+        double percent = levels.length > 1 ? Math.max(levels[0], levels[1]) : levels[0];
+        return Double.isNaN(percent) ? 1 : Math.clamp(percent / 100, 0.0, 1.0);
     }
 
     private Sound sound(String reference) {
@@ -173,13 +178,21 @@ final class LottieSounds {
         if (comma < 0 || !parts[parts.length - 1].trim().equals("base64")) {
             return new Sound(null, UNDECODABLE);
         }
-        // four characters hold three bytes: decided before anything is decoded
-        if ((source.length() - comma - 1) / 4L * 3 > MAX_BYTES + 3L) {
+        // four characters hold three bytes, white space aside: decided before anything is decoded
+        int characters = 0;
+        for (int i = comma + 1; i < source.length(); i++) {
+            if (!Character.isWhitespace(source.charAt(i))) {
+                characters++;
+            }
+        }
+        if (characters / 4L * 3 > MAX_BYTES + 3L) {
             return new Sound(null, TOO_LARGE);
         }
+        String payload = source.substring(comma + 1);
         byte[] bytes;
         try {
-            bytes = Base64.getDecoder().decode(source.substring(comma + 1).replaceAll("\\s", ""));
+            bytes = Base64.getDecoder().decode(characters == payload.length() ? payload
+                    : payload.replaceAll("\\s", ""));
         } catch (IllegalArgumentException e) {
             return new Sound(null, UNDECODABLE);
         }

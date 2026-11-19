@@ -300,7 +300,11 @@ final class LottieLayers {
     private Layer image(Object json, LayerBase base) {
         String reference = LottieJson.string(json, "refId", "");
         Object asset = lottieAssets.get(reference);
-        ImageData data = ImageData.fromDataUri(LottieJson.string(asset, "p", null));
+        String source = LottieJson.string(asset, "p", null);
+        ImageData data = ImageData.fromDataUri(source);
+        if (data == null && source != null && source.trim().regionMatches(true, 0, "data:audio/", 0, 11)) {
+            return ignored("Image layers whose asset is a sound are ignored");
+        }
         if (data == null) {
             warnings.add("External images are not supported", "layer ignored", "layers ignored");
             return null;

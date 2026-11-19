@@ -480,6 +480,19 @@ class RobustnessTest {
     }
 
     @Test
+    void aLineWrappedSoundJustUnderTheLimitIsTakenOver() throws IOException {
+        // 76 characters a line, as MIME writes base64: the line breaks are not part of the size
+        int bytes = LottieSounds.MAX_BYTES - LottieSounds.MAX_BYTES % 57;
+        String line = "AAAA".repeat(19) + "\\r\\n";
+        ImportResult result = lottie(sound("{\"id\":\"s\",\"e\":1,\"p\":\"data:audio/wav;base64,"
+                + line.repeat(bytes / 57) + "\"}", ""));
+        Animation animation = result.file().animation();
+        assertEquals(List.of("Other", "Sound"), names(animation.layers()));
+        assertEquals(bytes, result.file().assets().get(animation.assets().get(0).id()).length);
+        assertEquals(List.of(), result.warnings());
+    }
+
+    @Test
     void anAudioLayerWhoseAssetIsNoSoundIsSkipped() throws IOException {
         String missing = "Audio layers whose sound is missing from the file were skipped (1 layer)";
         String noSound = "Audio layers whose asset is not a sound were skipped (1 layer)";

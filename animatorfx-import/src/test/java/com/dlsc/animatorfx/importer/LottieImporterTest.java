@@ -758,7 +758,7 @@ class LottieImporterTest {
         assertFalse(beep.muted());
         assertTrue(beep.base().visible());
 
-        // the sound starts 15 frames before the layer does; the levels are in decibels
+        // the sound starts 15 frames before the layer does; the levels are percentages
         AudioLayer late = named(animation, "Late", AudioLayer.class);
         assertEquals(beepAsset.id(), late.assetId());
         assertEquals(0.5, late.base().inPoint(), EPS);
@@ -766,7 +766,7 @@ class LottieImporterTest {
         assertEquals(0.5, late.clipOffset(), EPS);
         assertEquals(2, late.volume().keyframes().size());
         assertKey(0.5, Easing.LINEAR, late.volume().keyframes().get(0));
-        assertEquals(Math.pow(10, -6 / 20.0), late.volume().keyframes().get(0).value(), EPS);
+        assertEquals(0.5, late.volume().keyframes().get(0).value(), EPS);
         assertKey(1.5, Easing.LINEAR, late.volume().keyframes().get(1));
         assertEquals(1, late.volume().keyframes().get(1).value(), EPS);
 
@@ -824,12 +824,49 @@ class LottieImporterTest {
         assertEquals(List.of("Audio levels that are not understood are ignored; the sound plays at full volume"
                 + " (1 layer)"), result.warnings());
 
-        // levels above 0 dB cannot get louder than the sound itself; a single number serves both channels
-        result = read(soundDocument("data:audio/wav;base64,AAECAw==", ",\"au\":{\"lv\":{\"a\":0,\"k\":[12]}}"));
+        // percentages: the louder channel counts, more than 100 % is full volume, a single number serves both
+        String[][] cases = {{"[50, 50]", "0.5"}, {"[100, 0]", "1"}, {"[0, 100]", "1"}, {"[150, 150]", "1"},
+                {"[0, 0]", "0"}, {"[25]", "0.25"}, {"40", "0.4"}, {"[-30, -30]", "0"}};
+        for (String[] each : cases) {
+            result = read(soundDocument("data:audio/wav;base64,AAECAw==",
+                    ",\"au\":{\"lv\":{\"a\":0,\"k\":" + each[0] + "}}"));
+            assertEquals(Double.parseDouble(each[1]),
+                    ((AudioLayer) result.file().animation().layers().get(0)).volume().at(0), EPS, each[0]);
+        }
+        // no levels at all: full volume, nothing to report
+        result = read(soundDocument("data:audio/wav;base64,AAECAw==", ""));
         assertEquals(Animatable.of(1.0), ((AudioLayer) result.file().animation().layers().get(0)).volume());
-        result = read(soundDocument("data:audio/wav;base64,AAECAw==", ",\"au\":{\"lv\":{\"a\":0,\"k\":-40}}"));
-        assertEquals(0.01, ((AudioLayer) result.file().animation().layers().get(0)).volume().at(0), EPS);
         assertEquals(List.of(), result.warnings());
+        result = read(soundDocument("data:audio/wav;base64,AAECAw==", ",\"au\":{}"));
+        assertEquals(Animatable.of(1.0), ((AudioLayer) result.file().animation().layers().get(0)).volume());
+    }
+
+    @Test
+    void aSoundDoesNotStartBeforeItsStartTime() throws IOException {
+        // the layer is in from frame 0, its sound starts at frame 15: nothing can sound before that
+        ImportResult result = read(soundDocument("data:audio/wav;base64,AAECAw==", "")
+                .replace("\"st\":0", "\"st\":15"));
+        AudioLayer layer = (AudioLayer) result.file().animation().layers().get(0);
+        assertEquals(0.5, layer.base().inPoint(), EPS);
+        assertEquals(2, layer.base().outPoint(), EPS);
+        assertEquals(0, layer.clipOffset(), EPS);
+
+        // a start after the out point leaves a layer without a duration, at the out point
+        result = read(soundDocument("data:audio/wav;base64,AAECAw==", "")
+                .replace("\"op\":60,\"st\":0", "\"op\":30,\"st\":45"));
+        layer = (AudioLayer) result.file().animation().layers().get(0);
+        assertEquals(1, layer.base().inPoint(), EPS);
+        assertEquals(1, layer.base().outPoint(), EPS);
+        assertEquals(0, layer.clipOffset(), EPS);
+    }
+
+    @Test
+    void anImageLayerThatRefersToASoundSaysSo() throws IOException {
+        ImportResult result = read(soundDocument("data:audio/wav;base64,AAECAw==", "")
+                .replace("{\"ty\":6,", "{\"ty\":2,"));
+        assertEquals(List.of(), result.file().animation().layers());
+        assertEquals(List.of(), result.file().animation().assets());
+        assertEquals(List.of("Image layers whose asset is a sound are ignored (1 layer ignored)"), result.warnings());
     }
 
     private static String soundDocument(String source, String layerMembers) {
