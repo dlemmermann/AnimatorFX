@@ -371,6 +371,7 @@ public final class MainWindow {
         canvasView.setNotifier(noticeBar::show);
         canvasView.setKeyboardTaken(this::isDialogShowing);
         timelineView.setNotifier(noticeBar::show);
+        timelineView.setSoundImporter(() -> importActions.chooseAndImportCue(timelineView::selectCue));
         sidePanel.getInspector().section(MotionPathSection.class)
                 .ifPresent(section -> section.setActions(canvasView::drawMotionPath, canvasView::editMotionPath));
     }

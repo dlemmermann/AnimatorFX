@@ -12,6 +12,7 @@ import com.dlsc.animatorfx.editor.timeline.TimelineRow.LayerRow;
 import com.dlsc.animatorfx.editor.timeline.TimelineRow.PropertyRow;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Asset;
 import com.dlsc.animatorfx.model.AudioLayer;
 import java.util.HashSet;
 import java.util.Set;
@@ -32,10 +33,14 @@ import javafx.css.PseudoClass;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBase;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
@@ -57,10 +62,12 @@ import org.kordamp.ikonli.material2.Material2OutlinedMZ;
 
 /**
  * The left column of the timeline: a header with the timeline controls (auto-key, show all
- * properties, add marker, zoom) and, below it, one row per layer and per listed property.
+ * properties, add marker, zoom), the strip beside the cue lane with the add-cue button and,
+ * below them, one row per layer and per listed property.
  *
  * <p>A layer row has a disclosure triangle (property rows and, for a group, its children), an
- * icon for the layer type, the name (double-click renames), and the visibility and lock toggles.
+ * icon for the layer type, the name (double-click renames), and the visibility and lock toggles;
+ * for an audio layer the visibility toggle is a speaker that mutes it.
  * A click selects the layer (Shift = range, Shortcut = toggle); dragging rows reorders them or
  * moves them into a group. A property row shows the value at the playhead and a keyframe
  * navigator: previous keyframe, keyframe at the playhead on/off, next keyframe.
@@ -74,12 +81,14 @@ public final class LayerTreeColumn extends Region {
     public static final String AUTO_KEY_ID = "timeline-auto-key";
     public static final String SHOW_ALL_ID = "timeline-show-all";
     public static final String ADD_MARKER_ID = "timeline-add-marker";
+    public static final String ADD_CUE_ID = "timeline-add-cue";
     public static final String ZOOM_IN_ID = "timeline-zoom-in";
     public static final String ZOOM_OUT_ID = "timeline-zoom-out";
     public static final String ZOOM_FIT_ID = "timeline-zoom-fit";
 
     private static final PseudoClass SELECTED = PseudoClass.getPseudoClass("selected");
     private static final PseudoClass SLOT = PseudoClass.getPseudoClass("slot");
+    private static final PseudoClass AUDIO = PseudoClass.getPseudoClass("audio");
     private Animation maskSource;
     private Set<String> maskIds = Set.of();
     private static final PseudoClass OFF = PseudoClass.getPseudoClass("off");
@@ -95,6 +104,8 @@ public final class LayerTreeColumn extends Region {
     private final ToggleButton showAll = toggle(SHOW_ALL_ID, Material2AL.FORMAT_LIST_BULLETED,
             "Show all properties of expanded layers, not only the animated ones");
     private final HBox header = new HBox();
+    private final HBox cueHeader = new HBox();
+    private final ContextMenu cueMenu = new ContextMenu();
     private final Pane body = new Pane();
     private final List<LayerCell> layerCells = new ArrayList<>();
     private final List<PropertyCell> propertyCells = new ArrayList<>();
@@ -129,6 +140,15 @@ public final class LayerTreeColumn extends Region {
         header.getStyleClass().add("timeline-header");
         header.getChildren().addAll(autoKey, showAll, addMarker, spacer, zoomOut, zoomIn, fit);
 
+        Label cueTitle = new Label("CUES");
+        cueTitle.getStyleClass().add("cue-header-title");
+        Region cueSpacer = new Region();
+        HBox.setHgrow(cueSpacer, Priority.ALWAYS);
+        Button addCue = button(ADD_CUE_ID, Material2AL.ADD, "Add a sound cue at the playhead");
+        addCue.setOnAction(e -> addCue(addCue));
+        cueHeader.getStyleClass().add("cue-header");
+        cueHeader.getChildren().addAll(new FontIcon(Material2MZ.VOLUME_UP), cueTitle, cueSpacer, addCue);
+
         body.getStyleClass().add("timeline-rows");
         body.setClip(new Rectangle());
         dropIndicator.getStyleClass().add("drop-indicator");
@@ -152,7 +172,7 @@ public final class LayerTreeColumn extends Region {
             }
         });
         body.getChildren().addAll(dropIndicator, renameField);
-        getChildren().addAll(body, header);
+        getChildren().addAll(body, header, cueHeader);
 
         body.setOnMousePressed(e -> {
             // only reached below the last row: the rows consume their presses
@@ -188,6 +208,8 @@ public final class LayerTreeColumn extends Region {
             showAll.selectedProperty().bindBidirectional(newDoc.getViewState().showAllPropertiesProperty());
         }
         header.setDisable(newDoc == null);
+        cueHeader.setDisable(newDoc == null);
+        cueMenu.hide();
         anchorLayerId = null;
     }
 
@@ -198,6 +220,47 @@ public final class LayerTreeColumn extends Region {
             doc.execute(Markers.add(timeline.getTime()));
             timeline.setSelectedMarker(name);
         }
+    }
+
+    /**
+     * The button of the cue lane: with one sound in the document a cue for it is added at the
+     * playhead; otherwise a menu offers the sounds, and to import one.
+     */
+    private void addCue(Node anchor) {
+        EditorDocument doc = doc();
+        if (doc == null) {
+            return;
+        }
+        List<Asset> sounds = Cues.audioAssets(doc.getAnimation());
+        if (sounds.size() == 1) {
+            timeline.addCue(timeline.getTime(), sounds.get(0).id());
+        } else {
+            getCueMenu().show(anchor, Side.BOTTOM, 0, 2);
+        }
+    }
+
+    /** The menu of the add-cue button, brought up to date: one item per sound, and Import Sound…. */
+    public ContextMenu getCueMenu() {
+        List<MenuItem> items = new ArrayList<>();
+        EditorDocument doc = doc();
+        if (doc != null) {
+            for (Asset sound : Cues.audioAssets(doc.getAnimation())) {
+                MenuItem item = new MenuItem(sound.name());
+                item.setMnemonicParsing(false);
+                item.setUserData(sound.id());
+                item.setOnAction(e -> timeline.addCue(timeline.getTime(), sound.id()));
+                items.add(item);
+            }
+        }
+        if (!items.isEmpty()) {
+            items.add(new SeparatorMenuItem());
+        }
+        MenuItem importSound = new MenuItem("Import Sound…");
+        importSound.setId("cue-menu-import");
+        importSound.setOnAction(e -> timeline.importSound());
+        items.add(importSound);
+        cueMenu.getItems().setAll(items);
+        return cueMenu;
     }
 
     // ------------------------------------------------------------------ rows
@@ -211,7 +274,9 @@ public final class LayerTreeColumn extends Region {
     void refresh() {
         double width = getWidth();
         double height = getHeight();
-        header.resizeRelocate(0, 0, width, TimelineView.HEADER_HEIGHT);
+        double mainHeader = TimelineView.RULER_HEIGHT + TimelineView.MARKER_HEIGHT;
+        header.resizeRelocate(0, 0, width, mainHeader);
+        cueHeader.resizeRelocate(0, mainHeader, width, TimelineView.CUE_HEIGHT);
         double bodyHeight = Math.max(0, height - TimelineView.HEADER_HEIGHT);
         body.resizeRelocate(0, TimelineView.HEADER_HEIGHT, width, bodyHeight);
         Rectangle clip = (Rectangle) body.getClip();
@@ -539,7 +604,7 @@ public final class LayerTreeColumn extends Region {
             case ImageLayer image -> Material2OutlinedAL.IMAGE;
             case GroupLayer group -> expanded ? Material2OutlinedAL.FOLDER_OPEN : Material2OutlinedAL.FOLDER;
             case SlotLayer slot -> Material2OutlinedMZ.WIDGETS;
-            case AudioLayer audio -> Material2OutlinedMZ.VOLUME_UP;
+            case AudioLayer audio -> Material2AL.AUDIOTRACK;
         };
     }
 
@@ -603,7 +668,9 @@ public final class LayerTreeColumn extends Region {
             });
             eye.setOnAction(e -> {
                 boolean visible = row.layer().base().visible();
-                doc().execute(Commands.updateLayer(visible ? "Hide Layer" : "Show Layer", row.layerId(),
+                boolean audio = row.layer() instanceof AudioLayer;
+                doc().execute(Commands.updateLayer(audio ? (visible ? "Mute Layer" : "Unmute Layer")
+                                : visible ? "Hide Layer" : "Show Layer", row.layerId(),
                         l -> l.withBase(l.base().withVisible(!visible))));
             });
             lock.setOnAction(e -> {
@@ -631,7 +698,11 @@ public final class LayerTreeColumn extends Region {
             chevron.setRotate(newRow.expanded() ? 90 : 0);
             typeIcon.setIconCode(icon(layer, newRow.expanded()));
             name.setText(layer instanceof SlotLayer slot ? layer.name() + "  ·  " + slot.slotName() : layer.name());
-            eyeIcon.setIconCode(layer.base().visible() ? Material2MZ.VISIBILITY : Material2MZ.VISIBILITY_OFF);
+            // an audio layer is not seen but heard: its eye is a speaker
+            boolean audio = layer instanceof AudioLayer;
+            eyeIcon.setIconCode(audio ? (layer.base().visible() ? Material2MZ.VOLUME_UP : Material2MZ.VOLUME_OFF)
+                    : layer.base().visible() ? Material2MZ.VISIBILITY : Material2MZ.VISIBILITY_OFF);
+            pseudoClassStateChanged(AUDIO, audio);
             lockIcon.setIconCode(layer.base().locked() ? Material2AL.LOCK : Material2AL.LOCK_OPEN);
             eye.pseudoClassStateChanged(ACTIVE, !layer.base().visible());
             lock.pseudoClassStateChanged(ACTIVE, layer.base().locked());

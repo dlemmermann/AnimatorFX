@@ -1,15 +1,24 @@
 package com.dlsc.animatorfx.editor.timeline;
 
+import com.dlsc.animatorfx.editor.audio.AudioImport;
+import com.dlsc.animatorfx.editor.audio.Waveform;
+import com.dlsc.animatorfx.editor.audio.WaveformCache;
+import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.Selection.KeyframeRef;
 import com.dlsc.animatorfx.editor.doc.ViewState;
 import com.dlsc.animatorfx.editor.ui.Palette;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Asset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Consumer;
 import javafx.beans.InvalidationListener;
+import javafx.beans.WeakInvalidationListener;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -30,7 +39,8 @@ import javafx.scene.shape.Rectangle;
 /**
  * The timeline at the bottom of the window. The left column is the layer tree
  * ({@link LayerTreeColumn}); the right side shows the time ruler ({@link TimeRuler}), the marker
- * lane ({@link MarkerLane}) and the tracks ({@link TrackPane}) with the playhead across them.
+ * lane ({@link MarkerLane}), the cue lane ({@link CueLane}) and the tracks ({@link TrackPane})
+ * with the playhead across them.
  * Both sides share the rows ({@link TimelineRow}) and one vertical scroll position; a divider
  * between them sets the width of the column.
  *
@@ -39,15 +49,17 @@ import javafx.scene.shape.Rectangle;
  * visible property rows.
  *
  * <p>Keyboard focus: the layer column takes the focus when clicked, and so do the tracks, the
- * ruler and the marker lane. While one of the latter three has it, Delete removes the selected
- * keyframes or the selected marker; anywhere else Delete removes the selected layers.
+ * ruler, the marker lane and the cue lane. While one of the latter four has it, Delete removes
+ * the selected cues, else the selected keyframes, else the selected marker; anywhere else Delete
+ * removes the selected layers, or the selected cues when cues are selected.
  */
 public final class TimelineView extends Region {
 
     public static final double ROW_HEIGHT = 22;
     public static final double RULER_HEIGHT = 22;
     public static final double MARKER_HEIGHT = 18;
-    public static final double HEADER_HEIGHT = RULER_HEIGHT + MARKER_HEIGHT;
+    public static final double CUE_HEIGHT = 18;
+    public static final double HEADER_HEIGHT = RULER_HEIGHT + MARKER_HEIGHT + CUE_HEIGHT;
 
     private static final double MIN_COLUMN_WIDTH = 190;
     private static final double MIN_TRACK_WIDTH = 160;
@@ -61,6 +73,7 @@ public final class TimelineView extends Region {
     private final LayerTreeColumn column = new LayerTreeColumn(this);
     private final TimeRuler ruler = new TimeRuler(this);
     private final MarkerLane markerLane = new MarkerLane(this);
+    private final CueLane cueLane = new CueLane(this);
     private final TrackPane tracks = new TrackPane(this);
     private final Region divider = new Region();
     private final ScrollBar hScroll = new ScrollBar();
@@ -86,6 +99,11 @@ public final class TimelineView extends Region {
 
     private Consumer<String> notifier = message -> {
     };
+    private Runnable soundImporter = () -> {
+    };
+    private Consumer<Double> scrubber = time -> {
+    };
+    private String lastCueAsset;
 
     public TimelineView() {
         getStyleClass().addAll("timeline-pane", "timeline-view");
@@ -105,7 +123,9 @@ public final class TimelineView extends Region {
         playheadHead.setManaged(false);
         playheadLayer.setMouseTransparent(true);
         playheadLayer.setClip(new Rectangle());
-        getChildren().addAll(palette, tracks, markerLane, ruler, playheadLayer, column, divider, hScroll, vScroll);
+        getChildren().addAll(palette, tracks, cueLane, markerLane, ruler, playheadLayer, column, divider, hScroll, vScroll);
+        // a waveform that arrives is drawn; the cache outlives the view
+        WaveformCache.shared().revisionProperty().addListener(new WeakInvalidationListener(redraw));
 
         palette.setOnChange(this::requestLayout);
         hScroll.valueProperty().addListener((obs, oldValue, value) -> {
@@ -180,6 +200,10 @@ public final class TimelineView extends Region {
         return markerLane;
     }
 
+    public CueLane getCueLane() {
+        return cueLane;
+    }
+
     public TrackPane getTrackPane() {
         return tracks;
     }
@@ -189,7 +213,7 @@ public final class TimelineView extends Region {
         return keyframeActions;
     }
 
-    Palette getPalette() {
+    public Palette getPalette() {
         return palette;
     }
 
@@ -245,6 +269,20 @@ public final class TimelineView extends Region {
         return Math.clamp(snapped, 0, Math.max(0, animation.duration()));
     }
 
+    /** The waveform of an audio asset of the document, once it has been worked out. */
+    public Optional<Waveform> waveformOf(String assetId) {
+        EditorDocument doc = getDocument();
+        if (doc == null) {
+            return Optional.empty();
+        }
+        for (Asset asset : doc.getAnimation().assets()) {
+            if (asset.id().equals(assetId) && asset.kind() == Asset.Kind.AUDIO) {
+                return AudioImport.waveform(doc, asset);
+            }
+        }
+        return Optional.empty();
+    }
+
     /** Receives messages for the user, such as why layers could not be dropped into a group. */
     public void setNotifier(Consumer<String> notifier) {
         this.notifier = Objects.requireNonNull(notifier, "notifier");
@@ -254,13 +292,72 @@ public final class TimelineView extends Region {
         notifier.accept(message);
     }
 
+    /** Asks for a sound file and adds it with a cue at the playhead: "Import Sound…" of the cue menu. */
+    public void setSoundImporter(Runnable importer) {
+        this.soundImporter = Objects.requireNonNull(importer, "importer");
+    }
+
+    void importSound() {
+        soundImporter.run();
+    }
+
     /**
-     * Whether the tracks, the ruler or the marker lane have the keyboard focus, so that Delete,
-     * Copy and Paste are about keyframes and markers rather than layers.
+     * Receives the time whenever the user moves the playhead in the ruler, after the playhead
+     * has been set: the moment to let the sound at that time be heard.
+     */
+    public void setScrubber(Consumer<Double> scrubber) {
+        this.scrubber = Objects.requireNonNull(scrubber, "scrubber");
+    }
+
+    void scrubbed(double time) {
+        scrubber.accept(time);
+    }
+
+    /**
+     * Adds a sound cue at the frame of a time and selects it. Without an asset the cue gets the
+     * sound that was used last ({@link Cues#defaultAsset}); a document without sounds gets a
+     * notice instead.
+     *
+     * @return the id of the new cue
+     */
+    public Optional<String> addCue(double time, String assetIdOrNull) {
+        EditorDocument doc = getDocument();
+        if (doc == null) {
+            return Optional.empty();
+        }
+        String assetId = assetIdOrNull != null ? assetIdOrNull
+                : Cues.defaultAsset(doc.getAnimation(), lastCueAsset).orElse(null);
+        if (assetId == null || !Commands.isAudioAsset(doc.getAnimation(), assetId)) {
+            notice("Add a sound first: File ▸ Import ▸ Audio…, or drop a sound file on the window.");
+            return Optional.empty();
+        }
+        String id = UUID.randomUUID().toString();
+        doc.execute(Cues.add(id, assetId, time));
+        if (doc.getAnimation().cues().stream().noneMatch(cue -> cue.id().equals(id))) {
+            return Optional.empty();
+        }
+        lastCueAsset = assetId;
+        selectCue(id);
+        return Optional.of(id);
+    }
+
+    /** Selects one cue and nothing else. */
+    public void selectCue(String cueId) {
+        EditorDocument doc = getDocument();
+        if (doc != null) {
+            setSelectedMarker(null);
+            doc.getSelection().cueIds().retainAll(Set.of(cueId));
+            doc.getSelection().cueIds().add(cueId);
+        }
+    }
+
+    /**
+     * Whether the tracks, the ruler, the marker lane or the cue lane have the keyboard focus, so
+     * that Delete, Copy and Paste are about keyframes, markers and cues rather than layers.
      */
     public boolean hasTrackFocus() {
         Node owner = getScene() == null ? null : getScene().getFocusOwner();
-        return owner == tracks || owner == ruler || owner == markerLane;
+        return owner == tracks || owner == ruler || owner == markerLane || owner == cueLane;
     }
 
     // ------------------------------------------------------------------ zoom and scroll
@@ -348,22 +445,26 @@ public final class TimelineView extends Region {
     }
 
     /**
-     * Whether Delete is about keyframes and markers rather than layers: while the tracks, the
-     * ruler or the marker lane have the focus, and anywhere in the timeline, the layer column
-     * included, while keyframes are selected.
+     * Whether Delete is about cues, keyframes and markers rather than layers: while the tracks,
+     * the ruler, the marker lane or the cue lane have the focus; anywhere in the timeline, the
+     * layer column included, while keyframes are selected; and anywhere at all while cues are
+     * selected, because then no layer is.
      */
     public boolean deletesHere() {
         EditorDocument doc = getDocument();
-        return hasTrackFocus() || (isFocusWithin() && doc != null && !doc.getSelection().keyframes().isEmpty());
+        return hasTrackFocus() || (doc != null && !doc.getSelection().cueIds().isEmpty())
+                || (isFocusWithin() && doc != null && !doc.getSelection().keyframes().isEmpty());
     }
 
-    /** Removes the selected keyframes, or else the selected marker. */
+    /** Removes the selected cues, or else the selected keyframes, or else the selected marker. */
     public void deleteSelection() {
         EditorDocument doc = getDocument();
         if (doc == null) {
             return;
         }
-        if (!doc.getSelection().keyframes().isEmpty()) {
+        if (!doc.getSelection().cueIds().isEmpty()) {
+            doc.execute(Commands.removeCues(List.copyOf(doc.getSelection().cueIds())));
+        } else if (!doc.getSelection().keyframes().isEmpty()) {
             keyframeActions.delete();
         } else if (getSelectedMarker() != null) {
             doc.execute(Markers.remove(getSelectedMarker()));
@@ -376,11 +477,13 @@ public final class TimelineView extends Region {
     private void documentChanged(EditorDocument oldDoc, EditorDocument newDoc) {
         tracks.cancelGesture();
         markerLane.cancelGesture();
+        cueLane.cancelGesture();
         column.cancelGesture();
         if (oldDoc != null) {
             oldDoc.animationProperty().removeListener(structure);
             oldDoc.getSelection().layerIds().removeListener(layerSelection);
             oldDoc.getSelection().keyframes().removeListener(redraw);
+            oldDoc.getSelection().cueIds().removeListener(redraw);
             oldDoc.playheadProperty().removeListener(playhead);
             ViewState view = oldDoc.getViewState();
             view.timelineZoomProperty().removeListener(redraw);
@@ -392,6 +495,7 @@ public final class TimelineView extends Region {
             newDoc.animationProperty().addListener(structure);
             newDoc.getSelection().layerIds().addListener(layerSelection);
             newDoc.getSelection().keyframes().addListener(redraw);
+            newDoc.getSelection().cueIds().addListener(redraw);
             newDoc.playheadProperty().addListener(playhead);
             ViewState view = newDoc.getViewState();
             view.timelineZoomProperty().addListener(redraw);
@@ -400,6 +504,7 @@ public final class TimelineView extends Region {
             view.getExpandedLayerIds().addListener(structure);
         }
         setSelectedMarker(null);
+        lastCueAsset = null;
         scrollY = 0;
         column.documentChanged(oldDoc, newDoc);
         invalidateRows();
@@ -503,6 +608,7 @@ public final class TimelineView extends Region {
         divider.resizeRelocate(left - 1 - (DIVIDER_GRIP - 1) / 2, 0, DIVIDER_GRIP, height);
         ruler.resizeRelocate(left, 0, trackWidth, RULER_HEIGHT);
         markerLane.resizeRelocate(left, RULER_HEIGHT, trackWidth, MARKER_HEIGHT);
+        cueLane.resizeRelocate(left, RULER_HEIGHT + MARKER_HEIGHT, trackWidth, CUE_HEIGHT);
         tracks.resizeRelocate(left, HEADER_HEIGHT, trackWidth, trackHeight);
         playheadLayer.resizeRelocate(left, 0, trackWidth, HEADER_HEIGHT + trackHeight);
         Rectangle clip = (Rectangle) playheadLayer.getClip();
@@ -512,6 +618,7 @@ public final class TimelineView extends Region {
         column.refresh();
         ruler.draw();
         markerLane.draw();
+        cueLane.draw();
         tracks.draw();
         positionPlayhead();
     }

@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.audio;
 
+import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.model.Asset;
@@ -170,6 +171,19 @@ public final class AudioImport {
         adopt(document, asset, sound);
         document.getSelection().layerIds().setAll(layerId);
         return layerId;
+    }
+
+    /**
+     * Adds the sound as an audio asset together with a sound cue, as one undo step.
+     *
+     * @param cueCommand makes the command that adds the cue for the id of the new asset
+     * @return the id of the new asset
+     */
+    public static String addWithCue(EditorDocument document, Sound sound, Function<String, Command> cueCommand) {
+        Asset asset = asset(sound);
+        document.execute(cueCommand.apply(asset.id()), Map.of(asset, sound.bytes()));
+        adopt(document, asset, sound);
+        return asset.id();
     }
 
     /**

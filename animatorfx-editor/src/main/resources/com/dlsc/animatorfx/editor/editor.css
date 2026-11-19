@@ -27,6 +27,11 @@
     -afx-shadow: rgba(0, 0, 0, 0.45);
     -afx-row-alt: #181f28;
     -afx-playhead-soft: rgba(255, 92, 92, 0.16);
+    /* sound: audio layer bars, waveforms and cues */
+    -afx-audio: #35c9a5;
+    -afx-audio-soft: rgba(53, 201, 165, 0.14);
+    -afx-audio-bar: rgba(53, 201, 165, 0.22);
+    -afx-wave: #7fe6cd;
 
     /* AtlantaFX follows the editor palette */
     -color-bg-default: -afx-panel;
@@ -68,6 +73,10 @@
     -afx-shadow: rgba(29, 39, 51, 0.18);
     -afx-row-alt: #f7f9fb;
     -afx-playhead-soft: rgba(229, 72, 77, 0.12);
+    -afx-audio: #0f9d84;
+    -afx-audio-soft: rgba(15, 157, 132, 0.12);
+    -afx-audio-bar: rgba(15, 157, 132, 0.20);
+    -afx-wave: #0b8571;
 }
 
 .main-window {
@@ -93,6 +102,10 @@
     -afx-palette-hover: -afx-hover;
     -afx-palette-grid: -afx-grid;
     -afx-palette-on-accent: -afx-on-accent;
+    -afx-palette-audio: -afx-audio;
+    -afx-palette-audio-soft: -afx-audio-soft;
+    -afx-palette-audio-bar: -afx-audio-bar;
+    -afx-palette-wave: -afx-wave;
 }
 
 .ikonli-font-icon {
@@ -1503,8 +1516,45 @@
 }
 
 .timeline-tick,
-.marker-label {
+.marker-label,
+.cue-label {
     -fx-font-size: 10px;
+}
+
+/* the strip beside the cue lane: what the lane is, and the button that adds a cue */
+.cue-header {
+    -fx-background-color: -afx-panel-alt;
+    -fx-border-color: -afx-line;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 0 6 0 9;
+    -fx-spacing: 5;
+    -fx-alignment: center-left;
+}
+
+.cue-header > .ikonli-font-icon {
+    -fx-icon-size: 11;
+    -fx-icon-color: -afx-audio;
+}
+
+.cue-header-title {
+    -fx-font-size: 9px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -afx-muted;
+}
+
+.cue-header .timeline-tool {
+    -fx-padding: 0 4 0 4;
+    -fx-min-height: 16;
+    -fx-pref-height: 16;
+}
+
+.cue-header .timeline-tool .ikonli-font-icon {
+    -fx-icon-size: 13;
+}
+
+/* an audio layer: its note and, when it sounds, its speaker in the colour of sound */
+.layer-row:audio .layer-icon {
+    -fx-icon-color: -afx-audio;
 }
 
 .playhead,

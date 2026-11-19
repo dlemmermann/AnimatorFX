@@ -1,5 +1,8 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.timeline.Cues;
+import java.util.UUID;
+import java.util.function.Consumer;
 import com.dlsc.animatorfx.editor.audio.AudioImport;
 import com.dlsc.animatorfx.editor.audio.AudioInfo;
 import java.util.concurrent.CompletableFuture;
@@ -154,6 +157,33 @@ public final class ImportActions {
             }
         });
         return done;
+    }
+
+    /**
+     * Asks for a sound file and adds it to the active document as an audio asset together with a
+     * sound cue at the playhead, as one undo step: "Import Sound…" of the cue menu.
+     *
+     * @param onAdded receives the id of the new cue
+     */
+    public void chooseAndImportCue(Consumer<String> onAdded) {
+        EditorDocument document = workspace.getActiveDocument();
+        List<Path> files = document == null ? List.of() : audioPicker.apply(owner.get());
+        if (files.isEmpty()) {
+            return;
+        }
+        Path file = files.get(0);
+        double time = document.getPlayhead();
+        AudioImport.read(file, message -> notices.show(message, null, null)).whenComplete((sound, error) -> {
+            if (error != null) {
+                Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+                notices.show("Could not import " + file.getFileName() + ": "
+                        + (cause instanceof AudioImport.Refused ? cause.getMessage() : "it cannot be read."));
+            } else if (workspace.getDocuments().contains(document)) {
+                String cueId = UUID.randomUUID().toString();
+                AudioImport.addWithCue(document, sound, assetId -> Cues.add(cueId, assetId, time));
+                onAdded.accept(cueId);
+            }
+        });
     }
 
     private List<Path> chooseAudioFiles(Window window) {

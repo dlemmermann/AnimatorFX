@@ -43,7 +43,9 @@ public final class TimeRuler extends Region {
             return;
         }
         requestFocus();
-        doc.setPlayhead(timeline.snapTime(timeline.getScale().toTime(event.getX()), event.isAltDown()));
+        double time = timeline.snapTime(timeline.getScale().toTime(event.getX()), event.isAltDown());
+        doc.setPlayhead(time);
+        timeline.scrubbed(time);
         event.consume();
     }
 

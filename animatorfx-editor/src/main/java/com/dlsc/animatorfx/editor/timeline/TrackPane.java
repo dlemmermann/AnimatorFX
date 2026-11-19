@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.timeline;
 
+import com.dlsc.animatorfx.editor.audio.Waveform;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.Selection.KeyframeRef;
 import com.dlsc.animatorfx.editor.timeline.TimelineRow.LayerRow;
@@ -7,6 +8,7 @@ import com.dlsc.animatorfx.editor.timeline.TimelineRow.PropertyRow;
 import com.dlsc.animatorfx.editor.ui.Palette;
 import com.dlsc.animatorfx.editor.ui.Palette.Tone;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Keyframe;
 import com.dlsc.animatorfx.model.Layer;
@@ -21,7 +23,7 @@ import javafx.scene.layout.Region;
 /**
  * The tracks of the timeline, drawn on a canvas with the colours of the stylesheet. A layer row
  * shows the bar of its in/out range and, while collapsed, small dots at the times of its
- * keyframes; a property row shows its keyframes as diamonds (squares for hold keyframes) on a
+ * keyframes; the bar of an audio layer also shows the waveform of its sound; a property row shows its keyframes as diamonds (squares for hold keyframes) on a
  * thin connector line. The time past the duration is shaded.
  *
  * <p>Pointer handling is in {@link TrackInteraction}: selecting, moving and adding keyframes,
@@ -52,6 +54,8 @@ public final class TrackPane extends Region {
     private static final double KEY_REACH = 6;
     private static final double BAR_INSET = 6;
     private static final double BAR_GRIP = 4;
+    private static final double AUDIO_BAR_INSET = 3;
+    private static final double HATCH = 5;
 
     private final TimelineView timeline;
     private final Canvas canvas = new Canvas();
@@ -231,6 +235,10 @@ public final class TrackPane extends Region {
 
     private void drawBar(GraphicsContext g, Palette palette, TimeScale scale, LayerRow row, double y, double duration) {
         Layer layer = row.layer();
+        if (layer instanceof AudioLayer audio) {
+            drawAudioBar(g, palette, scale, row, audio, y, duration);
+            return;
+        }
         boolean slot = layer instanceof SlotLayer;
         double x1 = Math.round(scale.toX(barStart(layer, duration)));
         double x2 = Math.max(x1 + 2, Math.round(scale.toX(barEnd(layer, duration))));
@@ -248,6 +256,96 @@ public final class TrackPane extends Region {
             for (double time : TimelineRows.keyTimes(layer)) {
                 double x = Math.round(scale.toX(time)) + 0.5;
                 diamond(g, x, cy, 3);
+                g.fill();
+            }
+        }
+        g.setGlobalAlpha(1);
+    }
+
+    /**
+     * The bar of an audio layer: taller than the others, in the colour of sound, with the
+     * waveform inside it once that is known. The sound at the in-point is the clip offset; a
+     * looping sound repeats with a line where it starts over; the part of the bar after the end
+     * of a sound that does not loop is hatched. A muted or hidden layer has a faint waveform. The
+     * volume, when it is animated, runs over the waveform as a thin line.
+     */
+    private void drawAudioBar(GraphicsContext g, Palette palette, TimeScale scale, LayerRow row, AudioLayer layer,
+                              double y, double duration) {
+        double width = getWidth();
+        double x1 = Math.round(scale.toX(barStart(layer, duration)));
+        double x2 = Math.max(x1 + 2, Math.round(scale.toX(barEnd(layer, duration))));
+        double top = y + AUDIO_BAR_INSET;
+        double barHeight = TimelineView.ROW_HEIGHT - 2 * AUDIO_BAR_INSET - 1;
+        boolean audible = layer.base().visible() && !layer.muted();
+        g.setGlobalAlpha(layer.base().visible() ? 1 : 0.5);
+        g.setFill(palette.get(Tone.AUDIO_BAR));
+        g.fillRoundRect(x1, top, x2 - x1, barHeight, 3, 3);
+
+        Waveform waveform = timeline.waveformOf(layer.assetId()).orElse(null);
+        g.save();
+        g.beginPath();
+        g.rect(x1 + 1, top + 1, x2 - x1 - 2, barHeight - 2);
+        g.clip();
+        if (waveform != null) {
+            double in = layer.base().inPoint();
+            AudioClips.Layout layout = AudioClips.layout(in, Math.max(in, layer.base().outPoint()), layer.clipOffset(),
+                    waveform.duration(), layer.loop());
+            double soundEnd = Math.round(scale.toX(layout.soundEnd()));
+            if (soundEnd < x2 - 1) {
+                // no sound from here on
+                double from = Math.max(x1, soundEnd);
+                g.setFill(palette.get(Tone.PANEL, 0.6));
+                g.fillRect(from, top, x2 - from, barHeight);
+                g.setStroke(palette.get(Tone.AUDIO, 0.3));
+                for (double hx = from - barHeight + (HATCH - (from % HATCH)); hx < x2; hx += HATCH) {
+                    if (hx + barHeight >= 0 && hx <= width) {
+                        g.strokeLine(hx, top + barHeight, hx + barHeight, top);
+                    }
+                }
+                g.setStroke(palette.get(Tone.AUDIO, 0.7));
+                g.strokeLine(from + 0.5, top, from + 0.5, top + barHeight);
+            }
+            WaveformPainter.paint(g, waveform, scale, in, layer.clipOffset(), layer.loop(), x1, x2, top + 1.5,
+                    barHeight - 3, width, palette.get(Tone.WAVE, audible ? 1 : 0.35));
+            if (layer.loop() && scale.toDuration(1) * 6 < waveform.duration()) {
+                g.setStroke(palette.get(Tone.FG, 0.55));
+                g.setLineDashes(2, 2);
+                for (double time : layout.loopBoundaries()) {
+                    double x = Math.round(scale.toX(time)) + 0.5;
+                    if (x >= 0 && x <= width) {
+                        g.strokeLine(x, top, x, top + barHeight);
+                    }
+                }
+                g.setLineDashes();
+            }
+        }
+        if (layer.volume().isAnimated()) {
+            // the volume envelope: full volume at the top of the bar
+            g.setStroke(palette.get(Tone.KEY, audible ? 0.95 : 0.45));
+            g.beginPath();
+            double room = barHeight - 3;
+            int from = (int) Math.max(x1, 0);
+            int to = (int) Math.min(x2, width);
+            for (int x = from; x <= to; x += 2) {
+                double volume = Math.clamp(layer.volume().at(scale.toTime(x)), 0, 1);
+                double vy = top + 1.5 + (1 - volume) * room;
+                if (x == from) {
+                    g.moveTo(x, vy);
+                } else {
+                    g.lineTo(x, vy);
+                }
+            }
+            g.stroke();
+        }
+        g.restore();
+
+        g.setStroke(palette.get(audible ? Tone.AUDIO : Tone.MUTED));
+        g.strokeRoundRect(x1 + 0.5, top + 0.5, x2 - x1 - 1, barHeight - 1, 3, 3);
+        if (!row.expanded()) {
+            double cy = top + barHeight / 2;
+            g.setFill(palette.get(Tone.KEY));
+            for (double time : TimelineRows.keyTimes(layer)) {
+                diamond(g, Math.round(scale.toX(time)) + 0.5, cy, 3);
                 g.fill();
             }
         }
