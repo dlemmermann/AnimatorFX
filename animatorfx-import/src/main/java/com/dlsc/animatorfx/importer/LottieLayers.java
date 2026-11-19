@@ -62,6 +62,8 @@ final class LottieLayers {
         boolean hiddenMatte;
         /** The unit whose alpha this one takes as its track matte, once that is settled. */
         Unit matteSource;
+        /** A sound: it takes no part in masks and mattes and cannot be hidden as one. */
+        boolean audio;
     }
 
     private final Warnings warnings;
@@ -69,6 +71,7 @@ final class LottieLayers {
     private final LottieTransforms transforms;
     private final LottieShapes shapes;
     private final LottieEffects effects;
+    private final LottieSounds sounds;
     private final Limits limits;
     private final double duration;
     private final Map<String, Object> lottieAssets;
@@ -93,6 +96,7 @@ final class LottieLayers {
         this.duration = duration;
         this.lottieAssets = lottieAssets;
         this.fonts = fonts;
+        this.sounds = new LottieSounds(warnings, properties, duration, lottieAssets, assets, assetBytes);
     }
 
     List<Asset> assets() {
@@ -133,7 +137,7 @@ final class LottieLayers {
         for (int i = units.size() - 1; i >= 0; i--) {
             Unit unit = units.get(i);
             for (Layer top : unit.tops) {
-                result.add(unit.hiddenMatte ? top.withBase(top.base().withVisible(false)) : top);
+                result.add(unit.hiddenMatte && !unit.audio ? top.withBase(top.base().withVisible(false)) : top);
             }
         }
         return result;
@@ -198,6 +202,16 @@ final class LottieLayers {
 
     private void build(Unit unit, double frameOffset) {
         Object json = unit.json;
+        int type = (int) LottieJson.number(json, "ty", -1);
+        if (type == AUDIO) {
+            unit.audio = true;
+            Layer sound = sounds.layer(json, unit.name, frameOffset);
+            if (sound != null) {
+                unit.core = sound;
+                unit.tops = List.of(sound);
+            }
+            return;
+        }
         // The mask layer is asked for before the content: a layer that cannot have its mask is
         // left out as a whole, and must not have used up the budget by then.
         Object mask = chooseMask(json);
@@ -224,7 +238,6 @@ final class LottieLayers {
         LayerBase base = new LayerBase(UUID.randomUUID().toString(), unit.name, !LottieJson.flag(json, "hd"), false,
                 in, Math.max(in, out), unit.placement.transform(), unit.placement.opacity(), null,
                 effects.read(json, frameOffset), null);
-        int type = (int) LottieJson.number(json, "ty", -1);
         unit.core = switch (type) {
             case SHAPE -> new GroupLayer(base, shapeContent(json, frameOffset));
             case NULL -> new GroupLayer(base, List.of());
@@ -232,7 +245,6 @@ final class LottieLayers {
             case IMAGE -> image(json, base);
             case TEXT -> text(json, base);
             case PRECOMPOSITION -> precomposition(json, base, frameOffset);
-            case AUDIO -> ignored("Audio layers are not supported");
             case CAMERA -> ignored("Camera layers are not supported");
             default -> ignored("Layers of type " + type + " are not supported");
         };
@@ -434,7 +446,7 @@ final class LottieLayers {
             }
             Unit source = get(unit.json, "tp") instanceof Number index ? byIndex.get(index.intValue())
                     : i > 0 ? units.get(i - 1) : null;
-            if (source == null || source == unit) {
+            if (source == null || source == unit || unit.audio || source.audio) {
                 continue;
             }
             if (mode != 1) {

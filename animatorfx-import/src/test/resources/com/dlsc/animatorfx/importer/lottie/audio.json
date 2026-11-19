@@ -1,0 +1,576 @@
+{
+ "v": "5.9.0",
+ "fr": 30,
+ "ip": 10,
+ "op": 70,
+ "w": 200,
+ "h": 100,
+ "nm": "Audio demo",
+ "ddd": 0,
+ "assets": [
+  {
+   "id": "snd_0",
+   "nm": "beep",
+   "u": "",
+   "p": "data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YSADAAAAAH8AiAENAiYBy/4L/JT6ufuP/5cEUgh7CFMESP2F9ofzUvY9/vQH3A5BD0cIo/yO8XjsWvAN/IkKEBVKFvoM3vw17X7l4ekC+U4M3BqCHV4SCv6c6gDhnuVY9oALYhuyHusTAAAV7E7hnuSA9KgJYhoAH2QV9gGi7bzhuuOy8sUHSBkwH8cW6gNC70ji8uLy8NsFFBhAHxQY2wXy8PLiSOJC7+oDxxYwH0gZxQey8rrjvOGi7fYBZBUAH2IaqAmA9J7kTuEV7AAA6xOyHmIbgAtY9p7lAOGc6gr+XhJEHkYcTg07+Ljm0OA56Rb8vhC4HQ4dDg8l+uznwODs5yX6Dg8OHbgdvhAW/Dnp0OC45jv4Tg1GHEQeXhIK/pzqAOGe5Vj2gAtiG7Ie6xMAABXsTuGe5ID0qAliGgAfZBX2AaLtvOG647LyxQdIGTAfxxbqA0LvSOLy4vLw2wUUGEAfFBjbBfLw8uJI4kLv6gPHFjAfSBnFB7LyuuO84aLt9gFkFQAfYhqoCYD0nuRO4RXsAADrE7IeYhuAC1j2nuUA4ZzqCv5eEkQeRhxODTv4uObQ4DnpFvy+ELgdDh0ODyX67OfA4OznJfoODw4duB2+EBb8OenQ4LjmO/hODUYcRB5eEgr+nOoA4Z7lWPaAC2Ibsh7rEwAAFexO4Z7kgPSoCWIaAB9kFfYBou284brjsvLFB0gZMB/HFuoDQu9I4vLi8vDbBRQYQB8UGNsF8vDy4kjiQu/qA8cWMB9IGcUHsvK647zhou32AWQVAB9iGqgJgPSe5E7hFewAAOsTsh5iG4ALWPae5QDhnOoK/l4SRB5GHE4NO/i45tDgOekW/L4QuB0OHQ4PJfrs58Dg7Ocl+g4PDh24Hb4QFvw56dDguOY7+E4NRhxEHl4SCv6c6gDhnuVY9oALYhuyHusTAAAV7E7hnuSA9KgJYhoAH2QV9gGi7X7iJOWy8/4GHxaCGssSIgMG87bp8Op39fMDpg+IE3IOXQO597/wJPEM+MMBrgl5DHsJuAKt+4X3rvdp+3EARwRsBfUDNQHa/vP9eP6B/w==",
+   "e": 1
+  },
+  {
+   "id": "snd_1",
+   "nm": "beep again",
+   "u": "",
+   "p": "data:audio/x-wav;charset=binary;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YSADAAAAAH8AiAENAiYBy/4L/JT6ufuP/5cEUgh7CFMESP2F9ofzUvY9/vQH3A5BD0cIo/yO8XjsWvAN/IkKEBVKFvoM3vw17X7l4ekC+U4M3BqCHV4SCv6c6gDhnuVY9oALYhuyHusTAAAV7E7hnuSA9KgJYhoAH2QV9gGi7bzhuuOy8sUHSBkwH8cW6gNC70ji8uLy8NsFFBhAHxQY2wXy8PLiSOJC7+oDxxYwH0gZxQey8rrjvOGi7fYBZBUAH2IaqAmA9J7kTuEV7AAA6xOyHmIbgAtY9p7lAOGc6gr+XhJEHkYcTg07+Ljm0OA56Rb8vhC4HQ4dDg8l+uznwODs5yX6Dg8OHbgdvhAW/Dnp0OC45jv4Tg1GHEQeXhIK/pzqAOGe5Vj2gAtiG7Ie6xMAABXsTuGe5ID0qAliGgAfZBX2AaLtvOG647LyxQdIGTAfxxbqA0LvSOLy4vLw2wUUGEAfFBjbBfLw8uJI4kLv6gPHFjAfSBnFB7LyuuO84aLt9gFkFQAfYhqoCYD0nuRO4RXsAADrE7IeYhuAC1j2nuUA4ZzqCv5eEkQeRhxODTv4uObQ4DnpFvy+ELgdDh0ODyX67OfA4OznJfoODw4duB2+EBb8OenQ4LjmO/hODUYcRB5eEgr+nOoA4Z7lWPaAC2Ibsh7rEwAAFexO4Z7kgPSoCWIaAB9kFfYBou284brjsvLFB0gZMB/HFuoDQu9I4vLi8vDbBRQYQB8UGNsF8vDy4kjiQu/qA8cWMB9IGcUHsvK647zhou32AWQVAB9iGqgJgPSe5E7hFewAAOsTsh5iG4ALWPae5QDhnOoK/l4SRB5GHE4NO/i45tDgOekW/L4QuB0OHQ4PJfrs58Dg7Ocl+g4PDh24Hb4QFvw56dDguOY7+E4NRhxEHl4SCv6c6gDhnuVY9oALYhuyHusTAAAV7E7hnuSA9KgJYhoAH2QV9gGi7X7iJOWy8/4GHxaCGssSIgMG87bp8Op39fMDpg+IE3IOXQO597/wJPEM+MMBrgl5DHsJuAKt+4X3rvdp+3EARwRsBfUDNQHa/vP9eP6B/w==",
+   "e": 1
+  },
+  {
+   "id": "snd_ext",
+   "u": "sounds/",
+   "p": "click.mp3",
+   "e": 0
+  },
+  {
+   "id": "snd_url",
+   "u": "",
+   "p": "https://example.invalid/click.mp3"
+  },
+  {
+   "id": "comp_0",
+   "layers": [
+    {
+     "ddd": 0,
+     "ind": 1,
+     "ty": 6,
+     "nm": "Nested beep",
+     "refId": "snd_0",
+     "sr": 1,
+     "ks": {
+      "o": {
+       "a": 0,
+       "k": 100
+      },
+      "r": {
+       "a": 0,
+       "k": 0
+      },
+      "p": {
+       "a": 0,
+       "k": [
+        0,
+        0,
+        0
+       ]
+      },
+      "a": {
+       "a": 0,
+       "k": [
+        0,
+        0,
+        0
+       ]
+      },
+      "s": {
+       "a": 0,
+       "k": [
+        100,
+        100,
+        100
+       ]
+      }
+     },
+     "ao": 0,
+     "ip": 0,
+     "op": 30,
+     "st": 0,
+     "bm": 0
+    }
+   ]
+  }
+ ],
+ "layers": [
+  {
+   "ddd": 0,
+   "ind": 1,
+   "ty": 6,
+   "nm": "Beep",
+   "refId": "snd_0",
+   "sr": 1,
+   "ks": {
+    "o": {
+     "a": 0,
+     "k": 100
+    },
+    "r": {
+     "a": 0,
+     "k": 0
+    },
+    "p": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "a": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "s": {
+     "a": 0,
+     "k": [
+      100,
+      100,
+      100
+     ]
+    }
+   },
+   "ao": 0,
+   "ip": 10,
+   "op": 40,
+   "st": 10,
+   "bm": 0,
+   "au": {
+    "lv": {
+     "a": 0,
+     "k": [
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "ddd": 0,
+   "ind": 2,
+   "ty": 6,
+   "nm": "Late",
+   "refId": "snd_0",
+   "sr": 1,
+   "ks": {
+    "o": {
+     "a": 0,
+     "k": 100
+    },
+    "r": {
+     "a": 0,
+     "k": 0
+    },
+    "p": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "a": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "s": {
+     "a": 0,
+     "k": [
+      100,
+      100,
+      100
+     ]
+    }
+   },
+   "ao": 0,
+   "ip": 25,
+   "op": 55,
+   "st": 10,
+   "bm": 0,
+   "au": {
+    "lv": {
+     "a": 1,
+     "k": [
+      {
+       "t": 25,
+       "s": [
+        -6,
+        -12
+       ],
+       "i": {
+        "x": [
+         0.833
+        ],
+        "y": [
+         0.833
+        ]
+       },
+       "o": {
+        "x": [
+         0.167
+        ],
+        "y": [
+         0.167
+        ]
+       }
+      },
+      {
+       "t": 55,
+       "s": [
+        0,
+        0
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "ddd": 0,
+   "ind": 3,
+   "ty": 6,
+   "nm": "Quiet",
+   "refId": "snd_1",
+   "sr": 1,
+   "ks": {
+    "o": {
+     "a": 0,
+     "k": 100
+    },
+    "r": {
+     "a": 0,
+     "k": 0
+    },
+    "p": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "a": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "s": {
+     "a": 0,
+     "k": [
+      100,
+      100,
+      100
+     ]
+    }
+   },
+   "ao": 0,
+   "ip": 0,
+   "op": 100,
+   "st": 0,
+   "bm": 0,
+   "au": {
+    "lv": {
+     "a": 0,
+     "k": [
+      -20,
+      -20
+     ]
+    }
+   },
+   "hd": true,
+   "parent": 6,
+   "tt": 1,
+   "masksProperties": [
+    {
+     "mode": "a",
+     "inv": false,
+     "o": {
+      "a": 0,
+      "k": 100
+     },
+     "pt": {
+      "a": 0,
+      "k": {
+       "c": true,
+       "v": [
+        [
+         0,
+         0
+        ],
+        [
+         10,
+         0
+        ],
+        [
+         10,
+         10
+        ]
+       ],
+       "i": [
+        [
+         0,
+         0
+        ],
+        [
+         0,
+         0
+        ],
+        [
+         0,
+         0
+        ]
+       ],
+       "o": [
+        [
+         0,
+         0
+        ],
+        [
+         0,
+         0
+        ],
+        [
+         0,
+         0
+        ]
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "ddd": 0,
+   "ind": 4,
+   "ty": 6,
+   "nm": "External",
+   "refId": "snd_ext",
+   "sr": 1,
+   "ks": {
+    "o": {
+     "a": 0,
+     "k": 100
+    },
+    "r": {
+     "a": 0,
+     "k": 0
+    },
+    "p": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "a": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "s": {
+     "a": 0,
+     "k": [
+      100,
+      100,
+      100
+     ]
+    }
+   },
+   "ao": 0,
+   "ip": 10,
+   "op": 70,
+   "st": 10,
+   "bm": 0
+  },
+  {
+   "ddd": 0,
+   "ind": 5,
+   "ty": 6,
+   "nm": "From the web",
+   "refId": "snd_url",
+   "sr": 1,
+   "ks": {
+    "o": {
+     "a": 0,
+     "k": 100
+    },
+    "r": {
+     "a": 0,
+     "k": 0
+    },
+    "p": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "a": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "s": {
+     "a": 0,
+     "k": [
+      100,
+      100,
+      100
+     ]
+    }
+   },
+   "ao": 0,
+   "ip": 10,
+   "op": 70,
+   "st": 10,
+   "bm": 0
+  },
+  {
+   "ddd": 0,
+   "ind": 6,
+   "ty": 0,
+   "nm": "Nested",
+   "refId": "comp_0",
+   "sr": 1,
+   "ks": {
+    "o": {
+     "a": 0,
+     "k": 100
+    },
+    "r": {
+     "a": 0,
+     "k": 0
+    },
+    "p": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "a": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "s": {
+     "a": 0,
+     "k": [
+      100,
+      100,
+      100
+     ]
+    }
+   },
+   "ao": 0,
+   "w": 200,
+   "h": 100,
+   "ip": 10,
+   "op": 70,
+   "st": 15,
+   "bm": 0
+  },
+  {
+   "ddd": 0,
+   "ind": 7,
+   "ty": 4,
+   "nm": "Box",
+   "sr": 1,
+   "ks": {
+    "o": {
+     "a": 0,
+     "k": 100
+    },
+    "r": {
+     "a": 0,
+     "k": 0
+    },
+    "p": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "a": {
+     "a": 0,
+     "k": [
+      0,
+      0,
+      0
+     ]
+    },
+    "s": {
+     "a": 0,
+     "k": [
+      100,
+      100,
+      100
+     ]
+    }
+   },
+   "ao": 0,
+   "ip": 10,
+   "op": 70,
+   "st": 10,
+   "bm": 0,
+   "shapes": [
+    {
+     "ty": "rc",
+     "p": {
+      "a": 0,
+      "k": [
+       50,
+       50
+      ]
+     },
+     "s": {
+      "a": 0,
+      "k": [
+       40,
+       40
+      ]
+     },
+     "r": {
+      "a": 0,
+      "k": 0
+     }
+    },
+    {
+     "ty": "fl",
+     "c": {
+      "a": 0,
+      "k": [
+       1,
+       0,
+       0,
+       1
+      ]
+     },
+     "o": {
+      "a": 0,
+      "k": 100
+     }
+    }
+   ]
+  }
+ ]
+}
