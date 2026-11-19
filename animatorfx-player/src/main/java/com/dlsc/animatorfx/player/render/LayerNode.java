@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.player.render;
 
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Paint;
@@ -61,6 +62,7 @@ abstract class LayerNode {
             case ShapeLayer shape -> new ShapeNode(shape.id(), geometryOnly, clip);
             case TextLayer text -> new TextNode(text.id(), geometryOnly, clip);
             case ImageLayer image -> new ImageNode(image.id(), geometryOnly, clip);
+            case AudioLayer audio -> new AudioNode(audio.id(), geometryOnly, clip);
             default -> new ContainerNode(layer.id(), geometryOnly, clip);
         };
     }
@@ -93,7 +95,7 @@ abstract class LayerNode {
         last = state;
         if (!clip) {
             if (old == null || old.visible() != state.visible()) {
-                node.setVisible(state.visible());
+                node.setVisible(state.visible() && rendered());
             }
             if (old == null || !Arrays.equals(old.matrix(), state.matrix())) {
                 double[] m = state.matrix();
@@ -107,6 +109,11 @@ abstract class LayerNode {
             effects.apply(node, state.effects());
         }
         writeValues(old, state);
+    }
+
+    /** Whether the layer draws anything; the node of a layer that does not is never shown. */
+    boolean rendered() {
+        return true;
     }
 
     abstract void writeStatics(Layer layer, Assets assets);
@@ -149,6 +156,28 @@ abstract class LayerNode {
 
         ContainerNode(String id, boolean geometryOnly, boolean clip) {
             super(id, new Group(), geometryOnly, clip);
+        }
+
+        @Override
+        void writeStatics(Layer layer, Assets assets) {
+        }
+
+        @Override
+        void writeValues(LayerState old, LayerState state) {
+        }
+    }
+
+    /** An audio layer has an empty node that is never shown. */
+    private static final class AudioNode extends LayerNode {
+
+        AudioNode(String id, boolean geometryOnly, boolean clip) {
+            super(id, new Group(), geometryOnly, clip);
+            node.setVisible(false);
+        }
+
+        @Override
+        boolean rendered() {
+            return false;
         }
 
         @Override

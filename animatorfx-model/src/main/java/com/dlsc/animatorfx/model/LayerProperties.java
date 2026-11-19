@@ -13,7 +13,8 @@ import java.util.function.Function;
  * {@code geometry.size|cornerRadius|start|end|radius|outerRadius|innerRadius|path},
  * {@code fontSize}, {@code fill}, {@code stroke.paint|width|dashOffset},
  * {@code trim.start|end|offset}, {@code motionPath.progress} and
- * {@code effects[i].radius|color|offsetX|offsetY|spread|level}.
+ * {@code effects[i].radius|color|offsetX|offsetY|spread|level}. An audio layer has only
+ * {@code volume} and {@code balance}: the visual members of its base have no effect.
  */
 public final class LayerProperties {
 
@@ -22,7 +23,8 @@ public final class LayerProperties {
 
     /**
      * The properties that exist on the layer, in display order: transform, opacity, the
-     * properties of the layer type, stroke, trim, motion path, effects.
+     * properties of the layer type, stroke, trim, motion path, effects. For an audio layer:
+     * volume, balance.
      */
     public static List<PropertyRef> list(Layer layer) {
         return entries(layer).stream().map(Entry::ref).toList();
@@ -85,6 +87,11 @@ public final class LayerProperties {
 
     private static List<Entry> entries(Layer layer) {
         Entries out = new Entries();
+        if (layer instanceof AudioLayer audio) {
+            out.number("volume", "Volume", audio.volume(), audio::withVolume);
+            out.number("balance", "Balance", audio.balance(), audio::withBalance);
+            return out.list;
+        }
         LayerBase base = layer.base();
         Transform t = base.transform();
         Function<Transform, Layer> withTransform = v -> layer.withBase(base.withTransform(v));
@@ -118,6 +125,7 @@ public final class LayerProperties {
             }
             case SlotLayer slot -> {
             }
+            case AudioLayer audio -> throw new AssertionError(audio);
         }
 
         MotionPath motionPath = base.motionPath();

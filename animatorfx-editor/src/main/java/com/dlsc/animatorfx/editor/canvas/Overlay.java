@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.editor.canvas;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.Matrices;
 import com.dlsc.animatorfx.editor.ui.Formats;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.MotionPath;
@@ -344,7 +345,7 @@ public final class Overlay extends Pane {
 
     /** The motion path of the one selected layer, which lives in the coordinates of the layer's parent. */
     private void refreshMotionPath(Layer layer) {
-        MotionPath path = layer == null ? null : layer.base().motionPath();
+        MotionPath path = layer == null || layer instanceof AudioLayer ? null : layer.base().motionPath();
         boolean shown = path != null && path.path().contours().stream().anyMatch(c -> c.vertices().size() >= 2);
         motion.setVisible(shown);
         if (!shown) {

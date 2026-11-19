@@ -2,6 +2,7 @@ package com.dlsc.animatorfx.editor.canvas;
 
 import com.dlsc.animatorfx.editor.doc.Matrices;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.Layer;
@@ -182,10 +183,12 @@ public final class LayerGeometry {
 
     /**
      * The layer's bounds in view pixels as the four corners of its (rotated) box; empty for an
-     * unknown layer and for one that is not drawn at the current frame.
+     * unknown layer, for one that is not drawn at the current frame, and for an audio layer,
+     * which is never drawn.
      */
     public Optional<Quad> quad(String layerId) {
-        return layer(layerId).filter(this::isShown).map(l -> Quad.of(localBox(l), localToView(l)));
+        return layer(layerId).filter(l -> !(l instanceof AudioLayer)).filter(this::isShown)
+                .map(l -> Quad.of(localBox(l), localToView(l)));
     }
 
     /** The axis-aligned box around {@link #quad} in view pixels. */
@@ -225,11 +228,11 @@ public final class LayerGeometry {
     }
 
     /**
-     * Whether the layer can be picked on the canvas at the current frame.
+     * Whether the layer can be picked on the canvas at the current frame. An audio layer never can.
      */
     public boolean isSelectable(Layer layer) {
         LayerState state = state(layer.id());
-        return layer.base().visible() && !layer.base().locked() && (state == null || state.visible())
+        return !(layer instanceof AudioLayer) && layer.base().visible() && !layer.base().locked() && (state == null || state.visible())
                 && !maskIds().contains(layer.id());
     }
 

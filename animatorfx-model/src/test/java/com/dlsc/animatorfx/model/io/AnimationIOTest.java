@@ -42,6 +42,7 @@ class AnimationIOTest {
 
     private static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', 0, 1, 2, 3, (byte) 0xFF};
     private static final byte[] TTF = new byte[5000];
+    private static final byte[] WAV = {'R', 'I', 'F', 'F', 0, (byte) 0x80, (byte) 0xFF, 'W', 'A', 'V', 'E'};
 
     static {
         for (int i = 0; i < TTF.length; i++) {
@@ -55,7 +56,7 @@ class AnimationIOTest {
             + "\"assets\":[{\"id\":\"a\",\"kind\":\"image\",\"path\":\"assets/a.png\"}]}";
 
     private static AnimationFile kitchenSink() {
-        return new AnimationFile(KitchenSink.animation(), Map.of("img-1", PNG, "font-1", TTF));
+        return new AnimationFile(KitchenSink.animation(), Map.of("img-1", PNG, "font-1", TTF, "snd-1", WAV));
     }
 
     private static byte[] bytes(AnimationFile file) throws IOException {
@@ -102,13 +103,14 @@ class AnimationIOTest {
         assertEquals(file.assets().keySet(), back.assets().keySet());
         assertArrayEquals(PNG, back.assets().get("img-1"));
         assertArrayEquals(TTF, back.assets().get("font-1"));
+        assertArrayEquals(WAV, back.assets().get("snd-1"));
     }
 
     @Test
     void writesAnimationJsonFirstThenAssetsInDocumentOrder() throws Exception {
         byte[] zip = bytes(kitchenSink());
 
-        assertEquals(List.of("animation.json", "assets/img-1.png", "assets/font-1.ttf"), entryNames(zip));
+        assertEquals(List.of("animation.json", "assets/img-1.png", "assets/font-1.ttf", "assets/snd-1.wav"), entryNames(zip));
         try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zip))) {
             in.getNextEntry();
             String json = new String(in.readAllBytes(), StandardCharsets.UTF_8);
@@ -122,6 +124,7 @@ class AnimationIOTest {
         reordered.put("unused", new byte[]{1});
         reordered.put("font-1", TTF.clone());
         reordered.put("img-1", PNG.clone());
+        reordered.put("snd-1", WAV.clone());
 
         assertArrayEquals(bytes(kitchenSink()), bytes(new AnimationFile(KitchenSink.animation(), reordered)));
     }

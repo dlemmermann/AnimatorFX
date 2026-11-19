@@ -2,15 +2,19 @@ package com.dlsc.animatorfx.model.io;
 
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Keyframe;
 import com.dlsc.animatorfx.model.Layer;
+import com.dlsc.animatorfx.model.LayerBase;
 import com.dlsc.animatorfx.model.Paint;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.Vec2;
@@ -72,8 +76,9 @@ class AnimationJsonTest {
     void minimalDocumentLoadsWithDefaults() throws Exception {
         Animation a = parse("{\"formatVersion\":1,\"width\":100,\"height\":100,\"duration\":1,\"layers\":[]}");
 
-        assertEquals(new Animation(1, "Untitled", 100, 100, 60, 1, Rgba.TRANSPARENT, List.of(), List.of(), List.of()),
+        assertEquals(new Animation(2, "Untitled", 100, 100, 60, 1, Rgba.TRANSPARENT, List.of(), List.of(), List.of()),
                 a);
+        assertEquals(List.of(), a.cues());
     }
 
     @Test
@@ -124,13 +129,13 @@ class AnimationJsonTest {
     @Test
     void defaultValuedMembersAreOmittedOnWrite() {
         Animation a = Animation.create("Untitled", 100, 50, 3).withLayers(List.of(
-                new ShapeLayer(com.dlsc.animatorfx.model.LayerBase.create("", 3).withId("x"),
+                new ShapeLayer(LayerBase.create("", 3).withId("x"),
                         new Geometry.Rect(Animatable.of(new Vec2(4, 5)), Animatable.of(0.0)),
                         Animatable.of(new Paint.Solid(Rgba.BLACK)), null, null)));
 
         assertEquals("""
                 {
-                  "formatVersion": 1,
+                  "formatVersion": 2,
                   "width": 100,
                   "height": 50,
                   "duration": 3,
@@ -175,7 +180,7 @@ class AnimationJsonTest {
 
     @Test
     void newerFormatVersionIsRejected() {
-        assertRejected("formatVersion", "{\"formatVersion\":2,\"width\":1,\"height\":1,\"duration\":1}");
+        assertRejected("formatVersion", "{\"formatVersion\":3,\"width\":1,\"height\":1,\"duration\":1}");
         assertRejected("formatVersion", "{\"formatVersion\":0,\"width\":1,\"height\":1,\"duration\":1}");
         assertRejected("formatVersion", "{\"formatVersion\":1.5,\"width\":1,\"height\":1,\"duration\":1}");
         assertRejected("formatVersion", "{\"formatVersion\":\"1\",\"width\":1,\"height\":1,\"duration\":1}");
@@ -351,5 +356,197 @@ class AnimationJsonTest {
         assertTrue(contour.closed());
         assertEquals(Vec2.ZERO, contour.vertices().get(1).out());
         assertEquals(new Vec2(1, 0), contour.vertices().get(2).out());
+    }
+
+    private static final String AUDIO_ASSETS = "\"assets\":[{\"id\":\"snd\",\"kind\":\"audio\",\"path\":\"assets/snd.wav\"},"
+            + "{\"id\":\"img\",\"kind\":\"image\",\"path\":\"assets/img.png\"}]";
+
+    /** A document with an audio and an image asset, one audio layer with the given extra members, and cues. */
+    private static String audio(String layerMembers, String... cues) {
+        return doc(AUDIO_ASSETS + ",\"layers\":[{\"type\":\"audio\",\"asset\":\"snd\""
+                + (layerMembers.isEmpty() ? "" : "," + layerMembers) + "}],\"cues\":[" + String.join(",", cues) + "]");
+    }
+
+    @Test
+    void versionOneDocumentLoadsAsTheCurrentVersionWithoutCues() throws Exception {
+        Animation a = parse("{\"formatVersion\":1,\"name\":\"old\",\"width\":10,\"height\":20,\"duration\":3,"
+                + "\"layers\":[{" + SHAPE + ",\"id\":\"a\"}]}");
+
+        assertEquals(2, a.formatVersion());
+        assertEquals(Animation.CURRENT_FORMAT, a.formatVersion());
+        assertEquals(List.of(), a.cues());
+        assertEquals(parse("{\"formatVersion\":2,\"name\":\"old\",\"width\":10,\"height\":20,\"duration\":3,"
+                + "\"layers\":[{" + SHAPE + ",\"id\":\"a\"}]}"), a);
+    }
+
+    @Test
+    void migrationOfVersionOneIsTheIdentity() {
+        Map<String, Object> json = new HashMap<>(Map.of("formatVersion", 1.0));
+
+        assertSame(json, AnimationJson.migrate(json, 1));
+    }
+
+    @Test
+    void audioLayerAndCueTakeDefaults() throws Exception {
+        Animation a = parse(audio("", "{\"t\":0.5,\"asset\":\"snd\"}", "{\"t\":0,\"asset\":\"snd\"}"));
+
+        AudioLayer layer = (AudioLayer) a.layers().get(0);
+        assertEquals(new AudioLayer(layer.base(), "snd", 0, Animatable.of(1.0), Animatable.of(0.0), false, false),
+                layer);
+        assertEquals(0, layer.base().inPoint());
+        assertEquals(2, layer.base().outPoint());
+        SoundCue cue = a.cues().get(0);
+        assertEquals(new SoundCue(cue.id(), "", 0.5, "snd", 1, false), cue);
+        assertFalse(cue.id().isEmpty());
+        assertNotEquals(cue.id(), a.cues().get(1).id());
+    }
+
+    @Test
+    void minimalAudioLayerAndCueAreWrittenWithoutDefaults() {
+        Animation a = Animation.create("Untitled", 100, 50, 3)
+                .withAssets(List.of(new Asset("snd", Asset.Kind.AUDIO, "assets/snd.wav", "")))
+                .withLayers(List.of(AudioLayer.create("", "snd", 0, 3).withBase(LayerBase.create("", 3).withId("x"))))
+                .withCues(List.of(SoundCue.create("", 1.5, "snd").withId("c")));
+
+        assertEquals("""
+                {
+                  "formatVersion": 2,
+                  "width": 100,
+                  "height": 50,
+                  "duration": 3,
+                  "assets": [
+                    {
+                      "id": "snd",
+                      "kind": "audio",
+                      "path": "assets/snd.wav"
+                    }
+                  ],
+                  "layers": [
+                    {
+                      "type": "audio",
+                      "id": "x",
+                      "asset": "snd"
+                    }
+                  ],
+                  "cues": [
+                    {
+                      "id": "c",
+                      "t": 1.5,
+                      "asset": "snd"
+                    }
+                  ]
+                }""", JsonWriter.write(AnimationJson.toJson(a)));
+    }
+
+    @Test
+    void nonDefaultAudioMembersAreWritten() {
+        Animation a = Animation.create("Untitled", 100, 50, 3)
+                .withAssets(List.of(new Asset("snd", Asset.Kind.AUDIO, "assets/snd.wav", "")))
+                .withLayers(List.of(new AudioLayer(LayerBase.create("Music", 3).withId("x").withInPoint(1), "snd",
+                        0.25, Animatable.of(0.5), Animatable.of(-1.0), true, true)))
+                .withCues(List.of(new SoundCue("c", "Tick", 0, "snd", 0.75, true)));
+
+        String text = JsonWriter.write(AnimationJson.toJson(a));
+
+        assertTrue(text.contains("""
+                      "type": "audio",
+                      "id": "x",
+                      "name": "Music",
+                      "inPoint": 1,
+                      "asset": "snd",
+                      "clipOffset": 0.25,
+                      "volume": 0.5,
+                      "balance": -1,
+                      "loop": true,
+                      "muted": true
+                """), text);
+        assertTrue(text.contains("""
+                      "id": "c",
+                      "name": "Tick",
+                      "t": 0,
+                      "asset": "snd",
+                      "volume": 0.75,
+                      "muted": true
+                """), text);
+    }
+
+    @Test
+    void audioAssetReferencesAreValidated() {
+        assertRejected("layers[0].asset", doc(AUDIO_ASSETS + ",\"layers\":[{\"type\":\"audio\"}]"));
+        assertRejected("layers[0].asset", doc(AUDIO_ASSETS + ",\"layers\":[{\"type\":\"audio\",\"asset\":\"img\"}]"));
+        assertRejected("layers[0].asset", doc(AUDIO_ASSETS + ",\"layers\":[{\"type\":\"audio\",\"asset\":\"nope\"}]"));
+        assertRejected("layers[0].asset",
+                doc(AUDIO_ASSETS + ",\"layers\":[{\"type\":\"image\",\"asset\":\"snd\",\"width\":1,\"height\":1}]"));
+        assertRejected("layers[0].fontAsset",
+                doc(AUDIO_ASSETS + ",\"layers\":[{\"type\":\"text\",\"text\":\"\",\"fontAsset\":\"snd\"}]"));
+        assertRejected("cues[0].asset", audio("", "{\"t\":0,\"asset\":\"nope\"}"));
+        assertRejected("cues[1].asset", audio("", "{\"t\":0,\"asset\":\"snd\"}", "{\"t\":0,\"asset\":\"img\"}"));
+        assertRejected("cues[0].asset", audio("", "{\"t\":0}"));
+        assertRejected("cues[0].t", audio("", "{\"asset\":\"snd\"}"));
+    }
+
+    @Test
+    void audioValuesMustBeInRange() {
+        assertRejected("layers[0].clipOffset", audio("\"clipOffset\":-0.1"));
+        assertRejected("layers[0].volume", audio("\"volume\":1.5"));
+        assertRejected("layers[0].volume", audio("\"volume\":-0.1"));
+        assertRejected("layers[0].volume.keyframes[1].v",
+                audio("\"volume\":{\"keyframes\":[{\"t\":0,\"v\":1},{\"t\":1,\"v\":1.01}]}"));
+        assertRejected("layers[0].balance", audio("\"balance\":-2"));
+        assertRejected("layers[0].balance", audio("\"balance\":1.5"));
+        assertRejected("layers[0].balance.keyframes[0].v", audio("\"balance\":{\"keyframes\":[{\"t\":0,\"v\":2}]}"));
+        assertRejected("cues[0].t", audio("", "{\"t\":-1,\"asset\":\"snd\"}"));
+        assertRejected("cues[0].volume", audio("", "{\"t\":0,\"asset\":\"snd\",\"volume\":1.5}"));
+        assertRejected("cues[0].volume", audio("", "{\"t\":0,\"asset\":\"snd\",\"volume\":-1}"));
+        assertRejected("cues", doc("\"cues\":{}"));
+    }
+
+    @Test
+    void audioRangeLimitsAreInclusive() throws Exception {
+        Animation a = parse(audio("\"clipOffset\":0,\"volume\":{\"keyframes\":[{\"t\":0,\"v\":0},{\"t\":1,\"v\":1}]},"
+                + "\"balance\":-1", "{\"t\":0,\"asset\":\"snd\",\"volume\":0}"));
+
+        AudioLayer layer = (AudioLayer) a.layers().get(0);
+        assertEquals(0.5, layer.volume().at(0.5));
+        assertEquals(-1.0, layer.balance().at(0));
+        assertEquals(0, a.cues().get(0).volume());
+    }
+
+    @Test
+    void nonFiniteAudioNumbersInAHandBuiltTreeAreRejected() {
+        Map<String, Object> asset = Map.of("id", "snd", "kind", "audio", "path", "assets/snd.wav");
+        Map<String, Object> layer = new HashMap<>(Map.of("type", "audio", "asset", "snd", "clipOffset", Double.NaN));
+        Map<String, Object> cue = new HashMap<>(Map.of("t", Double.POSITIVE_INFINITY, "asset", "snd"));
+        Map<String, Object> json = new HashMap<>(Map.of("formatVersion", 2, "width", 1, "height", 1, "duration", 1,
+                "assets", List.of(asset), "layers", List.of(layer), "cues", List.of(cue)));
+
+        AnimationFormatException e = assertThrows(AnimationFormatException.class, () -> AnimationJson.fromJson(json));
+        assertEquals("layers[0].clipOffset", e.jsonPath());
+
+        layer.put("clipOffset", 0);
+        e = assertThrows(AnimationFormatException.class, () -> AnimationJson.fromJson(json));
+        assertEquals("cues[0].t", e.jsonPath());
+    }
+
+    @Test
+    void duplicateCueIdsAreRejected() {
+        assertRejected("cues[1].id",
+                audio("", "{\"id\":\"c\",\"t\":0,\"asset\":\"snd\"}", "{\"id\":\"c\",\"t\":1,\"asset\":\"snd\"}"));
+    }
+
+    @Test
+    void audioLayerCannotBeAMaskButMayCarryOne() throws Exception {
+        String audioLayer = "{\"type\":\"audio\",\"id\":\"sound\",\"asset\":\"snd\"%s}";
+
+        assertRejected("layers[0].mask.layer", doc(AUDIO_ASSETS + ",\"layers\":[{" + SHAPE
+                + ",\"mask\":{\"layer\":\"sound\",\"mode\":\"clip\"}}," + audioLayer.formatted("") + "]"));
+
+        Animation a = parse(doc(AUDIO_ASSETS + ",\"layers\":[{" + SHAPE + ",\"id\":\"shape\"},"
+                + audioLayer.formatted(",\"mask\":{\"layer\":\"shape\",\"mode\":\"clip\"},\"opacity\":0.5,"
+                + "\"transform\":{\"position\":[1,2]}") + "]"));
+        LayerBase base = a.layers().get(1).base();
+        assertEquals("shape", base.mask().layerId());
+        assertEquals(Animatable.of(0.5), base.opacity());
+        assertEquals(Transform.at(1, 2), base.transform());
     }
 }

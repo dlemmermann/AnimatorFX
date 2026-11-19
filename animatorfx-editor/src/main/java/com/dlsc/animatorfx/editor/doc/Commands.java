@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.editor.doc;
 import com.dlsc.animatorfx.editor.doc.Selection.KeyframeRef;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometries;
@@ -303,11 +304,14 @@ public final class Commands {
 
     /**
      * Whether a layer can be the mask of another: they are different children of the same parent,
-     * and the mask layer is not itself masked by the layer, directly or through other masks. A
-     * layer that masks is not drawn, so two layers that mask each other would both disappear.
+     * neither is an audio layer, and the mask layer is not itself masked by the layer, directly
+     * or through other masks. A layer that masks is not drawn, so two layers that mask each
+     * other would both disappear.
      */
     public static boolean canMask(Animation animation, String id, String maskLayerId) {
-        if (!areSiblings(animation, id, maskLayerId)) {
+        if (!areSiblings(animation, id, maskLayerId)
+                || Layers.find(animation, id).orElse(null) instanceof AudioLayer
+                || Layers.find(animation, maskLayerId).orElse(null) instanceof AudioLayer) {
             return false;
         }
         Set<String> seen = new HashSet<>();
@@ -724,8 +728,12 @@ public final class Commands {
 
     /**
      * A copy of the layer with its position, every position keyframe, and its motion path shifted.
+     * An audio layer, which is nowhere, is returned as it is.
      */
     public static Layer translated(Layer layer, Vec2 delta) {
+        if (layer instanceof AudioLayer) {
+            return layer;
+        }
         Transform transform = layer.base().transform();
         LayerBase base = layer.base().withTransform(
                 transform.withPosition(mapValues(transform.position(), p -> p.plus(delta))));

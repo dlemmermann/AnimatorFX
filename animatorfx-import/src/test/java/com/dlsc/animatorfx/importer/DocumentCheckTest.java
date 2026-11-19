@@ -2,6 +2,8 @@ package com.dlsc.animatorfx.importer;
 
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
@@ -198,5 +200,30 @@ class DocumentCheckTest {
         assertEquals(shared.id(), result.layers().get(1).base().mask().layerId());
         assertEquals(List.of("Layers with values that are not finite or too large were dropped (2 layers)"),
                 warnings.lines());
+    }
+
+    @Test
+    void audioLayersAreCheckedLikeOtherLeafLayers() throws IOException {
+        Asset sound = new Asset("snd", Asset.Kind.AUDIO, "assets/snd.wav", "snd.wav");
+        AudioLayer good = AudioLayer.create("good", "snd", 0, 1);
+        ShapeLayer shape = shape("shape");
+        Animation valid = document(good, shape).withAssets(List.of(sound));
+        Warnings warnings = new Warnings();
+        Animation same = DocumentCheck.repair(valid, warnings);
+        assertSame(valid, same);
+        ImportChecks.assertSavesAndRenders(new AnimationFile(same, Map.of("snd", new byte[]{1, 2, 3})));
+        assertEquals(List.of(), warnings.lines());
+
+        AudioLayer orphan = AudioLayer.create("orphan", "no-such-asset", 0, 1);
+        AudioLayer loud = AudioLayer.create("loud", "snd", 0, 1).withVolume(Animatable.of(2.0));
+        AudioLayer nan = AudioLayer.create("nan", "snd", 0, 1).withClipOffset(Double.NaN);
+        Animation result = DocumentCheck.repair(document(good, masked(shape, good.id()), orphan,
+                new GroupLayer(LayerBase.create("g", 1), List.of(loud, nan))).withAssets(List.of(sound)), warnings);
+        assertEquals(List.of("good", "shape", "g"), names(result.layers()));
+        assertNull(result.layers().get(1).base().mask());
+        assertEquals(List.of(), ((GroupLayer) result.layers().get(2)).children());
+        assertEquals(List.of("Layers with values that are not finite or too large were dropped (1 layer)",
+                "Layers that the document format does not accept were dropped (2 layers)",
+                "Masks that the document format does not accept were removed (1 layer)"), warnings.lines());
     }
 }

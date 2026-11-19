@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.model.io;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
@@ -19,6 +20,7 @@ import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.Stroke;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Transform;
@@ -60,8 +62,29 @@ final class AnimationJsonReader {
         List<Marker> markers = markers(root.elements("markers"));
         List<Asset> assets = assets(root.elements("assets"));
         List<Layer> layers = layers(root.elements("layers"), 1);
+        List<SoundCue> cues = cues(root.elements("cues"));
         return new Animation(Animation.CURRENT_FORMAT, name, width, height, frameRate, duration, background, markers,
-                assets, layers);
+                assets, layers, cues);
+    }
+
+    private List<SoundCue> cues(List<Node> nodes) throws AnimationFormatException {
+        Set<String> ids = new HashSet<>();
+        List<SoundCue> cues = new ArrayList<>();
+        for (Node node : nodes) {
+            Node idNode = node.get("id");
+            String id = idNode.isMissing() ? UUID.randomUUID().toString() : idNode.string();
+            if (!ids.add(id)) {
+                throw idNode.error("Duplicate cue id: " + id);
+            }
+            Node volume = node.get("volume");
+            cues.add(new SoundCue(id,
+                    node.get("name").string(""),
+                    notNegative(node.required("t")),
+                    assetId(node.required("asset"), Asset.Kind.AUDIO),
+                    volume.isMissing() ? Defaults.CUE_VOLUME : within(volume, 0, 1),
+                    node.get("muted").bool(false)));
+        }
+        return cues;
     }
 
     private List<Marker> markers(List<Node> nodes) throws AnimationFormatException {
@@ -98,11 +121,11 @@ final class AnimationJsonReader {
             throw nodes.get(0).error("Layers are nested deeper than " + AnimationJson.MAX_LAYER_DEPTH + " levels");
         }
         List<Layer> layers = new ArrayList<>();
-        Set<String> ids = new HashSet<>();
+        Map<String, Layer> byId = new HashMap<>();
         for (Node node : nodes) {
             Layer layer = layer(node, depth);
             layers.add(layer);
-            ids.add(layer.id());
+            byId.put(layer.id(), layer);
         }
         // A mask is another layer of the same parent, which may come later in the list.
         for (int i = 0; i < layers.size(); i++) {
@@ -115,8 +138,12 @@ final class AnimationJsonReader {
             if (mask.layerId().equals(layer.id())) {
                 throw reference.error("A layer cannot mask itself");
             }
-            if (!ids.contains(mask.layerId())) {
+            Layer maskLayer = byId.get(mask.layerId());
+            if (maskLayer == null) {
                 throw reference.error("No layer with id " + mask.layerId() + " in the same parent");
+            }
+            if (maskLayer instanceof AudioLayer) {
+                throw reference.error("An audio layer cannot be used as a mask: " + mask.layerId());
             }
         }
         return layers;
@@ -133,6 +160,7 @@ final class AnimationJsonReader {
                     node.required("width").number(), node.required("height").number());
             case "group" -> new GroupLayer(base, layers(node.elements("children"), depth + 1));
             case "slot" -> slot(node, base);
+            case "audio" -> audio(node, base);
             default -> throw type.error("Unknown layer type: " + type.string());
         };
     }
@@ -180,13 +208,46 @@ final class AnimationJsonReader {
                 rest.isMissing() ? base.transform() : transform(rest));
     }
 
+    private AudioLayer audio(Node node, LayerBase base) throws AnimationFormatException {
+        Node clipOffset = node.get("clipOffset");
+        Node volume = node.get("volume");
+        Node balance = node.get("balance");
+        return new AudioLayer(base,
+                assetId(node.required("asset"), Asset.Kind.AUDIO),
+                clipOffset.isMissing() ? 0 : notNegative(clipOffset),
+                volume.isMissing() ? Defaults.VOLUME : animatable(volume, v -> within(v, 0, 1)),
+                balance.isMissing() ? Defaults.ZERO : animatable(balance, v -> within(v, -1, 1)),
+                node.get("loop").bool(false),
+                node.get("muted").bool(false));
+    }
+
+    private static double notNegative(Node node) throws AnimationFormatException {
+        double value = node.number();
+        if (value < 0) {
+            throw node.error("Must not be negative but is " + value);
+        }
+        return value;
+    }
+
+    private static double within(Node node, double min, double max) throws AnimationFormatException {
+        double value = node.number();
+        if (value < min || value > max) {
+            throw node.error("Must be within " + min + ".." + max + " but is " + value);
+        }
+        return value;
+    }
+
     private String assetId(Node node, Asset.Kind expected) throws AnimationFormatException {
         Asset.Kind kind = assetKinds.get(node.string());
         if (kind == null) {
             throw node.error("No asset with id " + node.string());
         }
         if (kind != expected) {
-            throw node.error("Asset " + node.string() + " is not " + (expected == Asset.Kind.IMAGE ? "an image" : "a font"));
+            throw node.error("Asset " + node.string() + " is not " + switch (expected) {
+                case IMAGE -> "an image";
+                case FONT -> "a font";
+                case AUDIO -> "an audio file";
+            });
         }
         return node.string();
     }

@@ -2,6 +2,7 @@ package com.dlsc.animatorfx.player;
 
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometries;
 import com.dlsc.animatorfx.model.Geometry;
@@ -140,7 +141,9 @@ public final class Evaluator {
 
         LayerPlan(Layer layer) {
             id = layer.id();
-            base = layer.base();
+            // an audio layer renders nothing: the visual members of its base have no effect
+            base = layer instanceof AudioLayer ? layer.base().withTransform(Transform.IDENTITY)
+                    .withOpacity(Animatable.of(1.0)).withEffects(List.of()).withMotionPath(null) : layer.base();
             MotionPath motionPath = base.motionPath();
             motion = motionPath == null ? null : new PathMeasure(motionPath.path());
 

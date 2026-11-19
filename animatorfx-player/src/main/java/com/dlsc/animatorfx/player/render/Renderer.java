@@ -1,6 +1,7 @@
 package com.dlsc.animatorfx.player.render;
 
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.Layer;
@@ -240,9 +241,9 @@ public final class Renderer {
             Layer mask = maskOf(layer, byId);
             if (mask != null) {
                 maskIds.add(mask.id());
-            } else if (layer.base().mask() != null) {
-                LOG.log(System.Logger.Level.WARNING, "Layer ''{0}'' is masked by ''{1}'', which is not a sibling"
-                        + " layer; the mask is ignored", layer.id(), layer.base().mask().layerId());
+            } else if (layer.base().mask() != null && !(layer instanceof AudioLayer)) {
+                LOG.log(System.Logger.Level.WARNING, "Layer ''{0}'' is masked by ''{1}'', which is not a visual"
+                        + " sibling layer; the mask is ignored", layer.id(), layer.base().mask().layerId());
             }
         }
         for (Layer layer : siblings) {
@@ -254,10 +255,11 @@ public final class Renderer {
 
     private static Layer maskOf(Layer layer, Map<String, Layer> siblings) {
         Mask mask = layer.base().mask();
-        if (mask == null || mask.layerId().equals(layer.id())) {
+        if (mask == null || mask.layerId().equals(layer.id()) || layer instanceof AudioLayer) {
             return null;
         }
-        return siblings.get(mask.layerId());
+        // an audio layer has nothing to mask with
+        return siblings.get(mask.layerId()) instanceof AudioLayer ? null : siblings.get(mask.layerId());
     }
 
     private LayerNode build(Layer layer, Map<String, Layer> siblings, boolean geometryOnly, boolean clip,

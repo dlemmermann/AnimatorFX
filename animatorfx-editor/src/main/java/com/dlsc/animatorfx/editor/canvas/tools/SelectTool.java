@@ -15,6 +15,7 @@ import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.Matrices;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
@@ -266,14 +267,17 @@ public final class SelectTool implements Tool {
         }
     }
 
-    /** The selected layers that can move: unlocked, and not inside a group that moves anyway. */
+    /**
+     * The selected layers that can move: unlocked, not inside a group that moves anyway, and not
+     * an audio layer, which is nowhere.
+     */
     private List<Layer> movable() {
         Animation animation = doc().getAnimation();
         Set<String> selected = new HashSet<>(selection());
         List<Layer> result = new ArrayList<>();
         for (String id : selection()) {
             Layer layer = Layers.find(animation, id).orElse(null);
-            if (layer == null || layer.base().locked()) {
+            if (layer == null || layer.base().locked() || layer instanceof AudioLayer) {
                 continue;
             }
             boolean inside = false;

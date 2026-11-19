@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.player.render;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.ImageLayer;
@@ -634,5 +635,32 @@ class RendererTest {
 
         assertTrue(renderer.getRoot().getChildren().isEmpty());
         assertNull(renderer.getLayerNode("r"));
+    }
+
+    private static AudioLayer audio(String id) {
+        return new AudioLayer(base(id).withTransform(Transform.at(50, 60)), "snd", 0, Animatable.of(1.0),
+                Animatable.of(0.0), false, false);
+    }
+
+    @Test
+    void audioLayerHasAnEmptyInvisibleNode() {
+        show(doc(rect("r", 10, 10), audio("snd")), 0);
+
+        Group node = assertInstanceOf(Group.class, renderer.getLayerNode("snd"));
+        assertTrue(node.getChildren().isEmpty());
+        assertFalse(node.isVisible());
+        assertTrue(node.getBoundsInParent().isEmpty());
+        assertTrue(renderer.getLayerNode("r").isVisible());
+    }
+
+    @Test
+    void audioLayerNeitherMasksNorIsMasked() {
+        show(doc(masked(rect("r", 10, 10), "snd", Mask.Mode.ALPHA), masked(audio("snd"), "m", Mask.Mode.CLIP),
+                rect("m", 5, 5)), 0);
+
+        assertNull(renderer.getLayerNode("r").getClip());
+        assertNull(renderer.getLayerNode("snd").getClip());
+        assertTrue(renderer.getRoot().getChildren().contains(renderer.getLayerNode("m")), "m is rendered itself");
+        assertTrue(renderer.getLayerNode("r").isVisible());
     }
 }

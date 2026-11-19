@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.model.io;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
@@ -18,6 +19,7 @@ import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.Stroke;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Transform;
@@ -37,11 +39,17 @@ final class KitchenSink {
     static Animation animation() {
         List<Asset> assets = List.of(
                 new Asset("img-1", Asset.Kind.IMAGE, "assets/img-1.png", "logo.png"),
-                new Asset("font-1", Asset.Kind.FONT, "assets/font-1.ttf", ""));
+                new Asset("font-1", Asset.Kind.FONT, "assets/font-1.ttf", ""),
+                new Asset("snd-1", Asset.Kind.AUDIO, "assets/snd-1.wav", "chime.wav"));
         List<Marker> markers = List.of(new Marker("intro", 0, 1.5), new Marker("loop", 1.5, 4));
+        List<SoundCue> cues = List.of(
+                new SoundCue("cue-1", "tick", 1.5, "snd-1", 0.25, true),
+                new SoundCue("cue-2", "", 0, "snd-1", 1, false));
         return new Animation(Animation.CURRENT_FORMAT, "Kitchen \"sink\" ✓", 640, 360.5, 30, DURATION,
                 Rgba.parse("#102030FF"), markers, assets,
-                List.of(rect(), ellipse(), line(), polygon(), star(), path(), text(), image(), group(), slot()));
+                List.of(rect(), ellipse(), line(), polygon(), star(), path(), text(), image(), group(), slot(),
+                        audio()),
+                cues);
     }
 
     @SafeVarargs
@@ -168,6 +176,12 @@ final class KitchenSink {
                         TextLayer.Weight.NORMAL, false, TextLayer.Align.LEFT,
                         Animatable.of(new Paint.Solid(Rgba.BLACK)), null)));
         return new GroupLayer(base("group").withTransform(Transform.at(20, 30)), List.of(child, slot, nested));
+    }
+
+    private static AudioLayer audio() {
+        return new AudioLayer(base("audio").withInPoint(0.5).withOutPoint(3), "snd-1", 0.75,
+                keys(key("v0", 0.5, 0.0, Easing.LINEAR), key("v1", 1, 1.0, Easing.HOLD)), Animatable.of(-0.5), true,
+                true);
     }
 
     private static SlotLayer slot() {

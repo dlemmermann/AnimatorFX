@@ -5,9 +5,11 @@ import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Vec2;
 import java.io.ByteArrayInputStream;
@@ -210,7 +212,7 @@ public final class AssetsView extends VBox {
         setMessage(problems.isEmpty() ? null : String.join("\n", problems));
     }
 
-    /** Removes an asset as one undo step; refuses, with a message, while layers use it. */
+    /** Removes an asset as one undo step; refuses, with a message, while layers or cues use it. */
     public void remove(String assetId) {
         EditorDocument doc = getDocument();
         Asset asset = doc == null ? null
@@ -220,7 +222,9 @@ public final class AssetsView extends VBox {
         }
         int users = usage(doc.getAnimation(), assetId);
         if (users > 0) {
-            setMessage("“" + asset.name() + "” is used by " + users + (users == 1 ? " layer" : " layers")
+            boolean cues = doc.getAnimation().cues().stream().anyMatch(cue -> cue.assetId().equals(assetId));
+            String what = users == 1 ? (cues ? " cue" : " layer") : (cues ? " layers and cues" : " layers");
+            setMessage("“" + asset.name() + "” is used by " + users + what
                     + ". Delete or reassign " + (users == 1 ? "it" : "them") + " first.");
             return;
         }
@@ -245,12 +249,18 @@ public final class AssetsView extends VBox {
         return Optional.of(layer.id());
     }
 
-    /** How many layers use the asset. */
+    /** How many layers and sound cues use the asset. */
     public static int usage(Animation animation, String assetId) {
         int count = 0;
         for (Layer layer : Layers.flatten(animation)) {
             if (layer instanceof ImageLayer image && image.assetId().equals(assetId)
-                    || layer instanceof TextLayer text && assetId.equals(text.fontAssetId())) {
+                    || layer instanceof TextLayer text && assetId.equals(text.fontAssetId())
+                    || layer instanceof AudioLayer audio && audio.assetId().equals(assetId)) {
+                count++;
+            }
+        }
+        for (SoundCue cue : animation.cues()) {
+            if (cue.assetId().equals(assetId)) {
                 count++;
             }
         }
@@ -294,7 +304,12 @@ public final class AssetsView extends VBox {
         byte[] bytes = doc.getFileContent().assets().get(asset.id());
         int users = usage(doc.getAnimation(), asset.id());
         String size = bytes == null ? "missing" : String.format(Locale.ROOT, "%.1f KB", bytes.length / 1024.0);
-        return (asset.kind() == Asset.Kind.IMAGE ? "Image" : "Font") + " · " + size + " · "
+        String kind = switch (asset.kind()) {
+            case IMAGE -> "Image";
+            case FONT -> "Font";
+            case AUDIO -> "Audio";
+        };
+        return kind + " · " + size + " · "
                 + (users == 0 ? "unused" : "used " + users + "×");
     }
 
@@ -312,7 +327,7 @@ public final class AssetsView extends VBox {
                 view.setFitHeight(THUMBNAIL - 4);
                 thumbnail.getChildren().add(view);
             }
-        } else {
+        } else if (asset.kind() == Asset.Kind.FONT) {
             Label sample = new Label("Aa");
             sample.getStyleClass().add("font-sample");
             Font font = fonts.computeIfAbsent(asset.id(), id -> {

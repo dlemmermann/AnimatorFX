@@ -2,6 +2,7 @@ package com.dlsc.animatorfx.player;
 
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.LayerBase;
@@ -238,5 +239,30 @@ class EvaluatorTest {
         Animation animation = doc(rect("r", 10, 10), rect("r", 20, 20));
 
         assertThrows(IllegalArgumentException.class, () -> Evaluator.sample(animation, 0));
+    }
+
+    @Test
+    void audioLayerHasAStateWithoutGeometryThatIgnoresItsVisualMembers() {
+        LayerBase base = base("snd").withInPoint(0.5).withOutPoint(1.5)
+                .withTransform(Transform.at(30, 40).withRotation(keys(0, 0.0, 2, 90.0)))
+                .withOpacity(keys(0, 0.0, 2, 1.0))
+                .withEffects(List.of(new Effect.Blur(Animatable.of(4.0))))
+                .withMotionPath(new MotionPath(line(0, 0, 100, 0), keys(0, 0.0, 2, 1.0), true));
+        Animation animation = doc(new AudioLayer(base, "asset", 0, keys(0, 0.0, 2, 1.0), Animatable.of(0.0), false,
+                false));
+
+        LayerState state = Evaluator.sample(animation, 1).get("snd");
+
+        assertTrue(state.visible());
+        assertArrayEquals(new double[]{1, 0, 0, 0, 1, 0}, state.matrix(), EPS);
+        assertEquals(1, state.opacity());
+        assertNull(state.fillPath());
+        assertNull(state.strokePath());
+        assertNull(state.fill());
+        assertNull(state.strokePaint());
+        assertEquals(List.of(), state.effects());
+        assertEquals(Vec2.ZERO, state.position());
+        assertFalse(Evaluator.sample(animation, 0.25).get("snd").visible());
+        assertFalse(Evaluator.sample(animation, 1.5).get("snd").visible());
     }
 }

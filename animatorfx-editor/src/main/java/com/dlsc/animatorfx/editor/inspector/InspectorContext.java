@@ -7,6 +7,7 @@ import com.dlsc.animatorfx.editor.doc.Selection.KeyframeRef;
 import com.dlsc.animatorfx.editor.inspector.fields.KeyframeToggle;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Keyframe;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.LayerProperties;
@@ -75,6 +76,12 @@ public final class InspectorContext {
     public boolean allLayers(Class<? extends Layer> type) {
         List<Layer> all = layers();
         return !all.isEmpty() && all.stream().allMatch(type::isInstance);
+    }
+
+    /** Whether there is a selection and every selected layer is drawn, that is none is an audio layer. */
+    public boolean allVisual() {
+        List<Layer> all = layers();
+        return !all.isEmpty() && all.stream().noneMatch(AudioLayer.class::isInstance);
     }
 
     /** The property of a layer, when the layer has it. */

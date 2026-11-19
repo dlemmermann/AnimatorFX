@@ -12,6 +12,7 @@ import com.dlsc.animatorfx.editor.timeline.TimelineRow.LayerRow;
 import com.dlsc.animatorfx.editor.timeline.TimelineRow.PropertyRow;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import java.util.HashSet;
 import java.util.Set;
 import com.dlsc.animatorfx.model.Layers;
@@ -538,6 +539,7 @@ public final class LayerTreeColumn extends Region {
             case ImageLayer image -> Material2OutlinedAL.IMAGE;
             case GroupLayer group -> expanded ? Material2OutlinedAL.FOLDER_OPEN : Material2OutlinedAL.FOLDER;
             case SlotLayer slot -> Material2OutlinedMZ.WIDGETS;
+            case AudioLayer audio -> Material2OutlinedMZ.VOLUME_UP;
         };
     }
 
