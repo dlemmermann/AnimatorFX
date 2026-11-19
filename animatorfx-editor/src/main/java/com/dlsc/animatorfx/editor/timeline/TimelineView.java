@@ -1,6 +1,7 @@
 package com.dlsc.animatorfx.editor.timeline;
 
 import com.dlsc.animatorfx.editor.audio.AudioImport;
+import com.dlsc.animatorfx.editor.audio.AudioInfo;
 import com.dlsc.animatorfx.editor.audio.Waveform;
 import com.dlsc.animatorfx.editor.audio.WaveformCache;
 import com.dlsc.animatorfx.editor.doc.Commands;
@@ -281,6 +282,23 @@ public final class TimelineView extends Region {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * The length of the sound of an audio asset in seconds, as soon as it is known, which is
+     * before its waveform is; NaN until then.
+     */
+    public double clipDurationOf(String assetId) {
+        EditorDocument doc = getDocument();
+        if (doc != null) {
+            for (Asset asset : doc.getAnimation().assets()) {
+                if (asset.id().equals(assetId) && asset.kind() == Asset.Kind.AUDIO) {
+                    double known = AudioImport.info(doc, asset).map(AudioInfo::duration).orElse(Double.NaN);
+                    return known > 0 ? known : AudioImport.waveform(doc, asset).map(Waveform::duration).orElse(Double.NaN);
+                }
+            }
+        }
+        return Double.NaN;
     }
 
     /** Receives messages for the user, such as why layers could not be dropped into a group. */

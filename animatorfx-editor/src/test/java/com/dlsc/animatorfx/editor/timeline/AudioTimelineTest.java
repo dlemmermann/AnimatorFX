@@ -194,6 +194,41 @@ class AudioTimelineTest extends EditorUiTest {
     }
 
     @Test
+    void aSoundWhoseWaveformIsNotThereYetStillShowsWhereItEndsAndSlidesWithinItsLength() throws Exception {
+        java.nio.file.Path longSound = dir.resolve("long.m4a");
+        java.nio.file.Path shortSound = dir.resolve("short.m4a");
+        org.junit.jupiter.api.Assumptions.assumeTrue(TestSounds.aac(longSound, 9) && TestSounds.aac(shortSound, 0.5),
+                "afconvert is not available");
+        // the long sound keeps the one-at-a-time analysis busy: the short one has a length but no waveform
+        run(() -> window.getImportActions().importAudio(doc, longSound));
+        run(() -> {
+            doc.setPlayhead(0.5);
+            window.getImportActions().importAudio(doc, shortSound);
+        });
+        fx(() -> window.getImportActions().whenAudioImported()).get(30, TimeUnit.SECONDS);
+        WaitForAsyncUtils.waitForFxEvents();
+        AudioLayer imported = (AudioLayer) doc.getAnimation().layers().get(doc.getAnimation().layers().size() - 1);
+        assertEquals("short", imported.name());
+        execute(Commands.updateLayer("Trim Layer", imported.id(), l -> l.withBase(l.base().withOutPoint(2.5))));
+        layout();
+        assertFalse(fx(() -> timeline.waveformOf(imported.assetId()).isPresent()), "no waveform yet");
+        assertEquals(0.5, fx(() -> timeline.clipDurationOf(imported.assetId())), 0.12);
+
+        // the bar from 0.5 to 2.5 has sound for half a second: after that it looks different
+        WritableImage image = fx(() -> tracks.snapshot(new SnapshotParameters(), null));
+        int row = fx(() -> tracks.rowOf(imported.id()));
+        int middle = (int) (fx(() -> timeline.rowTop(row)) + TimelineView.ROW_HEIGHT / 2);
+        Color sounding = image.getPixelReader().getColor((int) x(0.75), middle);
+        Color empty = image.getPixelReader().getColor((int) x(2.0), middle - 3);
+        assertFalse(sounding.equals(empty), "the part without sound is marked: " + sounding + " / " + empty);
+
+        double rowY = fx(() -> tracks.rowCenter(row));
+        drag(tracks, x(2.4), rowY, x(0.6), rowY, Keys.ALT);
+        AudioLayer slid = (AudioLayer) layer(imported.id());
+        assertTrue(slid.clipOffset() > 0.3 && slid.clipOffset() <= 0.62, "offset " + slid.clipOffset());
+    }
+
+    @Test
     void thePainterDrawsOneColumnPerPixelAsHighAsItsLoudestPeak() {
         float[] peaks = new float[200];
         for (int i = 0; i < 100; i++) {

@@ -281,51 +281,56 @@ public final class TrackPane extends Region {
         g.setFill(palette.get(Tone.AUDIO_BAR));
         g.fillRoundRect(x1, top, x2 - x1, barHeight, 3, 3);
 
+        // where the sound lies follows from its length, which is known before its waveform is
         Waveform waveform = timeline.waveformOf(layer.assetId()).orElse(null);
+        double clip = timeline.clipDurationOf(layer.assetId());
+        double in = layer.base().inPoint();
+        AudioClips.Layout layout = AudioClips.layout(in, Math.max(in, layer.base().outPoint()), layer.clipOffset(),
+                clip, layer.loop());
+        double soundEnd = Math.clamp(Math.round(scale.toX(layout.soundEnd())), x1, x2);
         g.save();
         g.beginPath();
         g.rect(x1 + 1, top + 1, x2 - x1 - 2, barHeight - 2);
         g.clip();
-        if (waveform != null) {
-            double in = layer.base().inPoint();
-            AudioClips.Layout layout = AudioClips.layout(in, Math.max(in, layer.base().outPoint()), layer.clipOffset(),
-                    waveform.duration(), layer.loop());
-            double soundEnd = Math.round(scale.toX(layout.soundEnd()));
-            if (soundEnd < x2 - 1) {
-                // no sound from here on
-                double from = Math.max(x1, soundEnd);
-                g.setFill(palette.get(Tone.PANEL, 0.6));
-                g.fillRect(from, top, x2 - from, barHeight);
-                g.setStroke(palette.get(Tone.AUDIO, 0.3));
-                for (double hx = from - barHeight + (HATCH - (from % HATCH)); hx < x2; hx += HATCH) {
-                    if (hx + barHeight >= 0 && hx <= width) {
-                        g.strokeLine(hx, top + barHeight, hx + barHeight, top);
-                    }
+        if (soundEnd < x2 - 1) {
+            // no sound from here on
+            g.setFill(palette.get(Tone.PANEL, 0.6));
+            g.fillRect(soundEnd, top, x2 - soundEnd, barHeight);
+            g.setStroke(palette.get(Tone.AUDIO, 0.3));
+            for (double hx = soundEnd - barHeight + (HATCH - (soundEnd % HATCH)); hx < x2; hx += HATCH) {
+                if (hx + barHeight >= 0 && hx <= width) {
+                    g.strokeLine(hx, top + barHeight, hx + barHeight, top);
                 }
-                g.setStroke(palette.get(Tone.AUDIO, 0.7));
-                g.strokeLine(from + 0.5, top, from + 0.5, top + barHeight);
             }
+            g.setStroke(palette.get(Tone.AUDIO, 0.7));
+            g.strokeLine(soundEnd + 0.5, top, soundEnd + 0.5, top + barHeight);
+        }
+        if (waveform != null) {
             WaveformPainter.paint(g, waveform, scale, in, layer.clipOffset(), layer.loop(), x1, x2, top + 1.5,
                     barHeight - 3, width, palette.get(Tone.WAVE, audible ? 1 : 0.35));
-            if (layer.loop() && scale.toDuration(1) * 6 < waveform.duration()) {
-                g.setStroke(palette.get(Tone.FG, 0.55));
-                g.setLineDashes(2, 2);
-                for (double time : layout.loopBoundaries()) {
-                    double x = Math.round(scale.toX(time)) + 0.5;
-                    if (x >= 0 && x <= width) {
-                        g.strokeLine(x, top, x, top + barHeight);
-                    }
-                }
-                g.setLineDashes();
-            }
         }
-        if (layer.volume().isAnimated()) {
-            // the volume envelope: full volume at the top of the bar
+        if (layer.loop() && clip > 0 && scale.toDuration(1) * 6 < clip) {
+            g.setStroke(palette.get(Tone.FG, 0.55));
+            g.setLineDashes(2, 2);
+            for (double time : layout.loopBoundaries()) {
+                double x = Math.round(scale.toX(time)) + 0.5;
+                if (x >= 0 && x <= width) {
+                    g.strokeLine(x, top, x, top + barHeight);
+                }
+            }
+            g.setLineDashes();
+        }
+        if (layer.volume().isAnimated() && soundEnd > x1 + 1) {
+            // the volume envelope, where there is sound: full volume at the top of the bar
+            g.save();
+            g.beginPath();
+            g.rect(x1, top, soundEnd - x1, barHeight);
+            g.clip();
             g.setStroke(palette.get(Tone.KEY, audible ? 0.95 : 0.45));
             g.beginPath();
             double room = barHeight - 3;
             int from = (int) Math.max(x1, 0);
-            int to = (int) Math.min(x2, width);
+            int to = (int) Math.min(soundEnd + 2, width);
             for (int x = from; x <= to; x += 2) {
                 double volume = Math.clamp(layer.volume().at(scale.toTime(x)), 0, 1);
                 double vy = top + 1.5 + (1 - volume) * room;
@@ -336,6 +341,7 @@ public final class TrackPane extends Region {
                 }
             }
             g.stroke();
+            g.restore();
         }
         g.restore();
 

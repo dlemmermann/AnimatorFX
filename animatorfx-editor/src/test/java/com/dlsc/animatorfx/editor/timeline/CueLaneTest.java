@@ -111,6 +111,7 @@ class CueLaneTest extends EditorUiTest {
         playhead(2.0);
 
         run(() -> timeline.getLayerColumn().getCueMenu().getItems().get(0).fire());
+        fx(() -> window.getImportActions().whenAudioImported()).get(10, java.util.concurrent.TimeUnit.SECONDS);
         WaitForAsyncUtils.waitForFxEvents();
 
         assertEquals(1, doc.getAnimation().assets().size());

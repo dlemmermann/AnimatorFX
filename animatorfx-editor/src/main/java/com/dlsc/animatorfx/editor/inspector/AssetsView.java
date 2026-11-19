@@ -79,6 +79,9 @@ public final class AssetsView extends VBox {
     private final Map<String, Font> fonts = new HashMap<>();
     private final Map<String, Label> details = new HashMap<>();
     private List<Asset> listed;
+    /** The problems of the files of the last Add; sounds report theirs a moment later. */
+    private List<String> currentProblems = new ArrayList<>();
+    private final List<String> reading = new ArrayList<>();
     private Function<Window, List<Path>> filePicker = AssetsView::chooseFiles;
     private final InvalidationListener update = obs -> update();
     private final InvalidationListener soundArrived = obs -> {
@@ -199,12 +202,13 @@ public final class AssetsView extends VBox {
             return;
         }
         List<String> problems = new ArrayList<>();
+        currentProblems = problems;
         for (Path file : files) {
             String name = file.getFileName().toString();
             int dot = name.lastIndexOf('.');
             String extension = dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
             if (AudioImport.isAudio(file)) {
-                addSound(doc, file);
+                addSound(doc, file, problems);
                 continue;
             }
             Asset.Kind kind = switch (extension) {
@@ -232,23 +236,38 @@ public final class AssetsView extends VBox {
             String id = UUID.randomUUID().toString();
             doc.addAsset(new Asset(id, kind, "assets/" + id + "." + extension, name), bytes);
         }
-        setMessage(problems.isEmpty() ? null : String.join("\n", problems));
+        showProblems(problems);
     }
 
-    /** A sound is checked by the media stack, which may answer a moment later. */
-    private void addSound(EditorDocument doc, Path file) {
+    /** A sound is read and checked in the background; what is wrong with it joins the other problems. */
+    private void addSound(EditorDocument doc, Path file, List<String> problems) {
         AudioImport.read(file, text -> {
-            setMessage(text);
-            return () -> setMessage(null);
+            reading.add(text);
+            showProblems(problems);
+            return () -> {
+                reading.remove(text);
+                showProblems(problems);
+            };
         }).whenComplete((sound, error) -> {
             if (error != null) {
                 Throwable cause = error.getCause() != null ? error.getCause() : error;
-                setMessage("Could not add " + file.getFileName() + ": "
+                problems.add("Could not add " + file.getFileName() + ": "
                         + (cause instanceof AudioImport.Refused ? cause.getMessage() : "it cannot be read."));
             } else if (getDocument() == doc) {
                 AudioImport.addAsset(doc, sound);
             }
+            showProblems(problems);
         });
+    }
+
+    /** Shows what is being read and the problems of the files added last, unless a later Add replaced them. */
+    private void showProblems(List<String> problems) {
+        if (problems != currentProblems) {
+            return;
+        }
+        List<String> lines = new ArrayList<>(reading);
+        lines.addAll(problems);
+        setMessage(lines.isEmpty() ? null : String.join("\n", lines));
     }
 
     /** Adds an audio layer for an audio asset at the playhead, on top, and selects it. */

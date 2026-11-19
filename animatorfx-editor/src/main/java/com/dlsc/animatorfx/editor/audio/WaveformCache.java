@@ -2,13 +2,14 @@ package com.dlsc.animatorfx.editor.audio;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -24,18 +25,45 @@ import javafx.beans.property.ReadOnlyIntegerWrapper;
  * document holds for it), so nothing here belongs to a document or its undo history, and an
  * entry goes away when no document holds the content any more.
  *
- * <p>WAV and AIFF are decoded exactly on a background thread ({@link WaveformDecoder}); other
- * formats are analysed one at a time through JavaFX media ({@link SpectrumAnalyser}), which is
- * approximate, slower, and fills in while it runs. Use on the JavaFX application thread; results
+ * <p>The info of a sound ({@link AudioProbe}) never waits for a waveform. WAV and AIFF are
+ * decoded exactly on a background thread ({@link WaveformDecoder}); other formats are analysed
+ * one at a time through JavaFX media ({@link SpectrumAnalyser}), which is approximate, takes as
+ * long as the sound, and fills in while it runs. Use on the JavaFX application thread; results
  * arrive there and are announced through {@link #revisionProperty()}.
  */
 public final class WaveformCache {
 
     private static final WaveformCache SHARED = new WaveformCache();
 
+    /** A byte array as a map key: the same array, not equal content, and not kept alive by the map. */
+    private static final class Key extends WeakReference<byte[]> {
+
+        private final int hash;
+
+        Key(byte[] bytes, ReferenceQueue<byte[]> queue) {
+            super(bytes, queue);
+            hash = System.identityHashCode(bytes);
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            byte[] mine = get();
+            return mine != null && other instanceof Key key && key.get() == mine;
+        }
+    }
+
     private static final class Entry {
 
-        WeakReference<byte[]> content;
+        /** Read on the decoder thread too. */
+        volatile WeakReference<byte[]> content;
         final String extension;
         final CompletableFuture<AudioInfo> info = new CompletableFuture<>();
         Waveform waveform;
@@ -49,7 +77,8 @@ public final class WaveformCache {
         }
     }
 
-    private final Map<Integer, Entry> entries = new HashMap<>();
+    private final Map<Key, Entry> entries = new HashMap<>();
+    private final ReferenceQueue<byte[]> collected = new ReferenceQueue<>();
     private final Deque<Entry> waiting = new ArrayDeque<>();
     private final ReadOnlyIntegerWrapper revision = new ReadOnlyIntegerWrapper(this, "revision");
     private final ExecutorService decoder = Executors.newSingleThreadExecutor(runnable -> {
@@ -107,24 +136,22 @@ public final class WaveformCache {
 
     /**
      * Makes what is known, or being worked out, about a sound belong to another array with the
-     * same content: a document copies the content it is given.
+     * same content as well: a document copies the content it is given.
      */
     public void transfer(byte[] from, byte[] to) {
-        Entry entry = entries.get(System.identityHashCode(from));
-        if (entry != null && entry.content.get() == from && from != to) {
-            entries.remove(System.identityHashCode(from));
+        Entry entry = entries.get(new Key(from, null));
+        if (entry != null && from != to) {
             entry.content = new WeakReference<>(to);
-            entries.put(System.identityHashCode(to), entry);
+            entries.put(new Key(to, collected), entry);
         }
     }
 
     private Entry entry(byte[] bytes, String extension) {
-        int key = System.identityHashCode(bytes);
-        Entry entry = entries.get(key);
-        if (entry == null || entry.content.get() != bytes) {
+        Entry entry = entries.get(new Key(bytes, null));
+        if (entry == null) {
             purge();
             entry = new Entry(bytes, extension == null ? "" : extension);
-            entries.put(key, entry);
+            entries.put(new Key(bytes, collected), entry);
         }
         if (!entry.started) {
             entry.started = true;
@@ -154,8 +181,17 @@ public final class WaveformCache {
                 });
             });
         } else {
-            waiting.add(entry);
-            next();
+            // the length comes from a probe of its own: the analysis may be a long way off
+            AudioProbe.probe(bytes, entry.extension).whenComplete((info, error) -> {
+                if (error != null) {
+                    entry.info.completeExceptionally(error);
+                } else {
+                    entry.info.complete(info);
+                    waiting.add(entry);
+                    next();
+                }
+                changed();
+            });
         }
     }
 
@@ -179,10 +215,17 @@ public final class WaveformCache {
             try {
                 if (bytes != null) {
                     file = Files.createTempFile("animatorfx-waveform", "." + (current.extension.isBlank() ? "bin" : current.extension));
-                    Files.write(file, bytes);
                     file.toFile().deleteOnExit();
+                    Files.write(file, bytes);
                 }
             } catch (IOException | RuntimeException e) {
+                if (file != null) {
+                    try {
+                        Files.deleteIfExists(file);
+                    } catch (IOException | RuntimeException ignored) {
+                        // removed when the application exits
+                    }
+                }
                 file = null;
             }
             Path written = file;
@@ -196,11 +239,8 @@ public final class WaveformCache {
             return;
         }
         entry.file = file;
-        String format = AudioInfo.formatOf(entry.extension);
         entry.analysis = SpectrumAnalyser.analyse(file.toUri(),
                 seconds -> {
-                    entry.info.complete(new AudioInfo(seconds, 0, 0, format));
-                    changed();
                 },
                 partial -> {
                     if (entry.content.get() == null) {
@@ -222,13 +262,6 @@ public final class WaveformCache {
         analysing = null;
         entry.analysis = null;
         entry.waveform = result.orElse(null);
-        if (!entry.info.isDone()) {
-            if (result.isPresent()) {
-                entry.info.complete(new AudioInfo(result.get().duration(), 0, 0, AudioInfo.formatOf(entry.extension)));
-            } else {
-                entry.info.completeExceptionally(new IOException("The sound cannot be read"));
-            }
-        }
         Path file = entry.file;
         entry.file = null;
         if (file != null) {
@@ -248,13 +281,11 @@ public final class WaveformCache {
         revision.set(revision.get() + 1);
     }
 
-    /** Drops the entries whose content no document holds any more. */
+    /** Drops the keys whose array has been collected; an entry goes with its last key. */
     private void purge() {
-        for (Iterator<Entry> it = entries.values().iterator(); it.hasNext(); ) {
-            Entry entry = it.next();
-            if (entry.content.get() == null && entry != analysing) {
-                it.remove();
-            }
+        Reference<? extends byte[]> gone;
+        while ((gone = collected.poll()) != null) {
+            entries.remove(gone);
         }
     }
 }

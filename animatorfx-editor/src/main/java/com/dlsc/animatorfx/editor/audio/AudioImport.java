@@ -12,7 +12,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
+import javafx.application.Platform;
 import javafx.animation.PauseTransition;
 import javafx.util.Duration;
 
@@ -43,7 +45,7 @@ public final class AudioImport {
     /**
      * A sound file that was read and found playable.
      *
-     * @param info what is known about the sound; {@code null} when the media stack took too long to say
+     * @param info what is known about the sound; its length is known
      */
     public record Sound(String fileName, String extension, byte[] bytes, AudioInfo info) {
 
@@ -73,10 +75,12 @@ public final class AudioImport {
     }
 
     /**
-     * Reads a sound file and finds out how long it is. WAV and AIFF files are done at once; for
-     * other formats the media stack is asked, which takes a moment. Call on the JavaFX
-     * application thread; the result arrives there. Fails with {@link Refused} for a file that
-     * is too large, cannot be read or is no sound the media stack plays.
+     * Reads a sound file and finds out how long it is. The file is read on a background thread;
+     * WAV and AIFF files say their length in their header, for other formats the media stack is
+     * asked, which takes a moment. Call on the JavaFX application thread; the result arrives
+     * there, never inside this call. Fails with {@link Refused} for a file that is too large,
+     * cannot be read or is no sound the media stack plays, and, as a last resort, when there is
+     * no answer after 5 seconds: a file that was not checked is not taken.
      *
      * @param busy shows a message when the answer takes longer than a blink, and returns what
      *             takes the message away again
@@ -85,62 +89,59 @@ public final class AudioImport {
         CompletableFuture<Sound> result = new CompletableFuture<>();
         String name = file.getFileName() == null ? file.toString() : file.getFileName().toString();
         String extension = extension(name);
-        byte[] bytes;
-        try {
-            if (!AudioInfo.EXTENSIONS.contains(extension)) {
-                throw new Refused("it is not an MP3, WAV, AIFF or AAC file.");
-            }
-            if (Files.size(file) > MAX_BYTES) {
-                throw new Refused("it is larger than 50 MB.");
-            }
-            bytes = Files.readAllBytes(file);
-        } catch (IOException e) {
-            result.completeExceptionally(new Refused(e.getMessage() == null ? "it cannot be read." : e.getMessage()));
-            return result;
-        } catch (Refused e) {
-            result.completeExceptionally(e);
-            return result;
-        }
-        CompletableFuture<AudioInfo> info = WaveformCache.shared().info(bytes, extension);
-        if (info.isDone()) {
-            settle(result, name, extension, bytes, info);
-            return result;
-        }
+
         Runnable[] dismiss = {null};
         PauseTransition busyTimer = new PauseTransition(BUSY_AFTER);
         busyTimer.setOnFinished(e -> dismiss[0] = busy.apply("Reading " + name + "…"));
         PauseTransition giveUp = new PauseTransition(GIVE_UP_AFTER);
-        Runnable finish = () -> {
+        // every outcome comes through here, on the JavaFX application thread
+        BiConsumer<Sound, Refused> finish = (sound, refused) -> {
+            if (result.isDone()) {
+                return;
+            }
             busyTimer.stop();
             giveUp.stop();
             if (dismiss[0] != null) {
                 dismiss[0].run();
             }
-        };
-        giveUp.setOnFinished(e -> {
-            if (!result.isDone()) {
-                finish.run();
-                result.complete(new Sound(name, extension, bytes, null));
+            if (refused != null) {
+                result.completeExceptionally(refused);
+            } else {
+                result.complete(sound);
             }
-        });
+        };
+        giveUp.setOnFinished(e -> finish.accept(null, new Refused("the sound could not be read in time.")));
         busyTimer.play();
         giveUp.play();
-        info.whenComplete((value, error) -> {
-            if (!result.isDone()) {
-                finish.run();
-                settle(result, name, extension, bytes, info);
+
+        AudioProbe.IO.execute(() -> {
+            byte[] bytes;
+            try {
+                if (!AudioInfo.EXTENSIONS.contains(extension)) {
+                    throw new Refused("it is not an MP3, WAV, AIFF or AAC file.");
+                }
+                if (Files.size(file) > MAX_BYTES) {
+                    throw new Refused("it is larger than 50 MB.");
+                }
+                bytes = Files.readAllBytes(file);
+            } catch (Refused e) {
+                Platform.runLater(() -> finish.accept(null, e));
+                return;
+            } catch (IOException | RuntimeException | OutOfMemoryError e) {
+                Platform.runLater(() -> finish.accept(null, new Refused("it cannot be read.")));
+                return;
             }
+            Platform.runLater(() -> {
+                if (result.isDone()) {
+                    return;
+                }
+                // the cache probes the sound by itself, apart from the analysis of waveforms
+                WaveformCache.shared().info(bytes, extension).whenComplete((info, error) -> finish.accept(
+                        error != null || !info.hasDuration() ? null : new Sound(name, extension, bytes, info),
+                        error != null || !info.hasDuration() ? new Refused("it is not a sound the editor can play.") : null));
+            });
         });
         return result;
-    }
-
-    private static void settle(CompletableFuture<Sound> result, String name, String extension, byte[] bytes,
-                               CompletableFuture<AudioInfo> info) {
-        if (info.isCompletedExceptionally()) {
-            result.completeExceptionally(new Refused("it is not a sound the editor can play."));
-        } else {
-            result.complete(new Sound(name, extension, bytes, info.join()));
-        }
     }
 
     private static Asset asset(Sound sound) {
@@ -165,7 +166,7 @@ public final class AudioImport {
     public static String addLayer(EditorDocument document, Sound sound) {
         Asset asset = asset(sound);
         String layerId = UUID.randomUUID().toString();
-        double length = sound.info() == null ? Double.NaN : sound.info().duration();
+        double length = sound.info().duration();
         document.execute(Commands.addAudioLayer(layerId, sound.baseName(), asset.id(), document.getPlayhead(), length),
                 Map.of(asset, sound.bytes()));
         adopt(document, asset, sound);

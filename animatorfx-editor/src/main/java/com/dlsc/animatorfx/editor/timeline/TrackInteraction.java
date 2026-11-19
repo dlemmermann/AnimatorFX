@@ -336,7 +336,7 @@ final class TrackInteraction {
         double offset = layer.clipOffset();
         String name;
         if (bar.part() == BarPart.BODY && slip) {
-            double clip = timeline.waveformOf(layer.assetId()).map(w -> w.duration()).orElse(Double.NaN);
+            double clip = timeline.clipDurationOf(layer.assetId());
             double rate = start.frameRate();
             offset = AudioClips.slide(offset, rate > 0 ? Math.round(delta * rate) / rate : delta, clip);
             name = "Slide Clip";

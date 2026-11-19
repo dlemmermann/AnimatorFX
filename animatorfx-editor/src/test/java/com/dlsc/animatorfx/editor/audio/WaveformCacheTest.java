@@ -68,6 +68,44 @@ class WaveformCacheTest {
     }
 
     @Test
+    void whatIsKnownGoesWithTheCopyADocumentMakes() throws Exception {
+        WaveformCache cache = new WaveformCache();
+        byte[] wav = TestSounds.tone(0.2, 0.5);
+        byte[] copy = wav.clone();
+
+        fx(() -> cache.waveform(wav, "wav"));
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> fx(() -> cache.waveform(wav, "wav").isPresent()));
+        int revision = fx(cache::getRevision);
+        fx(() -> {
+            cache.transfer(wav, copy);
+            return null;
+        });
+
+        assertSame(fx(() -> cache.waveform(wav, "wav").orElseThrow()), fx(() -> cache.waveform(copy, "wav").orElseThrow()));
+        assertEquals(revision, fx(cache::getRevision), "nothing was worked out again");
+    }
+
+    @Test
+    void theLengthOfACompressedSoundDoesNotWaitForTheWaveformOfAnother() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory(java.nio.file.Path.of("target"), "probe");
+        java.nio.file.Path longFile = dir.resolve("long.m4a");
+        java.nio.file.Path shortFile = dir.resolve("short.m4a");
+        org.junit.jupiter.api.Assumptions.assumeTrue(TestSounds.aac(longFile, 8) && TestSounds.aac(shortFile, 0.5),
+                "afconvert is not available");
+        WaveformCache cache = new WaveformCache();
+        byte[] longSound = java.nio.file.Files.readAllBytes(longFile);
+        byte[] shortSound = java.nio.file.Files.readAllBytes(shortFile);
+
+        CompletableFuture<AudioInfo> first = fx(() -> cache.info(longSound, "m4a"));
+        assertEquals(8, first.get(4, TimeUnit.SECONDS).duration(), 0.12);
+        // the long sound is being analysed now, which takes eight seconds
+        CompletableFuture<AudioInfo> second = fx(() -> cache.info(shortSound, "m4a"));
+
+        assertEquals(0.5, second.get(4, TimeUnit.SECONDS).duration(), 0.12);
+        assertEquals("AAC", second.get().format());
+    }
+
+    @Test
     void whatIsNoSoundHasNoInfoAndNoWaveform() throws Exception {
         WaveformCache cache = new WaveformCache();
         byte[] junk = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};

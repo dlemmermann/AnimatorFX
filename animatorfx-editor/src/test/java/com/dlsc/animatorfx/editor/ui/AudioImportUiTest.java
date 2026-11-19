@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,6 +44,16 @@ class AudioImportUiTest extends EditorUiTest {
 
     private void importAudio() {
         run(() -> window.menuItem("menu-file-import-audio").fire());
+        settle();
+    }
+
+    /** Files are read and probed in the background: waits until every import asked for so far is applied. */
+    private void settle() {
+        try {
+            fx(() -> window.getImportActions().whenAudioImported()).get(30, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
         WaitForAsyncUtils.waitForFxEvents();
         layout();
     }
@@ -106,25 +117,12 @@ class AudioImportUiTest extends EditorUiTest {
 
     @Test
     void aCompressedSoundIsImportedOnceTheMediaStackKnowsItsLength() throws Exception {
-        // at a usual sample rate: the length the media stack reports includes the padding of the
-        // encoder, which is a third of a second at 8 kHz and a few hundredths at 44.1 kHz
-        Path wav = dir.resolve("voice.wav");
-        Files.write(wav, TestSounds.wav(TestSounds.sine(0.8, 44100, 440, 0.5), 44100, 1, 16, false));
         Path m4a = dir.resolve("voice.m4a");
-        boolean converted;
-        try {
-            Process process = new ProcessBuilder("afconvert", "-f", "m4af", "-d", "aac", wav.toString(), m4a.toString())
-                    .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
-            converted = process.waitFor(20, TimeUnit.SECONDS) && process.exitValue() == 0;
-        } catch (IOException e) {
-            converted = false;
-        }
-        Assumptions.assumeTrue(converted, "afconvert is not available");
+        Assumptions.assumeTrue(TestSounds.aac(m4a, 0.8), "afconvert is not available");
         picked.add(m4a);
         run(() -> doc.setPlayhead(1.0));
 
         importAudio();
-        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> !doc.getAnimation().layers().isEmpty());
 
         AudioLayer layer = (AudioLayer) doc.getAnimation().layers().get(0);
         assertEquals("voice", layer.name());
@@ -138,13 +136,57 @@ class AudioImportUiTest extends EditorUiTest {
     }
 
     @Test
+    void compressedSoundsImportedTogetherEachGetTheirLength() throws Exception {
+        Path first = dir.resolve("one.m4a");
+        Path second = dir.resolve("two.m4a");
+        Path third = dir.resolve("three.m4a");
+        Assumptions.assumeTrue(TestSounds.aac(first, 0.8) && TestSounds.aac(second, 0.5) && TestSounds.aac(third, 1.2),
+                "afconvert is not available");
+        picked.addAll(List.of(first, second, third));
+        run(() -> doc.setPlayhead(1.0));
+
+        importAudio();
+
+        assertEquals(List.of(), notices());
+        assertEquals(List.of("one", "two", "three"), doc.getAnimation().layers().stream().map(Layer::name).toList());
+        assertEquals(1.8, doc.getAnimation().layers().get(0).base().outPoint(), 0.12);
+        assertEquals(1.5, doc.getAnimation().layers().get(1).base().outPoint(), 0.12);
+        assertEquals(2.2, doc.getAnimation().layers().get(2).base().outPoint(), 0.12);
+    }
+
+    @Test
+    void whileALongSoundIsStillAnalysedAnotherOneIsImportedPromptlyAndJunkIsStillRefused() throws Exception {
+        Path longSound = dir.resolve("long.m4a");
+        Path shortSound = dir.resolve("short.m4a");
+        Assumptions.assumeTrue(TestSounds.aac(longSound, 9) && TestSounds.aac(shortSound, 0.5),
+                "afconvert is not available");
+        Path junk = dir.resolve("junk.mp3");
+        Files.write(junk, new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        run(() -> doc.execute(com.dlsc.animatorfx.editor.doc.Commands.setDocument("Set Duration", a -> a.withDuration(20))));
+        picked.add(longSound);
+        importAudio();
+        assertEquals(9, doc.getAnimation().layers().get(0).base().outPoint(), 0.12);
+
+        // the analysis of the long sound takes as long as the sound; these do not wait for it
+        long started = System.nanoTime();
+        picked.addAll(List.of(shortSound, junk));
+        importAudio();
+        double seconds = (System.nanoTime() - started) / 1e9;
+
+        assertEquals(List.of("long", "short"), doc.getAnimation().layers().stream().map(Layer::name).toList());
+        assertEquals(0.5, doc.getAnimation().layers().get(1).base().outPoint(), 0.12);
+        assertEquals(List.of("Could not import junk.mp3: it is not a sound the editor can play."), notices());
+        assertEquals(2, doc.getAnimation().assets().size(), "the junk file is no asset");
+        assertTrue(seconds < 7, "took " + seconds + " s");
+    }
+
+    @Test
     void aFileThatIsNoSoundIsRefusedWithANotice() throws Exception {
         Path file = dir.resolve("noise.mp3");
         Files.write(file, new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
         picked.add(file);
 
         importAudio();
-        WaitForAsyncUtils.waitFor(20, TimeUnit.SECONDS, () -> notices().stream().anyMatch(n -> n.startsWith("Could not import")));
 
         assertEquals(List.of("Could not import noise.mp3: it is not a sound the editor can play."), notices());
         assertTrue(doc.getAnimation().assets().isEmpty());
@@ -167,12 +209,46 @@ class AudioImportUiTest extends EditorUiTest {
     }
 
     @Test
+    void theFileIsReadOffTheJavaFxThread() throws Exception {
+        Path file = sound("big.wav", 2);
+        CompletableFuture<Boolean> doneAtOnce = new CompletableFuture<>();
+
+        run(() -> doneAtOnce.complete(window.getImportActions().importAudio(doc, file).isDone()));
+
+        assertFalse(doneAtOnce.get(), "the import must not finish inside the call that starts it");
+        settle();
+        assertEquals(1, doc.getAnimation().layers().size());
+        assertEquals("Add Audio", doc.getUndoName());
+        run(doc::undo);
+        assertFalse(doc.isCanUndo(), "still one undo step");
+    }
+
+    @Test
+    void severalProblemsOfOneAddInTheAssetsTabAreAllShown() throws Exception {
+        Path junk = dir.resolve("junk.mp3");
+        Files.write(junk, new byte[]{1, 2, 3, 4, 5, 6, 7, 8});
+        Path text = dir.resolve("notes.txt");
+        Files.writeString(text, "hello");
+        Path good = sound("good.wav", 0.2);
+        var assets = window.getSidePanel().getAssets();
+
+        run(() -> assets.addFiles(List.of(junk, text, good)));
+        WaitForAsyncUtils.waitFor(20, TimeUnit.SECONDS, () -> fx(() -> assets.getMessage() != null
+                && assets.getMessage().contains("junk.mp3") && !assets.getMessage().contains("Reading")));
+
+        String message = fx(assets::getMessage);
+        assertTrue(message.contains("notes.txt is not"), message);
+        assertTrue(message.contains("Could not add junk.mp3: it is not a sound the editor can play."), message);
+        assertEquals(1, doc.getAnimation().assets().size());
+    }
+
+    @Test
     void aSoundDroppedOnTheWindowBecomesAnAudioLayer() throws Exception {
         Path file = sound("drop.wav", 0.5);
 
         assertTrue(window.isDroppable(file.toFile()));
         assertTrue(fx(() -> window.openDropped(List.of(file.toFile()))));
-        WaitForAsyncUtils.waitForFxEvents();
+        settle();
 
         assertEquals(1, window.getWorkspace().getDocuments().size(), "no new document");
         assertEquals(List.of("drop"), doc.getAnimation().layers().stream().map(Layer::name).toList());
@@ -184,7 +260,7 @@ class AudioImportUiTest extends EditorUiTest {
         var assets = window.getSidePanel().getAssets();
 
         run(() -> assets.addFiles(List.of(file)));
-        WaitForAsyncUtils.waitForFxEvents();
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> !doc.getAnimation().assets().isEmpty());
 
         assertEquals(1, doc.getAnimation().assets().size());
         assertTrue(doc.getAnimation().layers().isEmpty());

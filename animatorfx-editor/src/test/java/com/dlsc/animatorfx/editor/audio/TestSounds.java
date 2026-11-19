@@ -42,6 +42,29 @@ public final class TestSounds {
         return wav(samples, rate, 1, 16, false);
     }
 
+    /**
+     * An AAC file ({@code .m4a}) with a tone, made with the {@code afconvert} tool of macOS;
+     * {@code false} where the tool is missing. At 44.1 kHz, where the length the media stack
+     * reports is within a few hundredths of the real one.
+     */
+    public static boolean aac(java.nio.file.Path target, double seconds) {
+        java.nio.file.Path wav = target.resolveSibling(target.getFileName() + ".source.wav");
+        try {
+            java.nio.file.Files.write(wav, wav(sine(seconds, 44100, 440, 0.5), 44100, 1, 16, false));
+            Process process = new ProcessBuilder("afconvert", "-f", "m4af", "-d", "aac", wav.toString(), target.toString())
+                    .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            return process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS) && process.exitValue() == 0;
+        } catch (IOException | InterruptedException e) {
+            return false;
+        } finally {
+            try {
+                java.nio.file.Files.deleteIfExists(wav);
+            } catch (IOException e) {
+                // a temp directory of the test
+            }
+        }
+    }
+
     public static double[] sine(double seconds, int rate, double frequency, double level) {
         double[] samples = new double[(int) Math.round(seconds * rate)];
         for (int i = 0; i < samples.length; i++) {
