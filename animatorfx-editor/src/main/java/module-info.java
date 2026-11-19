@@ -3,6 +3,9 @@ module com.dlsc.animatorfx.editor {
     requires com.dlsc.animatorfx.player;
     requires com.dlsc.animatorfx.importer;
     requires javafx.controls;
+    requires javafx.media;
+    // javax.sound.sampled: exact waveforms of WAV and AIFF files
+    requires java.desktop;
     requires atlantafx.base;
     requires com.dlsc.gemsfx;
     requires org.kordamp.ikonli.core;
@@ -10,6 +13,7 @@ module com.dlsc.animatorfx.editor {
     requires org.kordamp.ikonli.material2;
 
     exports com.dlsc.animatorfx.editor;
+    exports com.dlsc.animatorfx.editor.audio;
     exports com.dlsc.animatorfx.editor.canvas;
     exports com.dlsc.animatorfx.editor.canvas.tools;
     exports com.dlsc.animatorfx.editor.doc;

@@ -1,5 +1,10 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.audio.AudioImport;
+import com.dlsc.animatorfx.editor.audio.AudioInfo;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.function.Function;
 import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
@@ -36,8 +41,8 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 /**
- * File ▸ Import: SVG, Lottie and FXML files become new untitled documents, and an SVG can also
- * be placed into the active document. What an importer had to leave out is summed up in a
+ * File ▸ Import: SVG, Lottie and FXML files become new untitled documents, an SVG can also
+ * be placed into the active document, and sound files become audio layers of the active document. What an importer had to leave out is summed up in a
  * notice whose action lists the warnings, as often as wanted; a file that cannot be imported is reported in a notice.
  */
 public final class ImportActions {
@@ -72,6 +77,7 @@ public final class ImportActions {
     private final NoticeBar notices;
     private final Supplier<Window> owner;
     private BiFunction<Window, Kind, Optional<Path>> filePicker = this::chooseFile;
+    private Function<Window, List<Path>> audioPicker = this::chooseAudioFiles;
     private BiConsumer<String, List<String>> warningsViewer;
     private Path lastDirectory;
 
@@ -94,6 +100,76 @@ public final class ImportActions {
      */
     public void setWarningsViewer(BiConsumer<String, List<String>> viewer) {
         warningsViewer = Objects.requireNonNull(viewer, "viewer");
+    }
+
+    /**
+     * Replaces the file dialog of Import ▸ Audio…; it returns the chosen files, none when cancelled.
+     */
+    public void setAudioPicker(Function<Window, List<Path>> picker) {
+        audioPicker = Objects.requireNonNull(picker, "picker");
+    }
+
+    /**
+     * Asks for sound files and adds each to the active document as an audio asset with an audio
+     * layer at the playhead.
+     */
+    public void chooseAndImportAudio() {
+        EditorDocument document = workspace.getActiveDocument();
+        if (document != null) {
+            for (Path file : audioPicker.apply(owner.get())) {
+                importAudio(document, file);
+            }
+        }
+    }
+
+    /**
+     * Adds a sound file (MP3, WAV, AIFF, AAC) to the document as an audio asset together with an
+     * audio layer named after the file, on top of the other layers. The layer starts at the
+     * playhead and lasts as long as the sound, at most to the end of the document. Asset and
+     * layer are one undo step; the layer is selected. A file that is larger than 50 MB or that
+     * is no playable sound is refused with a notice.
+     *
+     * <p>How long a compressed sound is has to be asked from the media stack, so the layer may
+     * appear a moment later; a notice says so when it takes more than a blink. After 5 seconds
+     * the layer is added anyway and lasts to the end of the document.
+     *
+     * @return completes with the id of the new layer, or empty when the file was refused
+     */
+    public CompletableFuture<Optional<String>> importAudio(EditorDocument document, Path file) {
+        CompletableFuture<Optional<String>> done = new CompletableFuture<>();
+        AudioImport.read(file, message -> notices.show(message, null, null)).whenComplete((sound, error) -> {
+            if (error != null) {
+                Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+                notices.show("Could not import " + file.getFileName() + ": "
+                        + (cause instanceof AudioImport.Refused ? cause.getMessage() : "it cannot be read."));
+                done.complete(Optional.empty());
+            } else if (!workspace.getDocuments().contains(document)) {
+                done.complete(Optional.empty());
+            } else {
+                if (sound.info() == null || !sound.info().hasDuration()) {
+                    notices.show("The length of " + sound.fileName() + " is not known yet: its layer lasts to the end"
+                            + " of the document.");
+                }
+                done.complete(Optional.of(AudioImport.addLayer(document, sound)));
+            }
+        });
+        return done;
+    }
+
+    private List<Path> chooseAudioFiles(Window window) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Import Audio");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Audio files",
+                AudioInfo.EXTENSIONS.stream().map(extension -> "*." + extension).toList()));
+        if (lastDirectory != null && Files.isDirectory(lastDirectory)) {
+            chooser.setInitialDirectory(lastDirectory.toFile());
+        }
+        List<File> files = chooser.showOpenMultipleDialog(window);
+        if (files == null || files.isEmpty()) {
+            return List.of();
+        }
+        lastDirectory = files.get(0).toPath().toAbsolutePath().getParent();
+        return files.stream().map(File::toPath).toList();
     }
 
     /**

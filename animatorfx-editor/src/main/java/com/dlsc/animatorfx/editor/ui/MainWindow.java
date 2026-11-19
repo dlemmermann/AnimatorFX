@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.audio.AudioImport;
 import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.inspector.sections.MotionPathSection;
@@ -442,14 +443,22 @@ public final class MainWindow {
     /**
      * Opens the {@code .afx} files among the dropped files and imports the SVG ({@code .svg}),
      * Lottie ({@code .json}) and FXML ({@code .fxml}) files, each as a document of its own.
-     * Images are taken by the canvas.
+     * Sound files become audio layers of the active document. Images are taken by the canvas.
      *
-     * @return whether any file became a document
+     * @return whether any file was taken
      */
     boolean openDropped(List<File> files) {
         boolean opened = false;
         for (File file : files) {
             if (!isDroppable(file)) {
+                continue;
+            }
+            if (AudioImport.isAudio(file.toPath())) {
+                EditorDocument document = workspace.getActiveDocument();
+                if (document != null) {
+                    importActions.importAudio(document, file.toPath());
+                    opened = true;
+                }
                 continue;
             }
             Optional<ImportActions.Kind> kind = ImportActions.Kind.of(file.toPath());
@@ -461,7 +470,7 @@ public final class MainWindow {
 
     static boolean isDroppable(File file) {
         return file.isFile() && (file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".afx")
-                || ImportActions.Kind.of(file.toPath()).isPresent());
+                || ImportActions.Kind.of(file.toPath()).isPresent() || AudioImport.isAudio(file.toPath()));
     }
 
     private void bindTitle(EditorDocument document) {

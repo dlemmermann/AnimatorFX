@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.inspector;
 
+import com.dlsc.animatorfx.editor.audio.AudioImport;
 import com.dlsc.animatorfx.editor.canvas.tools.NewLayers;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
@@ -164,9 +165,11 @@ public final class AssetsView extends VBox {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Add Assets");
         chooser.getExtensionFilters().addAll(
-                new FileChooser.ExtensionFilter("Images and fonts", "*.png", "*.jpg", "*.jpeg", "*.ttf", "*.otf"),
+                new FileChooser.ExtensionFilter("Images, fonts and sounds", "*.png", "*.jpg", "*.jpeg", "*.ttf", "*.otf",
+                        "*.mp3", "*.wav", "*.aif", "*.aiff", "*.m4a", "*.aac"),
                 new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg"),
-                new FileChooser.ExtensionFilter("Fonts", "*.ttf", "*.otf"));
+                new FileChooser.ExtensionFilter("Fonts", "*.ttf", "*.otf"),
+                new FileChooser.ExtensionFilter("Sounds", "*.mp3", "*.wav", "*.aif", "*.aiff", "*.m4a", "*.aac"));
         List<File> files = chooser.showOpenMultipleDialog(owner);
         return files == null ? List.of() : files.stream().map(File::toPath).toList();
     }
@@ -184,13 +187,17 @@ public final class AssetsView extends VBox {
             String name = file.getFileName().toString();
             int dot = name.lastIndexOf('.');
             String extension = dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
+            if (AudioImport.isAudio(file)) {
+                addSound(doc, file);
+                continue;
+            }
             Asset.Kind kind = switch (extension) {
                 case "png", "jpg", "jpeg" -> Asset.Kind.IMAGE;
                 case "ttf", "otf" -> Asset.Kind.FONT;
                 default -> null;
             };
             if (kind == null) {
-                problems.add(name + " is not a PNG, JPEG, TTF or OTF file.");
+                problems.add(name + " is not an image (PNG, JPEG), a font (TTF, OTF) or a sound (MP3, WAV, AIFF, AAC).");
                 continue;
             }
             byte[] bytes;
@@ -210,6 +217,28 @@ public final class AssetsView extends VBox {
             doc.addAsset(new Asset(id, kind, "assets/" + id + "." + extension, name), bytes);
         }
         setMessage(problems.isEmpty() ? null : String.join("\n", problems));
+    }
+
+    /** A sound is checked by the media stack, which may answer a moment later. */
+    private void addSound(EditorDocument doc, Path file) {
+        AudioImport.read(file, text -> {
+            setMessage(text);
+            return () -> setMessage(null);
+        }).whenComplete((sound, error) -> {
+            if (error != null) {
+                Throwable cause = error.getCause() != null ? error.getCause() : error;
+                setMessage("Could not add " + file.getFileName() + ": "
+                        + (cause instanceof AudioImport.Refused ? cause.getMessage() : "it cannot be read."));
+            } else if (getDocument() == doc) {
+                AudioImport.addAsset(doc, sound);
+            }
+        });
+    }
+
+    /** Adds an audio layer for an audio asset at the playhead, on top, and selects it. */
+    public Optional<String> placeAudio(String assetId) {
+        EditorDocument doc = getDocument();
+        return doc == null ? Optional.empty() : AudioImport.place(doc, assetId);
     }
 
     /** Removes an asset as one undo step; refuses, with a message, while layers or cues use it. */

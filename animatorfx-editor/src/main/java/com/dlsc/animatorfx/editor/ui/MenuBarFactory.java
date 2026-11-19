@@ -79,7 +79,8 @@ final class MenuBarFactory {
                 item("menu-file-import-lottie", "Lottie…", null,
                         () -> imports().chooseAndImport(ImportActions.Kind.LOTTIE)),
                 item("menu-file-import-fxml", "FXML…", null, () -> imports().chooseAndImport(ImportActions.Kind.FXML)),
-                item("menu-file-import-image", "Image…", null, () -> window.getCanvasView().getActions().chooseImage()));
+                item("menu-file-import-image", "Image…", null, () -> window.getCanvasView().getActions().chooseImage()),
+                item("menu-file-import-audio", "Audio…", null, () -> imports().chooseAndImportAudio()));
 
         // macOS has Quit in the application menu, where it ends the application the same way
         MenuItem quit = always("menu-file-quit", "Quit", shortcut(KeyCode.Q), Platform::exit);

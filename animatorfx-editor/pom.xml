@@ -20,8 +20,9 @@
         <animatorfx.args/>
         <!-- Platform specific jpackage options of the "package" profile; empty = jpackage defaults (default icon). -->
         <package.platform.options/>
+        <!-- animatorfx.audio=off: no test makes sound; tests that look at sound install a recording output. -->
         <!-- TestFX brings OSGi onto the test class path; Ikonli then tries its OSGi resolver and needs to read it. -->
-        <surefire.jvm.args>${javafx.headless.jvm.args} --add-reads org.kordamp.ikonli.core=ALL-UNNAMED</surefire.jvm.args>
+        <surefire.jvm.args>${javafx.headless.jvm.args} --add-reads org.kordamp.ikonli.core=ALL-UNNAMED -Danimatorfx.audio=off</surefire.jvm.args>
     </properties>
 
     <!-- Pins every (also transitive) JavaFX artifact to the editor JavaFX version. -->
@@ -78,6 +79,11 @@
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
+        </dependency>
+        <!-- audio info and approximate waveforms of compressed sounds -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-media</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.mkpaz</groupId>
