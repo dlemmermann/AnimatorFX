@@ -10,8 +10,9 @@ import java.util.Objects;
 
 /**
  * The selected layers (in selection order) and keyframes of a document, or its selected sound
- * cues. Layers and cues are not selected together: selecting a layer clears the cue selection,
- * selecting a cue clears the layers and their keyframes.
+ * cues. Cues are not selected together with layers or keyframes, and the selection sees to that
+ * itself: selecting a layer or a keyframe clears the cue selection, selecting a cue clears the
+ * layers and the keyframes.
  */
 public final class Selection {
 
@@ -29,11 +30,13 @@ public final class Selection {
     private final ObservableSet<String> cueIds = FXCollections.observableSet(new LinkedHashSet<>());
 
     public Selection() {
-        layerIds.addListener((InvalidationListener) obs -> {
-            if (!layerIds.isEmpty() && !cueIds.isEmpty()) {
+        InvalidationListener layersOrKeyframes = obs -> {
+            if (!(layerIds.isEmpty() && keyframes.isEmpty()) && !cueIds.isEmpty()) {
                 cueIds.clear();
             }
-        });
+        };
+        layerIds.addListener(layersOrKeyframes);
+        keyframes.addListener(layersOrKeyframes);
         cueIds.addListener((InvalidationListener) obs -> {
             if (!cueIds.isEmpty() && !(layerIds.isEmpty() && keyframes.isEmpty())) {
                 keyframes.clear();

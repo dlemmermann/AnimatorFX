@@ -65,12 +65,29 @@ public final class EditorAudio {
      * are, and only then really released when it is no longer wanted.
      *
      * @param playing whether the player is playing right now
-     * @return releases the kept output; to be called when the player is no longer used
+     * @return the handle on the kept output
      */
-    public static Runnable install(AnimationPlayer player, BooleanSupplier playing) {
+    public static Installed install(AnimationPlayer player, BooleanSupplier playing) {
         Shared shared = new Shared(playing);
         player.setAudioOutputFactory(shared::acquire);
-        return shared::close;
+        return shared;
+    }
+
+    /** The sound of a player that takes it from the editor, see {@link #install}. */
+    public interface Installed {
+
+        /**
+         * Cuts the sound cues that are sounding. A player lets them ring out when it is paused;
+         * the editor cuts them when the user stops playback or moves the playhead.
+         */
+        void stopCues();
+
+        /**
+         * Releases the kept output with everything it holds; to be called when the document of
+         * the player is closed and when the player is no longer used. Sound comes back with a
+         * new output when the player next needs one.
+         */
+        void release();
     }
 
     /** What decides whether an output made for one document can go on for another. */
@@ -107,7 +124,7 @@ public final class EditorAudio {
         }
     }
 
-    private static final class Shared {
+    private static final class Shared implements Installed {
 
         /** How long an output that nobody holds may go on sounding while the player plays. */
         private static final Duration GRACE = Duration.millis(200);
@@ -137,6 +154,22 @@ public final class EditorAudio {
             }
             lease = real == null ? null : new Lease();
             return lease;
+        }
+
+        @Override
+        public void stopCues() {
+            if (real != null) {
+                try {
+                    real.stopCues();
+                } catch (RuntimeException e) {
+                    LOG.log(System.Logger.Level.WARNING, "Sound cues could not be stopped", e);
+                }
+            }
+        }
+
+        @Override
+        public void release() {
+            close();
         }
 
         void close() {

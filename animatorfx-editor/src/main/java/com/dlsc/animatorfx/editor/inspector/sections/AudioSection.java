@@ -12,6 +12,8 @@ import com.dlsc.animatorfx.model.Asset;
 import com.dlsc.animatorfx.model.AudioLayer;
 import java.util.List;
 import java.util.Optional;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.WeakChangeListener;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -44,6 +46,8 @@ public final class AudioSection extends SectionBase {
     private final Button preview = SoundFields.previewButton(PREVIEW_ID, previewIcon, "Play the clip from its offset");
     private List<Asset> listedAssets;
     private boolean updating;
+    private final ChangeListener<Object> previewOwner = (obs, old, owner) ->
+            previewIcon.setIconCode(owner == this ? Material2MZ.STOP : Material2MZ.PLAY_ARROW);
 
     public AudioSection() {
         super("Audio");
@@ -97,8 +101,8 @@ public final class AudioSection extends SectionBase {
         row("", switches);
 
         preview.setOnAction(e -> togglePreview());
-        SoundPreview.shared().ownerProperty().addListener((obs, old, owner) ->
-                previewIcon.setIconCode(owner == this ? Material2MZ.STOP : Material2MZ.PLAY_ARROW));
+        // weak: the preview voice outlives every inspector
+        SoundPreview.shared().ownerProperty().addListener(new WeakChangeListener<>(previewOwner));
         actions().getChildren().add(preview);
     }
 

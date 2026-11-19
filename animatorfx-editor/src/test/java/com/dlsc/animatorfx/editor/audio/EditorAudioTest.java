@@ -122,7 +122,7 @@ class EditorAudioTest {
 
     @Test
     void otherSoundsOrLayersGetANewOutput() throws Exception {
-        Runnable[] release = new Runnable[1];
+        EditorAudio.Installed[] release = new EditorAudio.Installed[1];
         fx(() -> {
             AnimationPlayer player = new AnimationPlayer();
             release[0] = EditorAudio.install(player, () -> playing);
@@ -136,7 +136,7 @@ class EditorAudioTest {
         assertTrue(outputs.get(0).disposed);
         assertFalse(outputs.get(1).disposed);
 
-        fx(release[0]);
+        fx(() -> release[0].release());
         assertTrue(outputs.get(1).disposed);
     }
 }

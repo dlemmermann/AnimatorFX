@@ -208,7 +208,13 @@ class AudioCommandsTest {
         selection.layerIds().setAll("a");
         assertTrue(selection.cueIds().isEmpty());
 
+        // keyframes belong to layers: they do not go with cues either
         selection.cueIds().add("c");
+        selection.keyframes().add(new Selection.KeyframeRef("a", "volume", "k"));
+        assertTrue(selection.cueIds().isEmpty());
+        selection.cueIds().add("c");
+        assertTrue(selection.keyframes().isEmpty());
+
         selection.clear();
         assertTrue(selection.cueIds().isEmpty());
     }

@@ -210,6 +210,64 @@ class AudioPlaybackUiTest extends EditorUiTest {
         assertEquals(1, outputs.size(), "the output was not made anew");
         assertFalse(outputs.get(0).disposed);
         assertEquals(0, outputs.get(0).count("silence"), "and never fell silent");
+        assertEquals(0, outputs.get(0).cuesStopped, "a cue that is sounding rings on");
+    }
+
+    @Test
+    void pausingPlaybackCutsTheCuesThatAreSounding() throws Exception {
+        run(() -> canvas.togglePlayback());
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> !outputs.isEmpty() && outputs.get(0).count("apply") >= 2);
+        assertEquals(0, outputs.get(0).cuesStopped);
+
+        run(() -> canvas.togglePlayback());
+
+        assertEquals(1, outputs.get(0).cuesStopped);
+        assertFalse(outputs.get(0).disposed);
+    }
+
+    @Test
+    void goingToTheStartCutsTheCuesThatAreSounding() throws Exception {
+        run(() -> canvas.togglePlayback());
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> !outputs.isEmpty() && outputs.get(0).count("apply") >= 2);
+
+        run(() -> ((javafx.scene.control.Button) window.getScene().lookup("#transport-start")).fire());
+
+        assertEquals(1, outputs.get(0).cuesStopped);
+        assertTrue(fx(() -> canvas.isPlaying()), "playback goes on from the start");
+    }
+
+    @Test
+    void playbackRunningIntoTheEndLetsACueRingOut() throws Exception {
+        playhead(2.9);
+        run(() -> canvas.togglePlayback());
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> !outputs.isEmpty() && !fx(() -> canvas.isPlaying()));
+
+        assertEquals(0, outputs.get(0).cuesStopped);
+    }
+
+    @Test
+    void closingTheDocumentReleasesTheOutputForGood() throws Exception {
+        run(() -> canvas.togglePlayback());
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> !outputs.isEmpty() && outputs.get(0).count("apply") >= 2);
+
+        run(() -> window.getFileActions().close(doc));
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertTrue(outputs.get(0).disposed);
+        assertEquals(1, outputs.size());
+    }
+
+    @Test
+    void closingTheWindowReleasesTheOutputForGood() throws Exception {
+        run(() -> canvas.togglePlayback());
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> !outputs.isEmpty() && outputs.get(0).count("apply") >= 2);
+
+        run(() -> window.shutdown());
+        assertTrue(outputs.get(0).disposed);
+
+        // a player that is disposed makes no sound again, whatever is asked of it
+        run(() -> canvas.scrub(0.5));
+        assertEquals(1, outputs.size());
     }
 
     // ------------------------------------------------------------------ dialogs

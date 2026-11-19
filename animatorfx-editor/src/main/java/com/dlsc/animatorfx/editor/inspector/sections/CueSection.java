@@ -12,6 +12,8 @@ import com.dlsc.animatorfx.model.Asset;
 import com.dlsc.animatorfx.model.SoundCue;
 import java.util.List;
 import java.util.Optional;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.WeakChangeListener;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -44,6 +46,8 @@ public final class CueSection extends SectionBase {
     private final Button preview = SoundFields.previewButton(PREVIEW_ID, previewIcon, "Play the sound of the cue");
     private List<Asset> listedAssets;
     private boolean updating;
+    private final ChangeListener<Object> previewOwner = (obs, old, owner) ->
+            previewIcon.setIconCode(owner == this ? Material2MZ.STOP : Material2MZ.PLAY_ARROW);
 
     public CueSection() {
         super("Cue");
@@ -90,8 +94,8 @@ public final class CueSection extends SectionBase {
         row("", mute);
 
         preview.setOnAction(e -> togglePreview());
-        SoundPreview.shared().ownerProperty().addListener((obs, old, owner) ->
-                previewIcon.setIconCode(owner == this ? Material2MZ.STOP : Material2MZ.PLAY_ARROW));
+        // weak: the preview voice outlives every inspector
+        SoundPreview.shared().ownerProperty().addListener(new WeakChangeListener<>(previewOwner));
         actions().getChildren().add(preview);
     }
 

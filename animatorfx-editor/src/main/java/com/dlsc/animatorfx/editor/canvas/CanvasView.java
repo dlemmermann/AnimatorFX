@@ -11,7 +11,6 @@ import com.dlsc.animatorfx.editor.canvas.tools.ShapeTool;
 import com.dlsc.animatorfx.editor.canvas.tools.SlotTool;
 import com.dlsc.animatorfx.editor.canvas.tools.TextTool;
 import com.dlsc.animatorfx.editor.canvas.tools.Tool;
-import com.dlsc.animatorfx.editor.audio.EditorAudio;
 import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
@@ -101,8 +100,6 @@ public final class CanvasView extends Region {
     private final Pane editorLayer = new Pane();
     private final LayerGeometry geometry = new LayerGeometry(this);
     private final Playback playback = new Playback(view);
-    /** Lets go of the audio output that is kept across edits of a document. */
-    private final Runnable releaseAudio = EditorAudio.install(view.getPlayer(), playback::isPlaying);
     private final CanvasActions actions;
     private final Map<ToolKind, Tool> tools = new EnumMap<>(ToolKind.class);
     private final Tool idleTool = new Tool() {
@@ -410,7 +407,6 @@ public final class CanvasView extends Region {
             state.canvasPanYProperty().removeListener(refresh);
         }
         playback.setDocument(newDoc);
-        releaseAudio.run();
         if (newDoc != null) {
             view.animationProperty().bind(newDoc.fileContentProperty());
             view.seek(newDoc.getPlayhead());
@@ -555,8 +551,7 @@ public final class CanvasView extends Region {
 
     /** Stops playback and releases what makes the sound; for when the window closes. */
     public void dispose() {
-        playback.pause();
-        releaseAudio.run();
+        playback.dispose();
     }
 
     // ------------------------------------------------------------------ zoom and pan

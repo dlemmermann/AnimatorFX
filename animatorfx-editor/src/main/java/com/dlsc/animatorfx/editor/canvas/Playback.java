@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.canvas;
 
+import com.dlsc.animatorfx.editor.audio.EditorAudio;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.player.AnimationPlayer;
 import com.dlsc.animatorfx.player.AnimationView;
@@ -18,6 +19,8 @@ final class Playback {
     private static final long SCRUB_INTERVAL_NANOS = 50_000_000L;
 
     private final AnimationView view;
+    /** The sound of the player: kept across edits, see {@link EditorAudio#install}. */
+    private final EditorAudio.Installed audio;
     private final ReadOnlyBooleanWrapper playing = new ReadOnlyBooleanWrapper(this, "playing");
     private final BooleanProperty loop = new SimpleBooleanProperty(this, "loop");
     private EditorDocument document;
@@ -26,6 +29,7 @@ final class Playback {
 
     Playback(AnimationView view) {
         this.view = view;
+        this.audio = EditorAudio.install(view.getPlayer(), this::isPlaying);
         view.statusProperty().addListener((obs, oldStatus, status) -> {
             playing.set(status == AnimationPlayer.Status.PLAYING);
             pushTime();
@@ -68,9 +72,19 @@ final class Playback {
         loop.set(value);
     }
 
+    /** Another document, or none: playback stops and the sound of the previous one is released for good. */
     void setDocument(EditorDocument document) {
         view.pause();
+        audio.release();
         this.document = document;
+    }
+
+    /** The window closes: no sound from here on. */
+    void dispose() {
+        view.pause();
+        audio.release();
+        view.dispose();
+        document = null;
     }
 
     void toggle() {
@@ -78,15 +92,20 @@ final class Playback {
             return;
         }
         if (isPlaying()) {
-            view.pause();
+            pause();
         } else {
             view.seek(document.getPlayhead());
             view.play();
         }
     }
 
+    /**
+     * The user stops playback: unlike a player that is paused, the editor also cuts the sound
+     * cues that are sounding. Playback that runs into the end lets them ring out.
+     */
     void pause() {
         view.pause();
+        audio.stopCues();
     }
 
     /**
@@ -110,6 +129,8 @@ final class Playback {
     void playheadChanged() {
         if (!driving && document != null) {
             view.seek(document.getPlayhead());
+            // a jump, such as going to the start: what sounded belongs to where playback was
+            audio.stopCues();
         }
     }
 
