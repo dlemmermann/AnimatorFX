@@ -23,12 +23,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /**
  * Renders the Lottie fixtures twice, with our importer and the {@code AnimationView}, and with
@@ -51,13 +49,6 @@ class LottieOracleTest {
     private static final int CHANNEL_TOLERANCE = 24;
 
     /**
-     * Fixtures Lottie4J 1.2.8 cannot read at all. {@code layers} has an image with an external
-     * file ({@code "u": "images/"}), which that version reads as a shape type and rejects. A fix
-     * is proposed for Lottie4J; remove the entry once a release that has it is used here.
-     */
-    private static final Set<String> UNREADABLE_BY_REFERENCE = Set.of("layers");
-
-    /**
      * The share of pixels (0..1) that may differ, per fixture; 1% for a fixture not named here. What
      * is measured today, rounded up:
      * <ul>
@@ -65,17 +56,18 @@ class LottieOracleTest {
      *       towards the end of a gradient with alpha stops, and the stroke of an ellipse with a
      *       gradient). Which side is right has not been established; the Lottie specification
      *       needs to be read against both outputs.</li>
-     *   <li>{@code parenting}, {@code masks}, {@code transform}, {@code precomp}: edges that
-     *       differ by a pixel or two, plus small offsets that have not been traced yet.</li>
+     *   <li>{@code layers}: its text layer, which the two draw with their own idea of the font and
+     *       of where the baseline is.</li>
+     *   <li>{@code parenting}, {@code precomp}, {@code morph}: edges that differ by a pixel or
+     *       two, plus offsets that have not been traced yet.</li>
      * </ul>
      */
     private static final Map<String, Double> LIMITS = Map.of(
             "shapes", 0.16,
-            "transform", 0.02,
+            "layers", 0.09,
             "parenting", 0.04,
-            "masks", 0.025,
-            "morph", 0.015,
-            "precomp", 0.025);
+            "precomp", 0.025,
+            "morph", 0.015);
 
     /** Set the environment variable {@code LOTTIE_ORACLE_DUMP} to a directory to get both pictures of every frame as PNG files. */
     private static final String DUMP_VARIABLE = "LOTTIE_ORACLE_DUMP";
@@ -116,13 +108,10 @@ class LottieOracleTest {
 
     /** The picture of one frame as Lottie4J draws it. */
     private static WritableImage reference(com.lottie4j.core.model.animation.Animation animation, double frame) {
-        LottiePlayer player = new LottiePlayer(animation, animation.width().intValue(),
-                animation.height().intValue());
-        // adaptive scaling trades resolution for speed on a slow machine: not what is being compared
-        player.setAdaptiveOffscreenScalingEnabled(false);
+        LottiePlayer player = new LottiePlayer(animation, animation.width(), animation.height());
         player.setBackgroundColor(Color.TRANSPARENT);
-        player.render(frame);
-        return player.snapshot(transparent(), null);
+        // a picture of its own canvas, without the adaptive scaling that trades resolution for speed
+        return player.snapshotFrame(frame);
     }
 
     private static void dump(String name, int step, WritableImage ours, WritableImage reference) throws IOException {
@@ -173,7 +162,6 @@ class LottieOracleTest {
     @ParameterizedTest
     @ValueSource(strings = {"layers", "shapes", "transform", "parenting", "masks", "morph", "precomp"})
     void importMatchesTheReferenceRenderer(String name) throws Exception {
-        assumeFalse(UNREADABLE_BY_REFERENCE.contains(name), name + " cannot be read by Lottie4J 1.2.8");
         var reference = LottieFileLoader.load(fixture(name));
         ImportResult imported;
         try (var in = LottieOracleTest.class.getResourceAsStream("lottie/" + name + ".json")) {

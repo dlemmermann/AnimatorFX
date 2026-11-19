@@ -49,6 +49,11 @@
             <groupId>com.dlsc.animatorfx</groupId>
             <artifactId>animatorfx-model</artifactId>
         </dependency>
+        <!-- The typed model of the Lottie format and its reader; LottieImporter converts from it. -->
+        <dependency>
+            <groupId>com.lottie4j</groupId>
+            <artifactId>core</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>

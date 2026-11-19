@@ -6,11 +6,13 @@ import com.dlsc.animatorfx.model.Marker;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.io.AnimationFile;
 import com.dlsc.animatorfx.model.io.AnimationFormatException;
-import com.dlsc.animatorfx.model.io.Json;
+import com.lottie4j.core.exception.LottieFileException;
+import com.lottie4j.core.file.LottieFileLoader;
+import com.lottie4j.core.helper.ModelWalker;
+import com.lottie4j.core.model.animation.Animated;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,11 +20,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.dlsc.animatorfx.importer.LottieJson.get;
-import static com.dlsc.animatorfx.importer.LottieJson.list;
-
 /**
- * Converts a Lottie (Bodymovin) JSON animation to an animated document.
+ * Converts a Lottie (Bodymovin) JSON animation to an animated document. The file is read by
+ * Lottie4J; this class and its helpers turn what it read into our model.
  */
 public final class LottieImporter {
 
@@ -44,15 +44,20 @@ public final class LottieImporter {
      *                     1000) and time range ({@code ip}, {@code op}; at most 24 hours)
      */
     public static ImportResult read(InputStream in, String name) throws IOException {
-        Object root = Json.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-        double width = dimension(root, "w", Double.MIN_VALUE, Limits.MAX_MAGNITUDE);
-        double height = dimension(root, "h", Double.MIN_VALUE, Limits.MAX_MAGNITUDE);
-        double frameRate = dimension(root, "fr", MIN_FRAME_RATE, MAX_FRAME_RATE);
-        if (!(get(root, "layers") instanceof List<?>)) {
+        com.lottie4j.core.model.animation.Animation source;
+        try {
+            source = LottieFileLoader.load(in);
+        } catch (LottieFileException e) {
+            throw new AnimationFormatException("Not a valid Lottie document: " + e.getMessage(), "", e);
+        }
+        double width = dimension(source.width(), "w", Double.MIN_VALUE, Limits.MAX_MAGNITUDE);
+        double height = dimension(source.height(), "h", Double.MIN_VALUE, Limits.MAX_MAGNITUDE);
+        double frameRate = dimension(source.framesPerSecond(), "fr", MIN_FRAME_RATE, MAX_FRAME_RATE);
+        if (source.layers() == null) {
             throw new AnimationFormatException("Not a valid Lottie document: there are no layers", "layers");
         }
-        double inPoint = LottieJson.number(root, "ip", 0);
-        double outPoint = LottieJson.number(root, "op", inPoint);
+        double inPoint = source.inPoint() != null ? source.inPoint() : 0;
+        double outPoint = source.outPoint() != null ? source.outPoint() : inPoint;
         if (!Limits.usable(inPoint) || !Limits.usable(outPoint)) {
             throw new AnimationFormatException("Not a valid Lottie document: the in and out points \"ip\" and"
                     + " \"op\" are out of range", "ip");
@@ -64,78 +69,55 @@ public final class LottieImporter {
         }
 
         Warnings warnings = new Warnings();
-        if (LottieJson.flag(root, "ddd")) {
+        if (source.has3dLayers() != null && source.has3dLayers() != 0) {
             warnings.add("3D layers are not supported; they are treated as 2D", "layer", "layers");
         }
-        int expressions = expressions(root);
-        for (int i = 0; i < expressions; i++) {
-            warnings.add("Expressions are not supported", "property", "properties");
-        }
-        Map<String, Object> assets = new HashMap<>();
-        for (Object asset : list(root, "assets")) {
-            assets.putIfAbsent(LottieJson.string(asset, "id", ""), asset);
-        }
-        Map<String, Object> fonts = new HashMap<>();
-        for (Object font : list(get(root, "fonts"), "list")) {
-            fonts.putIfAbsent(LottieJson.string(font, "fName", ""), font);
+        ModelWalker.visit(source, part -> {
+            if (part instanceof Animated property && property.hasExpression()) {
+                warnings.add("Expressions are not supported", "property", "properties");
+            }
+        });
+        Map<String, com.lottie4j.core.model.asset.Asset> assets = new HashMap<>();
+        if (source.assets() != null) {
+            for (com.lottie4j.core.model.asset.Asset asset : source.assets()) {
+                if (asset != null) {
+                    assets.putIfAbsent(asset.id() != null ? asset.id() : "", asset);
+                }
+            }
         }
         LottieProperties properties = new LottieProperties(warnings, frameRate);
-        LottieLayers converter = new LottieLayers(warnings, properties, duration, assets, fonts);
-        List<Layer> layers = converter.composition(list(root, "layers"), -inPoint);
+        LottieLayers converter = new LottieLayers(warnings, properties, duration, assets, source.fonts());
+        List<Layer> layers = converter.composition(source.layers(), -inPoint);
 
-        String documentName = LottieJson.string(root, "nm", "");
+        String documentName = source.name() != null ? source.name() : "";
         Animation animation = DocumentCheck.repair(new Animation(Animation.CURRENT_FORMAT,
                 documentName.isBlank() ? name : documentName, width, height, frameRate, duration, Rgba.TRANSPARENT,
-                markers(list(root, "markers"), properties, -inPoint, duration), converter.assets(), layers),
+                markers(source.markers(), properties, -inPoint, duration), converter.assets(), layers),
                 warnings);
         return new ImportResult(new AnimationFile(animation, converter.assetBytes()), warnings.lines());
     }
 
-    private static double dimension(Object root, String key, double min, double max)
+    private static double dimension(Number value, String key, double min, double max)
             throws AnimationFormatException {
-        double value = LottieJson.number(root, key, Double.NaN);
-        if (!(value >= min && value <= max)) {
+        double number = value == null ? Double.NaN : value.doubleValue();
+        if (!(number >= min && number <= max)) {
             throw new AnimationFormatException("Not a valid Lottie document: \"" + key + "\" is "
-                    + (Double.isNaN(value) ? "missing" : "out of range (" + value + ")"), key);
+                    + (value == null ? "missing" : "out of range (" + number + ")"), key);
         }
-        return value;
-    }
-
-    /** Counts the properties that carry an expression ({@code x}) next to their value ({@code k}). */
-    private static int expressions(Object node) {
-        int count = 0;
-        if (node instanceof Map<?, ?> map) {
-            if (map.get("x") instanceof String && map.containsKey("k")) {
-                count++;
-            }
-            for (Object value : map.values()) {
-                count += expressions(value);
-            }
-        } else if (node instanceof List<?> list) {
-            for (Object value : list) {
-                count += expressions(value);
-            }
-        }
-        return count;
+        return number;
     }
 
     /**
-     * Markers with their time {@code tm} and duration {@code dr} in frames. The comment
-     * {@code cm} is the name, or a JSON object with a {@code name}. Names are made unique.
+     * Markers with their time and duration in frames, and the name Lottie4J reads from their
+     * comment. Names are made unique.
      */
-    private static List<Marker> markers(List<Object> source, LottieProperties properties, double frameOffset,
-                                        double duration) {
+    private static List<Marker> markers(List<com.lottie4j.core.model.animation.Marker> source,
+                                        LottieProperties properties, double frameOffset, double duration) {
         List<Marker> markers = new ArrayList<>();
         Set<String> names = new HashSet<>();
-        for (Object marker : source) {
-            String name = LottieJson.string(marker, "cm", "").trim();
-            if (name.startsWith("{")) {
-                try {
-                    name = LottieJson.string(Json.parse(name), "name", name).trim();
-                } catch (AnimationFormatException e) {
-                    // not JSON after all: the comment is the name
-                }
-            }
+        for (com.lottie4j.core.model.animation.Marker marker : source == null
+                ? List.<com.lottie4j.core.model.animation.Marker>of() : source) {
+            String name = marker.name();
             if (name.isEmpty()) {
                 name = "Marker " + (markers.size() + 1);
             }
@@ -143,10 +125,10 @@ public final class LottieImporter {
             for (int suffix = 2; !names.add(unique); suffix++) {
                 unique = name + " " + suffix;
             }
-            double frame = LottieJson.number(marker, "tm", 0);
+            double frame = marker.time() != null ? marker.time() : 0;
+            double length = marker.duration() != null ? Math.max(0, marker.duration()) : 0;
             double start = Math.clamp(properties.time(frame, frameOffset), 0.0, duration);
-            double end = Math.clamp(properties.time(frame + Math.max(0, LottieJson.number(marker, "dr", 0)),
-                    frameOffset), 0.0, duration);
+            double end = Math.clamp(properties.time(frame + length, frameOffset), 0.0, duration);
             markers.add(new Marker(unique, start, end));
         }
         return markers;

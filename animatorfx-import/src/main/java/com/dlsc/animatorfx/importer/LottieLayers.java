@@ -17,46 +17,44 @@ import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.Vec2;
 
+import com.lottie4j.core.definition.BlendMode;
+import com.lottie4j.core.definition.LayerType;
+import com.lottie4j.core.definition.MatteMode;
+import com.lottie4j.core.helper.LayerHierarchy;
+import com.lottie4j.core.model.text.Font;
+import com.lottie4j.core.model.text.FontList;
+import com.lottie4j.core.model.text.TextData;
+import com.lottie4j.core.model.text.TextKeyframe;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
-import static com.dlsc.animatorfx.importer.LottieJson.get;
-import static com.dlsc.animatorfx.importer.LottieJson.list;
 
 /**
  * Converts the layers of a Lottie composition. One instance converts one document.
  */
 final class LottieLayers {
 
-    private static final int PRECOMPOSITION = 0;
-    private static final int SOLID = 1;
-    private static final int IMAGE = 2;
-    private static final int NULL = 3;
-    private static final int SHAPE = 4;
-    private static final int TEXT = 5;
-    private static final int AUDIO = 6;
-    private static final int CAMERA = 13;
-
     /** As in the SVG importer: the ascent as a share of the font size. */
     private static final double ASCENT = 0.8;
 
     /** One layer of a composition on its way to the model. */
     private static final class Unit {
-        Object json;
+        com.lottie4j.core.model.layer.Layer source;
         String name;
         LottieTransforms.Placement placement;
         /** The converted layer; {@code null} if the layer is of a kind that is not converted. */
         Layer core;
         /** The layer for the layer's own mask, a sibling of {@code core}; or {@code null}. */
         Layer maskLayer;
-        Unit parent;
+        /** The layers this one follows, the closest first; empty for a layer without (usable) parent. */
+        List<Unit> ancestors = List.of();
         /** What stands for the layer among its siblings, bottom to top. */
         List<Layer> tops = List.of();
         boolean hiddenMatte;
@@ -71,8 +69,8 @@ final class LottieLayers {
     private final LottieEffects effects;
     private final Limits limits;
     private final double duration;
-    private final Map<String, Object> lottieAssets;
-    private final Map<String, Object> fonts;
+    private final Map<String, com.lottie4j.core.model.asset.Asset> lottieAssets;
+    private final FontList fonts;
     private final List<Asset> assets = new ArrayList<>();
     private final Map<String, byte[]> assetBytes = new LinkedHashMap<>();
     private final Map<String, String> imageAssetIds = new HashMap<>();
@@ -80,10 +78,10 @@ final class LottieLayers {
 
     /**
      * @param lottieAssets the assets of the document by id
-     * @param fonts        the fonts of the document by name
+     * @param fonts        the fonts of the document; {@code null} if it has none
      */
-    LottieLayers(Warnings warnings, LottieProperties properties, double duration, Map<String, Object> lottieAssets,
-                 Map<String, Object> fonts) {
+    LottieLayers(Warnings warnings, LottieProperties properties, double duration,
+                 Map<String, com.lottie4j.core.model.asset.Asset> lottieAssets, FontList fonts) {
         this.warnings = warnings;
         this.properties = properties;
         this.transforms = new LottieTransforms(properties, warnings);
@@ -108,26 +106,29 @@ final class LottieLayers {
      *
      * @param frameOffset added to every frame number of the composition, see {@link LottieProperties#time}
      */
-    List<Layer> composition(List<Object> layers, double frameOffset) {
+    List<Layer> composition(List<com.lottie4j.core.model.layer.Layer> layers, double frameOffset) {
         List<Unit> units = new ArrayList<>();
-        Map<Integer, Unit> byIndex = new HashMap<>();
-        for (Object json : layers) {
-            Unit unit = new Unit();
-            unit.json = json;
-            unit.name = LottieJson.string(json, "nm", "Layer " + (units.size() + 1));
-            unit.placement = transforms.read(get(json, "ks"), frameOffset);
-            units.add(unit);
-            if (get(json, "ind") instanceof Number index) {
-                byIndex.putIfAbsent(index.intValue(), unit);
+        Map<com.lottie4j.core.model.layer.Layer, Unit> unitOf = new IdentityHashMap<>();
+        for (com.lottie4j.core.model.layer.Layer source : layers) {
+            if (source == null) {
+                continue;
             }
+            Unit unit = new Unit();
+            unit.source = source;
+            unit.name = source.name() != null ? source.name() : "Layer " + (units.size() + 1);
+            unit.placement = transforms.read(source.transform(), frameOffset);
+            units.add(unit);
+            unitOf.put(source, unit);
         }
+        List<com.lottie4j.core.model.layer.Layer> sources = units.stream().map(unit -> unit.source).toList();
+        Map<Integer, com.lottie4j.core.model.layer.Layer> byIndex = LayerHierarchy.byIndex(sources);
         for (Unit unit : units) {
-            unit.parent = parent(unit, byIndex);
+            unit.ancestors = ancestors(unit, byIndex, unitOf);
         }
         for (Unit unit : units) {
             convert(unit, frameOffset);
         }
-        matte(units, byIndex);
+        matte(units, sources, byIndex, unitOf);
 
         List<Layer> result = new ArrayList<>();
         for (int i = units.size() - 1; i >= 0; i--) {
@@ -140,28 +141,31 @@ final class LottieLayers {
     }
 
     /**
-     * The parent layer, or {@code null} if the layer has none or its chain of ancestors is
-     * broken: one of them is missing, or the chain runs in a circle.
+     * The layers a layer follows, the closest first. Empty if the layer has none, or if its
+     * chain of ancestors is broken: one of them is missing, the chain runs in a circle, or it is
+     * longer than a document may nest.
      */
-    private Unit parent(Unit unit, Map<Integer, Unit> byIndex) {
-        Set<Unit> seen = new HashSet<>();
-        seen.add(unit);
-        Unit current = unit;
-        while (get(current.json, "parent") instanceof Number index) {
-            if (seen.size() > Limits.MAX_DEPTH) {
-                warnings.add("Parent chains longer than " + Limits.MAX_DEPTH + " layers are not supported; the"
-                        + " layers are treated as unparented", "layer", "layers");
-                return null;
-            }
-            Unit next = byIndex.get(index.intValue());
-            if (next == null || !seen.add(next)) {
-                warnings.add("Layers whose parent is missing or circular are treated as unparented", "layer",
-                        "layers");
-                return null;
-            }
-            current = next;
+    private List<Unit> ancestors(Unit unit, Map<Integer, com.lottie4j.core.model.layer.Layer> byIndex,
+                                 Map<com.lottie4j.core.model.layer.Layer, Unit> unitOf) {
+        if (unit.source.indexParent() == null) {
+            return List.of();
         }
-        return get(unit.json, "parent") instanceof Number index ? byIndex.get(index.intValue()) : null;
+        // outermost first; empty for a circle, and ending early at an ancestor that does not exist
+        List<com.lottie4j.core.model.layer.Layer> chain = LayerHierarchy.parentChain(unit.source, byIndex);
+        if (chain.isEmpty() || chain.get(0).indexParent() != null) {
+            warnings.add("Layers whose parent is missing or circular are treated as unparented", "layer", "layers");
+            return List.of();
+        }
+        if (chain.size() > Limits.MAX_DEPTH) {
+            warnings.add("Parent chains longer than " + Limits.MAX_DEPTH + " layers are not supported; the"
+                    + " layers are treated as unparented", "layer", "layers");
+            return List.of();
+        }
+        List<Unit> ancestors = new ArrayList<>();
+        for (int i = chain.size() - 1; i >= 0; i--) {
+            ancestors.add(unitOf.get(chain.get(i)));
+        }
+        return ancestors;
     }
 
     /**
@@ -172,10 +176,7 @@ final class LottieLayers {
         if (!limits.layer()) {
             return;
         }
-        int ancestors = 0;
-        for (Unit ancestor = unit.parent; ancestor != null; ancestor = ancestor.parent) {
-            ancestors++;
-        }
+        int ancestors = unit.ancestors.size();
         int entered = 0;
         try {
             // levels and layers for the carriers first: the content must not use them up
@@ -197,44 +198,43 @@ final class LottieLayers {
     }
 
     private void build(Unit unit, double frameOffset) {
-        Object json = unit.json;
+        com.lottie4j.core.model.layer.Layer source = unit.source;
         // The mask layer is asked for before the content: a layer that cannot have its mask is
         // left out as a whole, and must not have used up the budget by then.
-        Object mask = chooseMask(json);
+        com.lottie4j.core.model.layer.Mask mask = chooseMask(source);
         if (mask != null && !limits.layer()) {
             return;
         }
-        if (LottieJson.flag(json, "ddd")) {
+        if (flag(source.has3dLayers())) {
             warnings.add("3D layers are not supported; they are treated as 2D", "layer", "layers");
         }
-        if (LottieJson.flag(json, "ao")) {
+        if (flag(source.autoRotate())) {
             warnings.add("Auto-orient is not supported", "layer", "layers");
         }
-        if (LottieJson.number(json, "bm", 0) != 0) {
+        if (source.blendMode() != null && source.blendMode() != BlendMode.NORMAL) {
             warnings.add("Blend modes are not supported; the layers are blended normally", "layer", "layers");
         }
-        if (!list(json, "sy").isEmpty()) {
+        if (source.styles() != null && !source.styles().isEmpty()) {
             warnings.add("Layer styles are not supported", "layer", "layers");
         }
 
-        double in = LottieJson.has(json, "ip") ? clamp(properties.time(LottieJson.number(json, "ip", 0), frameOffset))
-                : 0;
-        double out = LottieJson.has(json, "op")
-                ? clamp(properties.time(LottieJson.number(json, "op", 0), frameOffset)) : duration;
-        LayerBase base = new LayerBase(UUID.randomUUID().toString(), unit.name, !LottieJson.flag(json, "hd"), false,
+        double in = source.inPoint() != null ? clamp(properties.time(source.inPoint(), frameOffset)) : 0;
+        double out = source.outPoint() != null ? clamp(properties.time(source.outPoint(), frameOffset)) : duration;
+        LayerBase base = new LayerBase(UUID.randomUUID().toString(), unit.name, !source.isHidden(), false,
                 in, Math.max(in, out), unit.placement.transform(), unit.placement.opacity(), null,
-                effects.read(json, frameOffset), null);
-        int type = (int) LottieJson.number(json, "ty", -1);
+                effects.read(source, frameOffset), null);
+        LayerType type = source.layerType();
         unit.core = switch (type) {
-            case SHAPE -> new GroupLayer(base, shapeContent(json, frameOffset));
+            case SHAPE -> new GroupLayer(base, shapeContent(source, frameOffset));
             case NULL -> new GroupLayer(base, List.of());
-            case SOLID -> solid(json, base);
-            case IMAGE -> image(json, base);
-            case TEXT -> text(json, base);
-            case PRECOMPOSITION -> precomposition(json, base, frameOffset);
+            case SOLD_COLOR -> solid(source, base);
+            case IMAGE -> image(source, base);
+            case TEXT -> text(source, base);
+            case PRECOMPOSITION -> precomposition(source, base, frameOffset);
             case AUDIO -> ignored("Audio layers are not supported");
             case CAMERA -> ignored("Camera layers are not supported");
-            default -> ignored("Layers of type " + type + " are not supported");
+            case null -> ignored("Layers of an unknown type are not supported");
+            default -> ignored("Layers of type " + type.value() + " are not supported");
         };
         if (unit.core == null) {
             return;
@@ -250,7 +250,7 @@ final class LottieLayers {
         tops.add(unit.core);
         // A child follows the transform of its parent, but neither its opacity nor its time
         // range: a group with a copy of the parent's transform carries it, one per ancestor.
-        for (Unit ancestor = unit.parent; ancestor != null; ancestor = ancestor.parent) {
+        for (Unit ancestor : unit.ancestors) {
             LayerBase carrier = LayerBase.create(ancestor.name + " (parent transform)", duration)
                     .withTransform(ancestor.placement.transform());
             tops = new ArrayList<>(List.of(new GroupLayer(carrier, tops)));
@@ -258,12 +258,16 @@ final class LottieLayers {
         unit.tops = tops;
     }
 
-    private List<Layer> shapeContent(Object json, double frameOffset) {
-        if (!limits.enter()) {
+    private static boolean flag(Integer value) {
+        return value != null && value != 0;
+    }
+
+    private List<Layer> shapeContent(com.lottie4j.core.model.layer.Layer source, double frameOffset) {
+        if (source.shapes() == null || !limits.enter()) {
             return List.of();
         }
         try {
-            return shapes.content(list(json, "shapes"), frameOffset);
+            return shapes.content(source.shapes(), frameOffset);
         } finally {
             limits.leave();
         }
@@ -278,17 +282,19 @@ final class LottieLayers {
         return null;
     }
 
-    private Layer solid(Object json, LayerBase base) {
-        Rgba color = SvgColors.parse(LottieJson.string(json, "sc", "#000000"));
-        Vec2 size = new Vec2(LottieJson.number(json, "sw", 0), LottieJson.number(json, "sh", 0));
+    private Layer solid(com.lottie4j.core.model.layer.Layer source, LayerBase base) {
+        Rgba color = SvgColors.parse(source.solidColor() != null ? source.solidColor() : "#000000");
+        Vec2 size = new Vec2(source.solidWidth() != null ? source.solidWidth() : 0,
+                source.solidHeight() != null ? source.solidHeight() : 0);
         return new ShapeLayer(base, new Geometry.Rect(Animatable.of(size), Animatable.of(0.0)),
                 Animatable.of(new Paint.Solid(color == null ? Rgba.BLACK : color)), null, null);
     }
 
-    private Layer image(Object json, LayerBase base) {
-        String reference = LottieJson.string(json, "refId", "");
-        Object asset = lottieAssets.get(reference);
-        ImageData data = ImageData.fromDataUri(LottieJson.string(asset, "p", null));
+    private Layer image(com.lottie4j.core.model.layer.Layer source, LayerBase base) {
+        String reference = source.referenceId() != null ? source.referenceId() : "";
+        com.lottie4j.core.model.asset.Asset asset = lottieAssets.get(reference);
+        ImageData data = ImageData.fromDataUri(
+                asset != null && asset.fileName() instanceof String uri ? uri : null);
         if (data == null) {
             warnings.add("External images are not supported", "layer ignored", "layers ignored");
             return null;
@@ -296,12 +302,12 @@ final class LottieLayers {
         String assetId = imageAssetIds.computeIfAbsent(reference, key -> {
             String id = UUID.randomUUID().toString();
             assets.add(new Asset(id, Asset.Kind.IMAGE, "assets/" + id + "." + data.extension(),
-                    LottieJson.string(asset, "nm", reference)));
+                    asset.name() != null ? asset.name() : reference));
             assetBytes.put(id, data.bytes());
             return id;
         });
-        return new ImageLayer(base, assetId, LottieJson.number(asset, "w", data.width()),
-                LottieJson.number(asset, "h", data.height()));
+        return new ImageLayer(base, assetId, asset.width() != null ? asset.width() : data.width(),
+                asset.height() != null ? asset.height() : data.height());
     }
 
     /**
@@ -310,27 +316,25 @@ final class LottieLayers {
      * baseline, the model by its top: the difference goes into the anchor, with the ascent
      * estimated for want of the font.
      */
-    private Layer text(Object json, LayerBase base) {
-        Object text = get(json, "t");
-        List<Object> documents = list(get(text, "d"), "k");
+    private Layer text(com.lottie4j.core.model.layer.Layer source, LayerBase base) {
+        TextData text = source.textData();
+        List<TextKeyframe> documents = text == null || text.document() == null
+                || text.document().keyframes() == null ? List.of() : text.document().keyframes();
         if (documents.isEmpty()) {
             return ignored("Text layers without text are ignored");
         }
-        if (documents.size() > 1 || !list(text, "a").isEmpty()) {
+        if (documents.size() > 1 || (text.animators() != null && !text.animators().isEmpty())) {
             warnings.add("Animated text is not supported; the first text is shown", "layer", "layers");
         }
-        Object document = get(documents.get(0), "s");
-        String content = LottieJson.string(document, "t", "").replace("\r\n", "\n").replace('\r', '\n')
-                .replace('\u0003', '\n');
-        double size = LottieJson.number(document, "s", 12);
-        String fontName = LottieJson.string(document, "f", "");
-        Object font = fonts.get(fontName);
-        String family = LottieJson.string(font, "fFamily", fontName.isEmpty() ? "System" : fontName);
-        String style = LottieJson.string(font, "fStyle", "").toLowerCase(Locale.ROOT);
-        String weight = LottieJson.string(font, "fWeight", "");
-        boolean bold = style.contains("bold") || style.contains("black") || style.contains("heavy")
-                || SvgLength.fraction(weight, 400, null) >= 600;
-        TextLayer.Align align = switch ((int) LottieJson.number(document, "j", 0)) {
+        TextKeyframe document = documents.get(0);
+        String content = document.getText().replace("\r\n", "\n").replace('\r', '\n').replace('\u0003', '\n');
+        double size = document.getFontSize() != null ? document.getFontSize() : 12;
+        String fontName = document.getFontFamily() != null ? document.getFontFamily() : "";
+        Font font = fonts == null ? null : fonts.byName(fontName);
+        String family = font != null && font.family() != null ? font.family()
+                : fontName.isEmpty() ? "System" : fontName;
+        Integer justification = document.getJustification();
+        TextLayer.Align align = switch (justification == null ? 0 : justification) {
             case 1 -> TextLayer.Align.RIGHT;
             case 2 -> TextLayer.Align.CENTER;
             default -> TextLayer.Align.LEFT;
@@ -339,9 +343,9 @@ final class LottieLayers {
         warnings.add("Text is placed approximately: the baseline is estimated without the font",
                 "text", "texts");
 
-        Rgba fill = LottieProperties.color(LottieJson.numbers(get(document, "fc")), null);
-        Rgba strokeColor = LottieProperties.color(LottieJson.numbers(get(document, "sc")), null);
-        double strokeWidth = LottieJson.number(document, "sw", 0);
+        Rgba fill = LottieProperties.color(document.getFontColor(), null);
+        Rgba strokeColor = LottieProperties.color(document.getStrokeColor(), null);
+        double strokeWidth = document.getStrokeWidth() != null ? document.getStrokeWidth() : 0;
         Stroke stroke = strokeColor == null || !(strokeWidth > 0) ? null
                 : new Stroke(Animatable.of(new Paint.Solid(strokeColor)), Animatable.of(strokeWidth), Stroke.Cap.BUTT,
                 Stroke.Join.MITER, 4, List.of(), Animatable.of(0.0));
@@ -349,16 +353,16 @@ final class LottieLayers {
         LayerBase placed = base.withTransform(
                 transform.withAnchor(Keyframes.map(transform.anchor(), anchor -> anchor.plus(origin))));
         return new TextLayer(placed, content, family, null, Animatable.of(size),
-                bold ? TextLayer.Weight.BOLD : TextLayer.Weight.NORMAL,
-                style.contains("italic") || style.contains("oblique"), align,
+                font != null && font.isBold() ? TextLayer.Weight.BOLD : TextLayer.Weight.NORMAL,
+                font != null && font.isItalic(), align,
                 Animatable.of(fill == null ? new Paint.None() : new Paint.Solid(fill)), stroke);
     }
 
     /** A precomposition is flattened into a group; its start time shifts everything inside. */
-    private Layer precomposition(Object json, LayerBase base, double frameOffset) {
-        String reference = LottieJson.string(json, "refId", "");
-        Object asset = lottieAssets.get(reference);
-        if (!LottieJson.has(asset, "layers")) {
+    private Layer precomposition(com.lottie4j.core.model.layer.Layer source, LayerBase base, double frameOffset) {
+        String reference = source.referenceId() != null ? source.referenceId() : "";
+        com.lottie4j.core.model.asset.Asset asset = lottieAssets.get(reference);
+        if (asset == null || asset.layers() == null) {
             return ignored("Precompositions that are missing from the file are ignored");
         }
         if (!openCompositions.add(reference)) {
@@ -369,16 +373,16 @@ final class LottieLayers {
             return new GroupLayer(base, List.of());
         }
         try {
-            if (LottieJson.has(json, "tm")) {
+            if (source.timeRemapping() != null) {
                 warnings.add("Time remapping is not supported", "layer", "layers");
             }
-            if (LottieJson.number(json, "sr", 1) != 1) {
+            if (source.timeStretch() != null && source.timeStretch() != 1) {
                 warnings.add("Time stretch is not supported; the layers play at normal speed", "layer", "layers");
             }
             warnings.add("The bounds of precompositions do not clip their content", "precomposition",
                     "precompositions");
-            double start = LottieJson.number(json, "st", 0);
-            return new GroupLayer(base, composition(list(asset, "layers"), frameOffset + start));
+            double start = source.startTime() != null ? source.startTime() : 0;
+            return new GroupLayer(base, composition(asset.layers(), frameOffset + start));
         } finally {
             limits.leave();
             openCompositions.remove(reference);
@@ -386,14 +390,17 @@ final class LottieLayers {
     }
 
     /** The mask of a layer that is converted: the first additive one, or {@code null}. */
-    private Object chooseMask(Object json) {
-        Object chosen = null;
-        for (Object mask : list(json, "masksProperties")) {
-            String mode = LottieJson.string(mask, "mode", "a");
+    private com.lottie4j.core.model.layer.Mask chooseMask(com.lottie4j.core.model.layer.Layer source) {
+        com.lottie4j.core.model.layer.Mask chosen = null;
+        if (source.masks() == null) {
+            return null;
+        }
+        for (com.lottie4j.core.model.layer.Mask mask : source.masks()) {
+            String mode = mask.mode() != null ? mask.mode() : "a";
             if (mode.equals("n")) {
                 continue;
             }
-            if (chosen == null && mode.equals("a") && !LottieJson.flag(mask, "inv")) {
+            if (chosen == null && mode.equals("a") && !Boolean.TRUE.equals(mask.inverted())) {
                 chosen = mask;
             } else {
                 warnings.add("Only one additive mask per layer is supported", "mask ignored", "masks ignored");
@@ -406,9 +413,9 @@ final class LottieLayers {
      * The mask path is in the coordinates of the layer, so the mask layer, a sibling as the
      * model wants it, gets the same transform.
      */
-    private void mask(Unit unit, Object chosen, double frameOffset) {
-        Animatable<PathData> path = properties.path(get(chosen, "pt"), frameOffset);
-        Animatable<Double> opacity = transforms.opacity(get(chosen, "o"), frameOffset);
+    private void mask(Unit unit, com.lottie4j.core.model.layer.Mask chosen, double frameOffset) {
+        Animatable<PathData> path = properties.path(chosen.path(), frameOffset);
+        Animatable<Double> opacity = transforms.opacity(chosen.opacity(), frameOffset);
         boolean opaque = !opacity.isAnimated() && opacity.at(0) >= 1;
         LayerBase base = LayerBase.create(unit.name + " (mask)", duration)
                 .withTransform(unit.placement.transform()).withOpacity(opacity);
@@ -424,20 +431,21 @@ final class LottieLayers {
      * layers of the same list, which is what the model asks of a mask. A matte may be matted
      * itself; mattes that lead back to their own layer are declined.
      */
-    private void matte(List<Unit> units, Map<Integer, Unit> byIndex) {
+    private void matte(List<Unit> units, List<com.lottie4j.core.model.layer.Layer> sources,
+                       Map<Integer, com.lottie4j.core.model.layer.Layer> byIndex,
+                       Map<com.lottie4j.core.model.layer.Layer, Unit> unitOf) {
         Set<Unit> used = new HashSet<>();
         for (int i = 0; i < units.size(); i++) {
             Unit unit = units.get(i);
-            int mode = (int) LottieJson.number(unit.json, "tt", 0);
-            if (mode == 0) {
+            MatteMode mode = unit.source.matteMode();
+            if (mode == null || mode == MatteMode.NORMAL) {
                 continue;
             }
-            Unit source = get(unit.json, "tp") instanceof Number index ? byIndex.get(index.intValue())
-                    : i > 0 ? units.get(i - 1) : null;
+            Unit source = matteSource(sources, i, byIndex, unitOf);
             if (source == null || source == unit) {
                 continue;
             }
-            if (mode != 1) {
+            if (mode != MatteMode.ALPHA) {
                 source.hiddenMatte = true;
                 warnings.add("Inverted and luminance track mattes are not supported", "matte ignored",
                         "mattes ignored");
@@ -472,7 +480,7 @@ final class LottieLayers {
             used.add(source);
         }
         for (Unit unit : units) {
-            if (LottieJson.flag(unit.json, "td")) {
+            if (flag(unit.source.matteTarget())) {
                 unit.hiddenMatte = true;
             }
             // a layer that masks another one is left out by the renderer; it need not be hidden
@@ -480,6 +488,21 @@ final class LottieLayers {
                 unit.hiddenMatte = false;
             }
         }
+    }
+
+    /**
+     * The layer a layer takes its matte from: the one it names with {@code tp}, or else the one
+     * listed before it, whether or not that one is marked as a matte.
+     */
+    private static Unit matteSource(List<com.lottie4j.core.model.layer.Layer> sources, int position,
+                                    Map<Integer, com.lottie4j.core.model.layer.Layer> byIndex,
+                                    Map<com.lottie4j.core.model.layer.Layer, Unit> unitOf) {
+        com.lottie4j.core.model.layer.Layer named = LayerHierarchy.matteSource(sources, position, byIndex);
+        if (named != null) {
+            return unitOf.get(named);
+        }
+        boolean names = sources.get(position).tp() != null;
+        return names || position == 0 ? null : unitOf.get(sources.get(position - 1));
     }
 
     /**

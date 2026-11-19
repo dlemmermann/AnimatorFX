@@ -513,13 +513,18 @@ Not supported: expressions, time remapping, repeaters, merge paths, round corner
 effects, blend modes, 3D layers, audio, curved motion between position keyframes, animated text,
 luma and inverted mattes. Trim applies to strokes only.
 
-> The Lottie conversion is implemented from the format's documentation and tested against small
+> The Lottie file is read by [Lottie4J](https://github.com/lottie4j/lottie4j) (`com.lottie4j:core`),
+> which gives the importer a typed model of the format; the importer converts that model to an
+> AnimatorFX document. Lottie4J is a dependency of the importer and therefore of the editor, and
+> brings Jackson 3 and the SLF4J API with it. The runtime (`animatorfx-model`, `animatorfx-player`)
+> does not depend on it.
+>
+> The conversion is implemented from the format's documentation and tested against small
 > hand-written files. It has **not** been validated against real After Effects exports;
 > conventions such as skew direction, shadow direction and blur factors may be off.
 >
-> `LottieOracleTest` renders those hand-written files a second time with the
-> [Lottie4J](https://github.com/lottie4j/lottie4j) player (a test dependency only: the importer and the runtime
-> do not use it) and compares the pictures. The two do not agree everywhere yet: the test
+> `LottieOracleTest` renders those hand-written files a second time with the Lottie4J player (a
+> test dependency only) and compares the pictures. The two do not agree everywhere yet: the test
 > records how far apart they are per file and fails when an import gets worse. Gradients are the
 > largest known difference, and it is not established which side is right. Set the environment
 > variable `LOTTIE_ORACLE_DUMP` to a directory to get both pictures of every compared frame.
