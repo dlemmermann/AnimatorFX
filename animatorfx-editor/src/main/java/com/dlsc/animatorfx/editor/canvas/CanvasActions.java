@@ -6,6 +6,7 @@ import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
@@ -95,6 +96,11 @@ public final class CanvasActions {
     // ------------------------------------------------------------------ selection
 
     public void delete() {
+        // sound cues are selected instead of layers
+        if (doc() != null && !doc().getSelection().cueIds().isEmpty()) {
+            doc().execute(Commands.removeCues(List.copyOf(doc().getSelection().cueIds())));
+            return;
+        }
         List<String> ids = selected();
         if (!ids.isEmpty()) {
             doc().execute(Commands.removeLayers(ids));
@@ -244,6 +250,8 @@ public final class CanvasActions {
             for (Layer layer : subtree(top)) {
                 if (layer instanceof ImageLayer image) {
                     assetIds.add(image.assetId());
+                } else if (layer instanceof AudioLayer audio) {
+                    assetIds.add(audio.assetId());
                 } else if (layer instanceof TextLayer text && text.fontAssetId() != null) {
                     assetIds.add(text.fontAssetId());
                 }

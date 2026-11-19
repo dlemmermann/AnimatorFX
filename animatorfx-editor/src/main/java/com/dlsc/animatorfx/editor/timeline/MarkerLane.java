@@ -12,7 +12,10 @@ import javafx.geometry.VPos;
 import javafx.scene.Cursor;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -25,12 +28,16 @@ import javafx.scene.layout.Region;
  * selects a marker, dragging its body moves it and dragging an end resizes it, both snapped to
  * frames unless Alt is held. A double-click on a marker renames it (names are unique; the
  * editor says so inline), a double-click on free space adds one. Delete removes the selected
- * marker while the lane has the focus.
+ * marker while the lane has the focus. The secondary button opens a menu for the marker, which
+ * also adds a sound cue at its start.
  */
 public final class MarkerLane extends Region {
 
     public static final String RENAME_FIELD_ID = "marker-rename-field";
     public static final String RENAME_ERROR_ID = "marker-rename-error";
+    public static final String MENU_ADD_CUE_ID = "marker-menu-add-cue";
+    public static final String MENU_RENAME_ID = "marker-menu-rename";
+    public static final String MENU_DELETE_ID = "marker-menu-delete";
 
     /** The part of a marker under the pointer. */
     public enum Part {START, BODY, END}
@@ -49,6 +56,7 @@ public final class MarkerLane extends Region {
     private final TextField renameField = new TextField();
     private final Label renameError = new Label();
 
+    private ContextMenu markerMenu;
     private String renaming;
     private Hit grabbed;
     private double pressX;
@@ -90,6 +98,15 @@ public final class MarkerLane extends Region {
         setOnMouseReleased(this::released);
         setOnMouseMoved(e -> setCursor(hitAt(e.getX()).filter(h -> h.part() != Part.BODY).isPresent()
                 ? Cursor.H_RESIZE : Cursor.DEFAULT));
+        setOnContextMenuRequested(e -> {
+            Optional<Hit> hit = hitAt(e.getX());
+            if (doc() != null && hit.isPresent()) {
+                requestFocus();
+                timeline.setSelectedMarker(hit.get().marker().name());
+                getMarkerMenu().show(this, e.getScreenX(), e.getScreenY());
+            }
+            e.consume();
+        });
         addEventHandler(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.ESCAPE && dragging) {
                 cancelGesture();
@@ -129,6 +146,31 @@ public final class MarkerLane extends Region {
         return Optional.empty();
     }
 
+    /** The menu for the selected marker: Add Cue at Marker Start, Rename, Delete. */
+    public ContextMenu getMarkerMenu() {
+        if (markerMenu == null) {
+            MenuItem addCue = new MenuItem("Add Cue at Marker Start");
+            addCue.setId(MENU_ADD_CUE_ID);
+            addCue.setOnAction(e -> selected().ifPresent(marker -> timeline.addCue(marker.start(), null)));
+            MenuItem rename = new MenuItem("Rename");
+            rename.setId(MENU_RENAME_ID);
+            rename.setOnAction(e -> selected().ifPresent(marker -> startRename(marker.name())));
+            MenuItem delete = new MenuItem("Delete");
+            delete.setId(MENU_DELETE_ID);
+            delete.setOnAction(e -> selected().ifPresent(marker -> {
+                doc().execute(Markers.remove(marker.name()));
+                timeline.setSelectedMarker(null);
+            }));
+            markerMenu = new ContextMenu(addCue, new SeparatorMenuItem(), rename, delete);
+        }
+        return markerMenu;
+    }
+
+    private Optional<Marker> selected() {
+        String name = timeline.getSelectedMarker();
+        return doc() == null || name == null ? Optional.empty() : doc().getAnimation().marker(name);
+    }
+
     // ------------------------------------------------------------------ pointer
 
     private void pressed(MouseEvent event) {
@@ -138,6 +180,10 @@ public final class MarkerLane extends Region {
             return;
         }
         doc.endGesture();
+        if (markerMenu != null) {
+            markerMenu.hide();
+        }
+        doc.getSelection().cueIds().clear();
         Optional<Hit> hit = hitAt(event.getX());
         timeline.setSelectedMarker(hit.map(h -> h.marker().name()).orElse(null));
         grabbed = hit.orElse(null);

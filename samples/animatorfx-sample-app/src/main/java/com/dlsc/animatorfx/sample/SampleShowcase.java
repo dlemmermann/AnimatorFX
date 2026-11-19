@@ -24,8 +24,8 @@ import javafx.util.StringConverter;
 import java.util.Locale;
 
 /**
- * One sample: an {@link AnimationView} with transport controls. The card sample gets a real
- * label and a real button embedded into its two slots.
+ * One sample: an {@link AnimationView} with transport and sound controls. The card sample gets
+ * a real label and a real button embedded into its two slots.
  */
 public final class SampleShowcase extends BorderPane {
 
@@ -110,7 +110,17 @@ public final class SampleShowcase extends BorderPane {
         rate.setValue(1.0);
         rate.valueProperty().addListener((observable, old, value) -> view.setRate(value));
 
-        HBox transport = new HBox(10, play, time, timecode, loop, rate);
+        // sound: the view plays the audio layers and cues of the animation by itself
+        CheckBox mute = new CheckBox("Mute");
+        mute.setId("mute");
+        mute.selectedProperty().bindBidirectional(view.mutedProperty());
+        Slider volume = new Slider(0, 1, 1);
+        volume.setId("volume");
+        volume.setPrefWidth(90);
+        volume.valueProperty().bindBidirectional(view.volumeProperty());
+        volume.disableProperty().bind(view.mutedProperty());
+
+        HBox transport = new HBox(10, play, time, timecode, loop, rate, mute, volume);
         transport.setAlignment(Pos.CENTER_LEFT);
 
         HBox markers = new HBox(8);
@@ -133,6 +143,11 @@ public final class SampleShowcase extends BorderPane {
 
     public AnimationView getView() {
         return view;
+    }
+
+    /** Releases the sound of the view for good; called when the window closes. */
+    public void dispose() {
+        view.dispose();
     }
 
     private void restart() {

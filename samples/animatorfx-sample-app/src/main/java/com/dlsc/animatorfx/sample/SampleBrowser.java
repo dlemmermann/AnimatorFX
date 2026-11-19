@@ -1,5 +1,9 @@
 package com.dlsc.animatorfx.sample;
 
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.CheckBox;
@@ -23,8 +27,21 @@ public final class SampleBrowser extends BorderPane {
     private final Map<String, SampleShowcase> showcases = new HashMap<>();
     private final InPlaceDemo inPlace = new InPlaceDemo();
     private final CheckBox dark = new CheckBox("Dark backdrop");
+    private final BooleanProperty muted = new SimpleBooleanProperty(this, "muted");
+    private final DoubleProperty volume = new SimpleDoubleProperty(this, "volume", 1);
 
     public SampleBrowser() {
+        this(false);
+    }
+
+    /**
+     * @param muted whether the window starts with its sound switched off
+     */
+    public SampleBrowser(boolean muted) {
+        this.muted.set(muted);
+        // the in-place player has no view; it follows the same mute and volume controls
+        inPlace.getPlayer().mutedProperty().bindBidirectional(this.muted);
+        inPlace.getPlayer().volumeProperty().bindBidirectional(volume);
         getStylesheets().add(SampleBrowser.class.getResource("sample.css").toExternalForm());
         list.setId("samples");
         list.setPrefWidth(150);
@@ -55,9 +72,49 @@ public final class SampleBrowser extends BorderPane {
         return list;
     }
 
-    /** The showcase of a sample; created on first use. */
+    /** The showcase of a sample; created on first use. Mute and volume are the same for all of them. */
     public SampleShowcase getShowcase(String name) {
-        return showcases.computeIfAbsent(name, key -> new SampleShowcase(key, Samples.load(key)));
+        return showcases.computeIfAbsent(name, key -> {
+            SampleShowcase showcase = new SampleShowcase(key, Samples.load(key));
+            showcase.getView().mutedProperty().bindBidirectional(muted);
+            showcase.getView().volumeProperty().bindBidirectional(volume);
+            return showcase;
+        });
+    }
+
+    /** Whether the sound of every sample is switched off. */
+    public final BooleanProperty mutedProperty() {
+        return muted;
+    }
+
+    public final boolean isMuted() {
+        return muted.get();
+    }
+
+    public final void setMuted(boolean value) {
+        muted.set(value);
+    }
+
+    /** The volume of every sample, from 0 to 1. */
+    public final DoubleProperty volumeProperty() {
+        return volume;
+    }
+
+    public final double getVolume() {
+        return volume.get();
+    }
+
+    public final void setVolume(double value) {
+        volume.set(value);
+    }
+
+    /**
+     * Releases the media players and temporary files of every view and of the in-place player.
+     * Called when the window is closed for good.
+     */
+    public void dispose() {
+        showcases.values().forEach(SampleShowcase::dispose);
+        inPlace.getPlayer().dispose();
     }
 
     public InPlaceDemo getInPlaceDemo() {
@@ -65,7 +122,8 @@ public final class SampleBrowser extends BorderPane {
     }
 
     private void show(String name) {
-        // a view that leaves the window pauses by itself and resumes when it comes back
+        // a view that leaves the window pauses by itself, falls silent and releases its sound; it
+        // resumes when it comes back
         setCenter(name == null ? null : getShowcase(name));
     }
 }

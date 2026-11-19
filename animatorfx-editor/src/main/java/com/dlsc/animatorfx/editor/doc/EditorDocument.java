@@ -9,6 +9,7 @@ import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.LayerProperties;
 import com.dlsc.animatorfx.model.Layers;
 import com.dlsc.animatorfx.model.PropertyRef;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.io.AnimationFile;
 import com.dlsc.animatorfx.model.io.AnimationFormatException;
 import com.dlsc.animatorfx.model.io.AnimationIO;
@@ -578,7 +579,7 @@ public final class EditorDocument {
     }
 
     /**
-     * Removes layers and keyframes that the document does not have from the selection. The
+     * Removes layers, keyframes and cues that the document does not have from the selection. The
      * document does this itself after every change of its content.
      */
     public void pruneSelection() {
@@ -586,6 +587,13 @@ public final class EditorDocument {
     }
 
     private void pruneSelection(Animation current) {
+        if (!selection.cueIds().isEmpty()) {
+            Set<String> cues = new HashSet<>();
+            for (SoundCue cue : current.cues()) {
+                cues.add(cue.id());
+            }
+            selection.cueIds().retainAll(cues);
+        }
         if (selection.layerIds().isEmpty() && selection.keyframes().isEmpty()) {
             return;
         }

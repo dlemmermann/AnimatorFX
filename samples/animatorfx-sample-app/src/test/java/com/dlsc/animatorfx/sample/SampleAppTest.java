@@ -13,10 +13,14 @@ import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
@@ -36,6 +40,15 @@ class SampleAppTest {
 
     private Stage stage;
     private SampleBrowser browser;
+
+    /**
+     * The application starts with its sound off, however this test is launched. The build sets
+     * the property as well, but a run from an IDE does not go through the build.
+     */
+    @BeforeAll
+    static void startSilent() {
+        System.setProperty(SampleApp.MUTED_PROPERTY, "true");
+    }
 
     @BeforeEach
     void show() throws Exception {
@@ -189,9 +202,98 @@ class SampleAppTest {
     }
 
     @Test
+    void theApplicationStartsSilentWhenAskedTo() throws Exception {
+        assertTrue(Boolean.getBoolean(SampleApp.MUTED_PROPERTY));
+        Fx.run(() -> {
+            assertTrue(browser.isMuted());
+            assertTrue(browser.getShowcase("loader").getView().isMuted());
+            assertTrue(browser.getInPlaceDemo().getPlayer().isMuted());
+        });
+    }
+
+    @Test
+    void muteAndVolumeAreSharedByEverySampleAndTheInPlacePlayer() throws Exception {
+        // on the loader, which has no sound: nothing can be heard while the controls are tried
+        SampleShowcase loader = browser.getShowcase("loader");
+        AnimationPlayer inPlace = browser.getInPlaceDemo().getPlayer();
+        Fx.run(() -> {
+            CheckBox mute = lookup(loader, "#mute", CheckBox.class);
+            Slider volume = lookup(loader, "#volume", Slider.class);
+            assertTrue(mute.isSelected());
+            assertTrue(volume.isDisabled());
+            assertEquals(1, volume.getValue());
+            assertEquals(0, volume.getMin());
+            assertEquals(1, volume.getMax());
+
+            // as quiet as it gets before the sound is switched on
+            volume.setValue(0);
+            assertEquals(0, loader.getView().getVolume());
+            assertEquals(0, inPlace.getVolume());
+            assertEquals(0, browser.getVolume());
+            mute.setSelected(false);
+            assertFalse(loader.getView().isMuted());
+            assertFalse(inPlace.isMuted());
+            assertFalse(volume.isDisabled());
+
+            // a showcase that is created later starts with the same settings
+            SampleShowcase morph = browser.getShowcase("morph");
+            assertFalse(morph.getView().isMuted());
+            assertEquals(0, morph.getView().getVolume());
+            assertFalse(lookup(morph, "#mute", CheckBox.class).isSelected());
+            lookup(morph, "#mute", CheckBox.class).setSelected(true);
+            lookup(morph, "#volume", Slider.class).setValue(0.5);
+            assertTrue(mute.isSelected());
+            assertEquals(0.5, volume.getValue());
+            assertTrue(inPlace.isMuted());
+            assertEquals(0.5, inPlace.getVolume());
+        });
+    }
+
+    @Test
+    void closingTheWindowDisposesTheViewsForGood() throws Exception {
+        Set<Path> before = soundDirectories();
+        // sound on, at volume 0: real media players and extracted files, and still nothing to hear
+        Fx.run(() -> {
+            browser.setVolume(0);
+            browser.setMuted(false);
+            browser.getList().getSelectionModel().select("success");
+        });
+        AnimationView view = browser.getShowcase("success").getView();
+        await(() -> view.getStatus() == AnimationPlayer.Status.PLAYING && view.getCurrentTime() > 0.05);
+        // only the directories that appeared during this test count: other AnimatorFX processes
+        // keep theirs in the same place
+        Set<Path> created = new HashSet<>();
+        await(() -> {
+            created.addAll(soundDirectories());
+            created.removeAll(before);
+            return !created.isEmpty();
+        });
+        Fx.run(() -> stage.close());
+        // the temporary files of the extracted sounds go with the window
+        await(() -> created.stream().noneMatch(Files::exists));
+    }
+
+    /** The private directories the runtime extracts sounds into, see the player's Javadoc. */
+    private static Set<Path> soundDirectories() {
+        File[] found = new File(System.getProperty("java.io.tmpdir"))
+                .listFiles((directory, name) -> name.startsWith("animatorfx-audio"));
+        Set<Path> directories = new HashSet<>();
+        if (found != null) {
+            for (File file : found) {
+                directories.add(file.toPath());
+            }
+        }
+        return directories;
+    }
+
+    @Test
     void theBackdropCanBeSwitched() throws Exception {
         Path directory = Fx.screenshots();
-        Fx.run(() -> browser.getList().getSelectionModel().select("card"));
+        Fx.run(() -> {
+            browser.getList().getSelectionModel().select("card");
+            // for the picture; the card has no sound and nothing else plays
+            browser.setMuted(false);
+        });
         AnimationView view = browser.getShowcase("card").getView();
         await(() -> view.getCurrentTime() > 0.05);
         WritableImage dark = Fx.call(() -> {

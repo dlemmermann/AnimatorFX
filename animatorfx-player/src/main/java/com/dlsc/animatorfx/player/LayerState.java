@@ -36,10 +36,15 @@ import java.util.Objects;
  * @param scale       {@code transform.scale}
  * @param rotation    {@code transform.rotation} in degrees, plus the motion path's tangent angle
  *                    when the layer is oriented to its path
+ * @param volume      the volume of an audio layer, as stored in the document ({@code 0..1}); 1
+ *                    for other layers
+ * @param balance     the balance of an audio layer, {@code -1} (left) to {@code 1} (right); 0 for
+ *                    other layers
  */
 public record LayerState(boolean visible, double[] matrix, double opacity, PathData fillPath, PathData strokePath,
                          Paint fill, Paint strokePaint, double strokeWidth, double dashOffset, double fontSize,
-                         List<EffectState> effects, Vec2 position, Vec2 scale, double rotation) {
+                         List<EffectState> effects, Vec2 position, Vec2 scale, double rotation,
+                         double volume, double balance) {
 
     /**
      * The resolved values of one effect.
@@ -75,9 +80,19 @@ public record LayerState(boolean visible, double[] matrix, double opacity, PathD
         effects = List.copyOf(effects);
     }
 
+    /**
+     * The state of a layer that is not an audio layer: volume 1, balance 0.
+     */
+    public LayerState(boolean visible, double[] matrix, double opacity, PathData fillPath, PathData strokePath,
+                      Paint fill, Paint strokePaint, double strokeWidth, double dashOffset, double fontSize,
+                      List<EffectState> effects, Vec2 position, Vec2 scale, double rotation) {
+        this(visible, matrix, opacity, fillPath, strokePath, fill, strokePaint, strokeWidth, dashOffset, fontSize,
+                effects, position, scale, rotation, 1, 0);
+    }
+
     LayerState withVisible(boolean visible) {
         return new LayerState(visible, matrix, opacity, fillPath, strokePath, fill, strokePaint, strokeWidth,
-                dashOffset, fontSize, effects, position, scale, rotation);
+                dashOffset, fontSize, effects, position, scale, rotation, volume, balance);
     }
 
     @Override
@@ -90,12 +105,13 @@ public record LayerState(boolean visible, double[] matrix, double opacity, PathD
                 && Double.compare(dashOffset, other.dashOffset) == 0
                 && Double.compare(fontSize, other.fontSize) == 0 && effects.equals(other.effects)
                 && position.equals(other.position) && scale.equals(other.scale)
-                && Double.compare(rotation, other.rotation) == 0;
+                && Double.compare(rotation, other.rotation) == 0
+                && Double.compare(volume, other.volume) == 0 && Double.compare(balance, other.balance) == 0;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(visible, Arrays.hashCode(matrix), opacity, fillPath, strokePath, fill, strokePaint,
-                strokeWidth, dashOffset, fontSize, effects, position, scale, rotation);
+                strokeWidth, dashOffset, fontSize, effects, position, scale, rotation, volume, balance);
     }
 }

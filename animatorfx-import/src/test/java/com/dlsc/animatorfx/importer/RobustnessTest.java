@@ -446,4 +446,83 @@ class RobustnessTest {
         assertEquals(List.of("User", "Matte"), names(animation.layers()));
         assertEquals(new Mask(named(animation, "Matte").id(), Mask.Mode.ALPHA), named(animation, "User").base().mask());
     }
+
+    // ------------------------------------------------------------------ sounds
+
+    private static String sound(String asset, String layerMembers) {
+        return lottieDocument(asset, "{\"ty\":6,\"nm\":\"Sound\",\"refId\":\"s\",\"ip\":0,\"op\":60" + layerMembers
+                + "},{\"ty\":4,\"nm\":\"Other\",\"ip\":0,\"op\":60," + BOX + "}");
+    }
+
+    private static void assertSkipped(ImportResult result, String warning) {
+        assertEquals(List.of("Other"), names(result.file().animation().layers()));
+        assertEquals(List.of(), result.file().animation().assets());
+        assertTrue(result.file().assets().isEmpty());
+        assertEquals(List.of(warning), result.warnings());
+    }
+
+    @Test
+    void aSoundThatCannotBeDecodedIsSkipped() throws IOException {
+        String undecodable = "Embedded sounds that cannot be decoded or are empty were skipped (1 layer)";
+        assertSkipped(lottie(sound("{\"id\":\"s\",\"e\":1,\"p\":\"data:audio/wav;base64,!!not base64!!\"}", "")),
+                undecodable);
+        assertSkipped(lottie(sound("{\"id\":\"s\",\"e\":1,\"p\":\"data:audio/wav;base64,AAECA\"}", "")), undecodable);
+        assertSkipped(lottie(sound("{\"id\":\"s\",\"e\":1,\"p\":\"data:audio/wav;base64,\"}", "")), undecodable);
+        assertSkipped(lottie(sound("{\"id\":\"s\",\"e\":1,\"p\":\"data:audio/wav,plain\"}", "")), undecodable);
+    }
+
+    @Test
+    void aSoundOfMoreThan50MegabytesIsSkipped() throws IOException {
+        String payload = "AAAA".repeat(50 * 1024 * 1024 / 3 + 1);
+        ImportResult result = lottie(sound("{\"id\":\"s\",\"e\":1,\"p\":\"data:audio/wav;base64," + payload + "\"}",
+                "").replace("{\"ty\":6,", "{\"ty\":6,\"ind\":7,\"refId\":\"s\"},{\"ty\":6,"));
+        assertSkipped(result, "Embedded sounds of more than 50 MB were skipped (2 layers)");
+    }
+
+    @Test
+    void aLineWrappedSoundJustUnderTheLimitIsTakenOver() throws IOException {
+        // 76 characters a line, as MIME writes base64: the line breaks are not part of the size
+        int bytes = LottieSounds.MAX_BYTES - LottieSounds.MAX_BYTES % 57;
+        String line = "AAAA".repeat(19) + "\\r\\n";
+        ImportResult result = lottie(sound("{\"id\":\"s\",\"e\":1,\"p\":\"data:audio/wav;base64,"
+                + line.repeat(bytes / 57) + "\"}", ""));
+        Animation animation = result.file().animation();
+        assertEquals(List.of("Other", "Sound"), names(animation.layers()));
+        assertEquals(bytes, result.file().assets().get(animation.assets().get(0).id()).length);
+        assertEquals(List.of(), result.warnings());
+    }
+
+    @Test
+    void anAudioLayerWhoseAssetIsNoSoundIsSkipped() throws IOException {
+        String missing = "Audio layers whose sound is missing from the file were skipped (1 layer)";
+        String noSound = "Audio layers whose asset is not a sound were skipped (1 layer)";
+        // a tiny PNG header as an image asset, a precomposition, nothing at all, no reference
+        assertSkipped(lottie(sound("{\"id\":\"s\",\"e\":1,\"p\":\"data:image/png;base64,iVBORw0KGgo=\"}", "")), noSound);
+        assertSkipped(lottie(sound("{\"id\":\"s\",\"layers\":[]}", "")), noSound);
+        assertSkipped(lottie(sound("{\"id\":\"s\"}", "")), missing);
+        assertSkipped(lottie(sound("", "")), missing);
+        assertSkipped(lottie(sound("{\"id\":\"s\",\"p\":17,\"u\":{}}", "")), missing);
+    }
+
+    @Test
+    void soundValuesThatAreAbsurdStayWithinTheRangesOfTheFormat() throws IOException {
+        String asset = "{\"id\":\"s\",\"e\":1,\"p\":\"data:audio/wav;base64,AAECAw==\"}";
+        ImportResult result = lottie(sound(asset, ",\"st\":-1e300,\"au\":{\"lv\":{\"a\":1,\"k\":["
+                + "{\"t\":0,\"s\":[1e300,-1e300]},{\"t\":30,\"s\":[-1e300]},{\"t\":60,\"s\":[0,0]}]}}"));
+        Animation animation = result.file().animation();
+        assertEquals(List.of("Other", "Sound"), names(animation.layers()));
+        com.dlsc.animatorfx.model.AudioLayer layer = (com.dlsc.animatorfx.model.AudioLayer) animation.layers().get(1);
+        assertEquals(0, layer.clipOffset());
+        for (double time : new double[]{0, 0.5, 1, 1.5, 2}) {
+            double volume = layer.volume().at(time);
+            assertTrue(volume >= 0 && volume <= 1, "volume at " + time + ": " + volume);
+        }
+
+        // in and out points far outside the document
+        result = lottie(sound(asset, ",\"st\":1e12").replace("\"ip\":0,\"op\":60,\"st\"", "\"ip\":-1e12,\"op\":1e12,\"st\""));
+        layer = (com.dlsc.animatorfx.model.AudioLayer) result.file().animation().layers().get(1);
+        assertEquals(0, layer.base().inPoint());
+        assertEquals(2, layer.base().outPoint());
+        assertEquals(0, layer.clipOffset());
+    }
 }

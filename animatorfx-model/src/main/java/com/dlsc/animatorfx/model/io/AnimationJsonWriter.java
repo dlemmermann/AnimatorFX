@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.model.io;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
@@ -18,6 +19,7 @@ import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.Stroke;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Transform;
@@ -55,6 +57,9 @@ final class AnimationJsonWriter {
             json.put("assets", list(a.assets(), AnimationJsonWriter::asset));
         }
         json.put("layers", list(a.layers(), layer -> layer(layer, a.duration(), 1)));
+        if (!a.cues().isEmpty()) {
+            json.put("cues", list(a.cues(), AnimationJsonWriter::cue));
+        }
         return json;
     }
 
@@ -63,6 +68,17 @@ final class AnimationJsonWriter {
         json.put("name", marker.name());
         json.put("start", marker.start());
         json.put("end", marker.end());
+        return json;
+    }
+
+    private static Map<String, Object> cue(SoundCue cue) {
+        Map<String, Object> json = new LinkedHashMap<>();
+        json.put("id", cue.id());
+        put(json, "name", cue.name(), "");
+        json.put("t", cue.time());
+        json.put("asset", cue.assetId());
+        put(json, "volume", cue.volume(), Defaults.CUE_VOLUME);
+        put(json, "muted", cue.muted(), false);
         return json;
     }
 
@@ -91,6 +107,7 @@ final class AnimationJsonWriter {
             case ImageLayer i -> "image";
             case GroupLayer g -> "group";
             case SlotLayer s -> "slot";
+            case AudioLayer a -> "audio";
         });
         base(json, layer.base(), duration);
         switch (layer) {
@@ -129,6 +146,14 @@ final class AnimationJsonWriter {
                 json.put("height", slot.height());
                 put(json, "restTransform", slot.restTransform(), slot.base().transform(),
                         AnimationJsonWriter::transform);
+            }
+            case AudioLayer audio -> {
+                json.put("asset", audio.assetId());
+                put(json, "clipOffset", audio.clipOffset(), 0.0);
+                put(json, "volume", audio.volume(), Defaults.VOLUME, AnimationJsonWriter::number);
+                put(json, "balance", audio.balance(), Defaults.ZERO, AnimationJsonWriter::number);
+                put(json, "loop", audio.loop(), false);
+                put(json, "muted", audio.muted(), false);
             }
         }
         return json;

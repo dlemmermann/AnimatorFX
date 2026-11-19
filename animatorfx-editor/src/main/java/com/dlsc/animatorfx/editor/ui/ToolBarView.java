@@ -18,7 +18,8 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.material2.Material2MZ;
 
 /**
- * The top bar: document tabs, transport, timecode, frame rate, loop toggle, zoom and theme switch.
+ * The top bar: document tabs, transport, timecode, frame rate, loop toggle, mute toggle, zoom and
+ * theme switch.
  *
  * <p>The to-start and to-end buttons move the playhead of the document. Playback itself is not
  * part of the toolbar: whoever owns the player sets {@link #onPlayPauseProperty()} and keeps
@@ -28,6 +29,7 @@ public final class ToolBarView extends HBox {
 
     private final ObjectProperty<EditorDocument> document = new SimpleObjectProperty<>(this, "document");
     private final BooleanProperty loop = new SimpleBooleanProperty(this, "loop");
+    private final BooleanProperty muted = new SimpleBooleanProperty(this, "muted");
     private final BooleanProperty playing = new SimpleBooleanProperty(this, "playing");
     private final ObjectProperty<Runnable> onPlayPause = new SimpleObjectProperty<>(this, "onPlayPause");
 
@@ -75,7 +77,17 @@ public final class ToolBarView extends HBox {
         loopButton.setTooltip(new Tooltip("Loop playback"));
         loopButton.selectedProperty().bindBidirectional(loop);
 
-        HBox centre = new HBox(transport, timecode, frameRate, loopButton);
+        FontIcon muteIcon = new FontIcon();
+        muteIcon.iconCodeProperty().bind(Bindings.when(muted)
+                .then((Ikon) Material2MZ.VOLUME_OFF).otherwise(Material2MZ.VOLUME_UP));
+        ToggleButton muteButton = new ToggleButton(null, muteIcon);
+        muteButton.setId("mute");
+        muteButton.getStyleClass().addAll("pill", "pill-toggle", "mute-toggle");
+        muteButton.setFocusTraversable(false);
+        muteButton.setTooltip(new Tooltip("Mute the sound of playback and scrubbing (M)"));
+        muteButton.selectedProperty().bindBidirectional(muted);
+
+        HBox centre = new HBox(transport, timecode, frameRate, loopButton, muteButton);
         centre.getStyleClass().add("toolbar-group");
 
         FontIcon themeIcon = new FontIcon();
@@ -134,6 +146,23 @@ public final class ToolBarView extends HBox {
 
     public final void setLoop(boolean value) {
         loop.set(value);
+    }
+
+    /**
+     * Whether the sound of the editor is switched off: playback and scrubbing are silent.
+     *
+     * @return the muted property
+     */
+    public final BooleanProperty mutedProperty() {
+        return muted;
+    }
+
+    public final boolean isMuted() {
+        return muted.get();
+    }
+
+    public final void setMuted(boolean value) {
+        muted.set(value);
     }
 
     /**

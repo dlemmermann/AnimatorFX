@@ -60,6 +60,8 @@ final class LottieLayers {
         boolean hiddenMatte;
         /** The unit whose alpha this one takes as its track matte, once that is settled. */
         Unit matteSource;
+        /** A sound: it takes no part in masks and mattes and cannot be hidden as one. */
+        boolean audio;
     }
 
     private final Warnings warnings;
@@ -67,6 +69,7 @@ final class LottieLayers {
     private final LottieTransforms transforms;
     private final LottieShapes shapes;
     private final LottieEffects effects;
+    private final LottieSounds sounds;
     private final Limits limits;
     private final double duration;
     private final Map<String, com.lottie4j.core.model.asset.Asset> lottieAssets;
@@ -91,6 +94,7 @@ final class LottieLayers {
         this.duration = duration;
         this.lottieAssets = lottieAssets;
         this.fonts = fonts;
+        this.sounds = new LottieSounds(warnings, properties, duration, lottieAssets, assets, assetBytes);
     }
 
     List<Asset> assets() {
@@ -134,7 +138,7 @@ final class LottieLayers {
         for (int i = units.size() - 1; i >= 0; i--) {
             Unit unit = units.get(i);
             for (Layer top : unit.tops) {
-                result.add(unit.hiddenMatte ? top.withBase(top.base().withVisible(false)) : top);
+                result.add(unit.hiddenMatte && !unit.audio ? top.withBase(top.base().withVisible(false)) : top);
             }
         }
         return result;

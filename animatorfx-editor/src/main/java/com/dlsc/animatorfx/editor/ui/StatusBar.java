@@ -39,11 +39,13 @@ public final class StatusBar extends HBox {
                 oldDoc.animationProperty().removeListener(update);
                 oldDoc.getSelection().layerIds().removeListener(update);
                 oldDoc.getSelection().keyframes().removeListener(update);
+                oldDoc.getSelection().cueIds().removeListener(update);
             }
             if (newDoc != null) {
                 newDoc.animationProperty().addListener(update);
                 newDoc.getSelection().layerIds().addListener(update);
                 newDoc.getSelection().keyframes().addListener(update);
+                newDoc.getSelection().cueIds().addListener(update);
             }
             update();
         });
@@ -96,7 +98,9 @@ public final class StatusBar extends HBox {
         size.setText(Formats.size(animation.width(), animation.height()));
         layers.setText(Formats.count(Layers.flatten(animation).size(), "layer"));
         int keyframes = doc.getSelection().keyframes().size();
-        selection.setText(Formats.selected(doc.getSelection().layerIds().size())
+        int cues = doc.getSelection().cueIds().size();
+        selection.setText(cues > 0 ? Formats.count(cues, "cue") + " selected"
+                : Formats.selected(doc.getSelection().layerIds().size())
                 + (keyframes == 0 ? "" : " · " + Formats.count(keyframes, "keyframe")));
     }
 

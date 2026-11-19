@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/animatorfx-editor/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/animatorfx-editor/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/animatorfx-import/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/animatorfx-import/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/animatorfx-model/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/animatorfx-model/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/animatorfx-player/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/animatorfx-player/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/samples/animations" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/samples/animatorfx-sample-app/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/samples/animatorfx-sample-app/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
   </component>

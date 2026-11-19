@@ -17,9 +17,13 @@
 
     <properties>
         <maven.compiler.release>${runtime.java.release}</maven.compiler.release>
-        <surefire.jvm.args>${javafx.headless.jvm.args}</surefire.jvm.args>
+        <!-- animatorfx.sample.muted: the application starts with its sound off, so no test is audible.
+             java.desktop is read by the tests only (javax.sound.sampled checks the generated sounds). -->
+        <surefire.jvm.args>${javafx.headless.jvm.args} -Danimatorfx.sample.muted=true --add-modules java.desktop --add-reads com.dlsc.animatorfx.sample=java.desktop</surefire.jvm.args>
         <!-- mvn test -Dtest=SampleFilesTest -Danimatorfx.samples.write=true regenerates samples/animations -->
         <animatorfx.samples.dir>${project.basedir}/../animations</animatorfx.samples.dir>
+        <!-- mvn javafx:run -Danimatorfx.sample.muted=true starts the application with its sound off -->
+        <animatorfx.sample.muted>false</animatorfx.sample.muted>
     </properties>
 
     <dependencies>
@@ -60,6 +64,23 @@
             </resource>
         </resources>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs>
+                                <arg>--add-modules</arg>
+                                <arg>java.desktop</arg>
+                                <arg>--add-reads</arg>
+                                <arg>com.dlsc.animatorfx.sample=java.desktop</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -105,7 +126,8 @@
                 <configuration>
                     <mainClass>com.dlsc.animatorfx.sample/com.dlsc.animatorfx.sample.SampleApp</mainClass>
                     <options>
-                        <option>--enable-native-access=javafx.graphics</option>
+                        <option>--enable-native-access=javafx.graphics,javafx.media</option>
+                        <option>-Danimatorfx.sample.muted=${animatorfx.sample.muted}</option>
                     </options>
                 </configuration>
             </plugin>

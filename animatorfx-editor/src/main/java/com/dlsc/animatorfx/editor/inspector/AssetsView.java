@@ -1,13 +1,16 @@
 package com.dlsc.animatorfx.editor.inspector;
 
+import com.dlsc.animatorfx.editor.audio.AudioImport;
 import com.dlsc.animatorfx.editor.canvas.tools.NewLayers;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.ImageLayer;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.Layers;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Vec2;
 import java.io.ByteArrayInputStream;
@@ -24,7 +27,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import com.dlsc.animatorfx.editor.audio.Waveform;
+import com.dlsc.animatorfx.editor.audio.WaveformCache;
 import javafx.beans.InvalidationListener;
+import javafx.beans.WeakInvalidationListener;
+import javafx.scene.shape.ClosePath;
+import javafx.scene.shape.LineTo;
+import javafx.scene.shape.MoveTo;
+import org.kordamp.ikonli.material2.Material2MZ;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Pos;
@@ -47,10 +57,11 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.material2.Material2AL;
 
 /**
- * The Assets tab: the images and fonts of the document, each with a thumbnail (or an "Aa" sample
- * in the font), its name, kind, size and the number of layers that use it. Add… takes PNG, JPEG,
- * TTF and OTF files; an image asset can be placed on the canvas as a new image layer; an asset
- * can be removed once no layer uses it. Adding, placing and removing are undo steps.
+ * The Assets tab: the images, fonts and sounds of the document, each with a thumbnail (an "Aa"
+ * sample in the font, the waveform of a sound), its name, kind, size, for a sound its length,
+ * and the number of layers and cues that use it. Add… takes PNG, JPEG, TTF and OTF files and
+ * sound files; an image asset can be placed on the canvas as a new image layer and a sound on
+ * the timeline as a new audio layer; an asset can be removed once nothing uses it. Adding, placing and removing are undo steps.
  */
 public final class AssetsView extends VBox {
 
@@ -68,8 +79,17 @@ public final class AssetsView extends VBox {
     private final Map<String, Font> fonts = new HashMap<>();
     private final Map<String, Label> details = new HashMap<>();
     private List<Asset> listed;
+    /** The problems of the files of the last Add; sounds report theirs a moment later. */
+    private List<String> currentProblems = new ArrayList<>();
+    private final List<String> reading = new ArrayList<>();
     private Function<Window, List<Path>> filePicker = AssetsView::chooseFiles;
     private final InvalidationListener update = obs -> update();
+    private final InvalidationListener soundArrived = obs -> {
+        if (listed != null && listed.stream().anyMatch(asset -> asset.kind() == Asset.Kind.AUDIO)) {
+            listed = null;
+            update();
+        }
+    };
 
     public AssetsView() {
         getStyleClass().add("assets-view");
@@ -105,6 +125,8 @@ public final class AssetsView extends VBox {
         VBox.setVgrow(scroll, Priority.ALWAYS);
         getChildren().addAll(header, scroll);
 
+        // the length and the waveform of a sound arrive after its row was made
+        WaveformCache.shared().revisionProperty().addListener(new WeakInvalidationListener(soundArrived));
         document.addListener((obs, oldDoc, newDoc) -> {
             if (oldDoc != null) {
                 oldDoc.animationProperty().removeListener(update);
@@ -162,9 +184,11 @@ public final class AssetsView extends VBox {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Add Assets");
         chooser.getExtensionFilters().addAll(
-                new FileChooser.ExtensionFilter("Images and fonts", "*.png", "*.jpg", "*.jpeg", "*.ttf", "*.otf"),
+                new FileChooser.ExtensionFilter("Images, fonts and sounds", "*.png", "*.jpg", "*.jpeg", "*.ttf", "*.otf",
+                        "*.mp3", "*.wav", "*.aif", "*.aiff", "*.m4a", "*.aac"),
                 new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg"),
-                new FileChooser.ExtensionFilter("Fonts", "*.ttf", "*.otf"));
+                new FileChooser.ExtensionFilter("Fonts", "*.ttf", "*.otf"),
+                new FileChooser.ExtensionFilter("Sounds", "*.mp3", "*.wav", "*.aif", "*.aiff", "*.m4a", "*.aac"));
         List<File> files = chooser.showOpenMultipleDialog(owner);
         return files == null ? List.of() : files.stream().map(File::toPath).toList();
     }
@@ -178,17 +202,22 @@ public final class AssetsView extends VBox {
             return;
         }
         List<String> problems = new ArrayList<>();
+        currentProblems = problems;
         for (Path file : files) {
             String name = file.getFileName().toString();
             int dot = name.lastIndexOf('.');
             String extension = dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
+            if (AudioImport.isAudio(file)) {
+                addSound(doc, file, problems);
+                continue;
+            }
             Asset.Kind kind = switch (extension) {
                 case "png", "jpg", "jpeg" -> Asset.Kind.IMAGE;
                 case "ttf", "otf" -> Asset.Kind.FONT;
                 default -> null;
             };
             if (kind == null) {
-                problems.add(name + " is not a PNG, JPEG, TTF or OTF file.");
+                problems.add(name + " is not an image (PNG, JPEG), a font (TTF, OTF) or a sound (MP3, WAV, AIFF, AAC).");
                 continue;
             }
             byte[] bytes;
@@ -207,10 +236,47 @@ public final class AssetsView extends VBox {
             String id = UUID.randomUUID().toString();
             doc.addAsset(new Asset(id, kind, "assets/" + id + "." + extension, name), bytes);
         }
-        setMessage(problems.isEmpty() ? null : String.join("\n", problems));
+        showProblems(problems);
     }
 
-    /** Removes an asset as one undo step; refuses, with a message, while layers use it. */
+    /** A sound is read and checked in the background; what is wrong with it joins the other problems. */
+    private void addSound(EditorDocument doc, Path file, List<String> problems) {
+        AudioImport.read(file, text -> {
+            reading.add(text);
+            showProblems(problems);
+            return () -> {
+                reading.remove(text);
+                showProblems(problems);
+            };
+        }).whenComplete((sound, error) -> {
+            if (error != null) {
+                Throwable cause = error.getCause() != null ? error.getCause() : error;
+                problems.add("Could not add " + file.getFileName() + ": "
+                        + (cause instanceof AudioImport.Refused ? cause.getMessage() : "it cannot be read."));
+            } else if (getDocument() == doc) {
+                AudioImport.addAsset(doc, sound);
+            }
+            showProblems(problems);
+        });
+    }
+
+    /** Shows what is being read and the problems of the files added last, unless a later Add replaced them. */
+    private void showProblems(List<String> problems) {
+        if (problems != currentProblems) {
+            return;
+        }
+        List<String> lines = new ArrayList<>(reading);
+        lines.addAll(problems);
+        setMessage(lines.isEmpty() ? null : String.join("\n", lines));
+    }
+
+    /** Adds an audio layer for an audio asset at the playhead, on top, and selects it. */
+    public Optional<String> placeAudio(String assetId) {
+        EditorDocument doc = getDocument();
+        return doc == null ? Optional.empty() : AudioImport.place(doc, assetId);
+    }
+
+    /** Removes an asset as one undo step; refuses, with a message, while layers or cues use it. */
     public void remove(String assetId) {
         EditorDocument doc = getDocument();
         Asset asset = doc == null ? null
@@ -218,10 +284,13 @@ public final class AssetsView extends VBox {
         if (asset == null) {
             return;
         }
-        int users = usage(doc.getAnimation(), assetId);
-        if (users > 0) {
-            setMessage("“" + asset.name() + "” is used by " + users + (users == 1 ? " layer" : " layers")
-                    + ". Delete or reassign " + (users == 1 ? "it" : "them") + " first.");
+        int layers = layerUsage(doc.getAnimation(), assetId);
+        int cues = cueUsage(doc.getAnimation(), assetId);
+        if (layers + cues > 0) {
+            String byLayers = layers == 0 ? "" : layers + (layers == 1 ? " layer" : " layers");
+            String byCues = cues == 0 ? "" : cues + (cues == 1 ? " cue" : " cues");
+            setMessage("“" + asset.name() + "” is used by " + byLayers + (layers > 0 && cues > 0 ? " and " : "") + byCues
+                    + ". Delete or reassign " + (layers + cues == 1 ? "it" : "them") + " first.");
             return;
         }
         setMessage(null);
@@ -245,16 +314,25 @@ public final class AssetsView extends VBox {
         return Optional.of(layer.id());
     }
 
-    /** How many layers use the asset. */
+    /** How many layers and sound cues use the asset. */
     public static int usage(Animation animation, String assetId) {
+        return layerUsage(animation, assetId) + cueUsage(animation, assetId);
+    }
+
+    private static int layerUsage(Animation animation, String assetId) {
         int count = 0;
         for (Layer layer : Layers.flatten(animation)) {
             if (layer instanceof ImageLayer image && image.assetId().equals(assetId)
-                    || layer instanceof TextLayer text && assetId.equals(text.fontAssetId())) {
+                    || layer instanceof TextLayer text && assetId.equals(text.fontAssetId())
+                    || layer instanceof AudioLayer audio && audio.assetId().equals(assetId)) {
                 count++;
             }
         }
         return count;
+    }
+
+    private static int cueUsage(Animation animation, String assetId) {
+        return (int) animation.cues().stream().filter(cue -> cue.assetId().equals(assetId)).count();
     }
 
     // ------------------------------------------------------------------ list
@@ -294,8 +372,18 @@ public final class AssetsView extends VBox {
         byte[] bytes = doc.getFileContent().assets().get(asset.id());
         int users = usage(doc.getAnimation(), asset.id());
         String size = bytes == null ? "missing" : String.format(Locale.ROOT, "%.1f KB", bytes.length / 1024.0);
-        return (asset.kind() == Asset.Kind.IMAGE ? "Image" : "Font") + " · " + size + " · "
-                + (users == 0 ? "unused" : "used " + users + "×");
+        String kind = switch (asset.kind()) {
+            case IMAGE -> "Image";
+            case FONT -> "Font";
+            case AUDIO -> "Audio";
+        };
+        String usage = users == 0 ? "unused" : "used " + users + "×";
+        if (asset.kind() == Asset.Kind.AUDIO) {
+            // two lines: with the length there is more to say than the panel is wide
+            return kind + AudioImport.info(doc, asset).map(info -> " · " + info.durationText()).orElse("")
+                    + "\n" + size + " · " + usage;
+        }
+        return kind + " · " + size + " · " + usage;
     }
 
     private Node row(EditorDocument doc, Asset asset) {
@@ -312,7 +400,7 @@ public final class AssetsView extends VBox {
                 view.setFitHeight(THUMBNAIL - 4);
                 thumbnail.getChildren().add(view);
             }
-        } else {
+        } else if (asset.kind() == Asset.Kind.FONT) {
             Label sample = new Label("Aa");
             sample.getStyleClass().add("font-sample");
             Font font = fonts.computeIfAbsent(asset.id(), id -> {
@@ -324,6 +412,15 @@ public final class AssetsView extends VBox {
                 sample.setFont(font);
             }
             thumbnail.getChildren().add(sample);
+        } else {
+            Optional<Waveform> waveform = AudioImport.waveform(doc, asset);
+            if (waveform.isPresent()) {
+                thumbnail.getChildren().add(waveformShape(waveform.get()));
+            } else {
+                FontIcon speaker = new FontIcon(Material2MZ.VOLUME_UP);
+                speaker.getStyleClass().add("asset-sound-icon");
+                thumbnail.getChildren().add(speaker);
+            }
         }
 
         Label name = new Label(asset.name());
@@ -348,11 +445,43 @@ public final class AssetsView extends VBox {
             place.setOnAction(e -> place(asset.id()));
             row.getChildren().add(place);
         }
+        if (asset.kind() == Asset.Kind.AUDIO) {
+            Button place = iconButton(Material2MZ.PLAYLIST_ADD, "Place on the timeline as a new audio layer at the playhead");
+            place.getStyleClass().add("asset-place");
+            place.setOnAction(e -> placeAudio(asset.id()));
+            row.getChildren().add(place);
+        }
         Button remove = iconButton(Material2AL.DELETE_OUTLINE, "Remove the asset");
         remove.getStyleClass().add("asset-remove");
         remove.setOnAction(e -> remove(asset.id()));
         row.getChildren().add(remove);
         return row;
+    }
+
+    /** The whole sound as a small mirrored outline, in the colour of the stylesheet. */
+    private static Node waveformShape(Waveform waveform) {
+        double width = THUMBNAIL - 6;
+        double reach = (THUMBNAIL - 10) / 2;
+        int columns = (int) width;
+        javafx.scene.shape.Path path = new javafx.scene.shape.Path();
+        double[] heights = new double[columns];
+        for (int i = 0; i < columns; i++) {
+            double from = waveform.duration() * i / columns;
+            double to = waveform.duration() * (i + 1) / columns;
+            heights[i] = Math.max(0.5, waveform.peak(from, to) * reach);
+        }
+        path.getElements().add(new MoveTo(0, -heights[0]));
+        for (int i = 0; i < columns; i++) {
+            path.getElements().add(new LineTo(i, -heights[i]));
+            path.getElements().add(new LineTo(i + 1, -heights[i]));
+        }
+        for (int i = columns - 1; i >= 0; i--) {
+            path.getElements().add(new LineTo(i + 1, heights[i]));
+            path.getElements().add(new LineTo(i, heights[i]));
+        }
+        path.getElements().add(new ClosePath());
+        path.getStyleClass().add("asset-waveform");
+        return path;
     }
 
     private static Button iconButton(org.kordamp.ikonli.Ikon icon, String tooltip) {

@@ -6,13 +6,14 @@ import java.util.Optional;
 
 /**
  * An animation document. Size is in document pixels, duration in seconds; the frame rate is used
- * for snapping and display only. Layers are ordered bottom to top.
+ * for snapping and display only. Layers are ordered bottom to top. Cues are sounds triggered at
+ * points in time.
  */
 public record Animation(int formatVersion, String name, double width, double height, double frameRate,
                         double duration, Rgba background, List<Marker> markers, List<Asset> assets,
-                        List<Layer> layers) {
+                        List<Layer> layers, List<SoundCue> cues) {
 
-    public static final int CURRENT_FORMAT = 1;
+    public static final int CURRENT_FORMAT = 2;
 
     public Animation {
         Objects.requireNonNull(name, "name");
@@ -20,6 +21,17 @@ public record Animation(int formatVersion, String name, double width, double hei
         markers = List.copyOf(markers);
         assets = List.copyOf(assets);
         layers = List.copyOf(layers);
+        cues = List.copyOf(cues);
+    }
+
+    /**
+     * A document without sound cues.
+     */
+    public Animation(int formatVersion, String name, double width, double height, double frameRate,
+                     double duration, Rgba background, List<Marker> markers, List<Asset> assets,
+                     List<Layer> layers) {
+        this(formatVersion, name, width, height, frameRate, duration, background, markers, assets, layers,
+                List.of());
     }
 
     /**
@@ -36,51 +48,56 @@ public record Animation(int formatVersion, String name, double width, double hei
 
     public Animation withFormatVersion(int formatVersion) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withName(String name) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withWidth(double width) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withHeight(double height) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withFrameRate(double frameRate) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withDuration(double duration) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withBackground(Rgba background) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withMarkers(List<Marker> markers) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withAssets(List<Asset> assets) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
     }
 
     public Animation withLayers(List<Layer> layers) {
         return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
-                layers);
+                layers, cues);
+    }
+
+    public Animation withCues(List<SoundCue> cues) {
+        return new Animation(formatVersion, name, width, height, frameRate, duration, background, markers, assets,
+                layers, cues);
     }
 }

@@ -1,9 +1,12 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.audio.TestSounds;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
+import com.dlsc.animatorfx.editor.timeline.TimelineView;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.GroupLayer;
 import com.dlsc.animatorfx.model.Layer;
@@ -32,6 +35,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -176,6 +180,36 @@ class ImportUiTest extends EditorUiTest {
 
         run(() -> imported.setPlayhead(1.5));
         screenshot("task-10-lottie.png");
+    }
+
+    @Test
+    void importingALottieFileWithAnEmbeddedSoundShowsAnAudioLayerWithItsWaveform() throws Exception {
+        String sound = Base64.getEncoder().encodeToString(TestSounds.tone(0.5, 0.5));
+        Path file = dir.resolve("jingle.json");
+        Files.writeString(file, "{\"fr\":30,\"ip\":0,\"op\":60,\"w\":100,\"h\":100,\"nm\":\"Jingle\","
+                + "\"assets\":[{\"id\":\"s\",\"nm\":\"tone\",\"u\":\"\",\"e\":1,\"p\":\"data:audio/wav;base64," + sound
+                + "\"}],\"layers\":[{\"ty\":6,\"nm\":\"Tone\",\"refId\":\"s\",\"ip\":15,\"op\":45,\"st\":15}]}");
+        picked.add(file);
+        fire("menu-file-import-lottie");
+
+        EditorDocument imported = active();
+        assertEquals("Jingle", imported.getTitle());
+        Animation animation = imported.getAnimation();
+        assertEquals(List.of(), fx(() -> window.getNoticeBar().getMessages()));
+        AudioLayer layer = assertInstanceOf(AudioLayer.class, animation.layers().get(0));
+        assertEquals("Tone", layer.name());
+        assertEquals(0.5, layer.base().inPoint(), 1e-9);
+        assertEquals(1.5, layer.base().outPoint(), 1e-9);
+        Asset asset = animation.assets().get(0);
+        assertEquals(Asset.Kind.AUDIO, asset.kind());
+        assertEquals(asset.id(), layer.assetId());
+
+        TimelineView timeline = fx(() -> window.getTimelineView());
+        assertTrue(fx(() -> timeline.getTrackPane().rowOf(layer.id())) >= 0, "the layer has a row");
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> fx(() -> timeline.waveformOf(asset.id()).isPresent()));
+        assertEquals(0.5, fx(() -> timeline.waveformOf(asset.id()).orElseThrow().duration()), 0.01);
+        assertEquals(0.5, fx(() -> timeline.waveformOf(asset.id()).orElseThrow().peak(0.1, 0.4)), 0.05);
+        screenshot("task-4-lottie-audio.png");
     }
 
     @Test

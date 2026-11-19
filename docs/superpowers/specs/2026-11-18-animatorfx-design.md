@@ -41,15 +41,16 @@ replaces the current single-module pom.
 | Artifact | JPMS module | Purpose | Depends on |
 |---|---|---|---|
 | `animatorfx-model` | `com.dlsc.animatorfx.model` | Immutable document model, interpolation, easing, `.afx` reader and writer, JSON parser | `java.base` |
-| `animatorfx-player` | `com.dlsc.animatorfx.player` | Evaluator, scene-graph renderer, `AnimationPlayer`, `AnimationView`, slot binding | model, `javafx.graphics`, `javafx.controls` |
+| `animatorfx-player` | `com.dlsc.animatorfx.player` | Evaluator, scene-graph renderer, `AnimationPlayer`, `AnimationView`, slot binding, sound | model, `javafx.graphics`, `javafx.controls`, `javafx.media` |
 | `animatorfx-import` | `com.dlsc.animatorfx.importer` | SVG, Lottie and FXML importers producing model documents | model, `java.xml`, `javafx.fxml` |
-| `animatorfx-editor` | `com.dlsc.animatorfx.editor` | The authoring tool | model, player, import, AtlantaFX, Ikonli |
+| `animatorfx-editor` | `com.dlsc.animatorfx.editor` | The authoring tool | model, player, import, `javafx.media`, `java.desktop`, AtlantaFX, Ikonli, GemsFX |
 
 Rules:
 
 - `model` and `player` compile with `--release 21` and have no third-party
   runtime dependencies. A build check (maven-enforcer `bannedDependencies`)
-  enforces this.
+  enforces this. `javafx.media`, which the player requires for sound, is part
+  of JavaFX.
 - `model` has no JavaFX dependency, so documents can be read, written and
   tested headless.
 - The editor previews through the `player` renderer. There is no second
@@ -61,6 +62,10 @@ Rules:
 
 All model types are immutable Java records. Edits create new instances
 (structural sharing of unchanged subtrees).
+
+Sound is specified in `2026-11-19-audio-support-design.md`, which extends this
+section: the asset kind `AUDIO`, the layer type `AudioLayer`, the sound cues of
+the document (`Animation.cues`) and format version 2.
 
 ### 4.1 Units and conventions
 
@@ -78,12 +83,12 @@ All model types are immutable Java records. Edits create new instances
 
 `Animation`: `formatVersion`, `name`, `width`, `height`, `frameRate`,
 `duration`, `background` (colour, may be transparent), `markers`, `assets`,
-`layers` (ordered bottom to top).
+`layers` (ordered bottom to top), `cues` (sound cues, see the audio spec).
 
 `Marker`: `name`, `start`, `end`. Names are unique per document.
 
-`Asset`: `id`, `kind` (`IMAGE` or `FONT`), `path` (entry inside the zip),
-`name`.
+`Asset`: `id`, `kind` (`IMAGE`, `FONT` or `AUDIO`), `path` (entry inside the
+zip), `name`.
 
 ### 4.3 Layers
 
@@ -159,13 +164,15 @@ path is closed and the other open, the keyframe behaves as `HOLD`.
 
 ```
 animation.json     the document
-assets/<id>.<ext>  images (PNG, JPEG) and fonts (TTF, OTF)
+assets/<id>.<ext>  images (PNG, JPEG), fonts (TTF, OTF) and sounds (MP3, WAV, AIFF, M4A, AAC)
 ```
 
 - `animation.json` is UTF-8, pretty-printed with stable key order, so files
   diff cleanly once unzipped.
-- `formatVersion` starts at `1`. The reader migrates older versions forward on
-  load and rejects files with a newer version than it supports.
+- `formatVersion` started at `1` and is `2` since audio support (audio assets,
+  `"type": "audio"` layers, `"cues"`; see the audio spec). The reader migrates
+  older versions forward on load and rejects files with a newer version than
+  it supports.
 - The reader also accepts a bare `animation.json` file (no zip) when the
   document references no assets. The editor always writes zips.
 - Layers are polymorphic through a `type` field (`shape`, `text`, `image`,
@@ -302,8 +309,10 @@ on unsupported features; they fail only on unreadable input.
   transforms; shape groups with rectangle, ellipse, star and path; fill,
   stroke, gradient fill and stroke; trim paths; masks; track mattes (alpha);
   markers; keyframe easing; layer parenting (converted to group nesting).
+  Audio layers with an embedded sound are converted (see the audio spec).
   Not supported (warning): expressions, time remapping, repeaters, merge paths,
-  layer effects other than blur and drop shadow, 3D layers, audio.
+  layer effects other than blur and drop shadow, 3D layers, audio layers whose
+  sound is an external file.
 - **FXML** → slot layers. The file is loaded with `FXMLLoader` without a
   controller; each node with an `fx:id` becomes a `SlotLayer` named after it,
   positioned and sized from the node's laid-out bounds. The editor shows a
@@ -439,7 +448,8 @@ working, tested state.
 ## 10. Out of scope
 
 - Expressions or scripting inside animations.
-- Audio and video layers.
+- Video layers. (Audio was out of scope in the first version and is covered by
+  `2026-11-19-audio-support-design.md`.)
 - State machines and interactive (input-driven) animations.
 - Export to Lottie, GIF or video.
 - 3D transforms.

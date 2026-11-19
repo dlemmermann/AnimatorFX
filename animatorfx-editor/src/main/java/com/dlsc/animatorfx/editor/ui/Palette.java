@@ -27,7 +27,7 @@ public final class Palette extends Region {
     /** One colour of the editor palette; the CSS property is {@code -afx-palette-<name>}. */
     public enum Tone {
         BG, PANEL, PANEL_ALT, ROW_ALT, LINE, FG, MUTED, ACCENT, ACCENT_SOFT, ACCENT_BAR, KEY, KEY_SOFT, KEY_BAR, PLAYHEAD,
-        HOVER, GRID, ON_ACCENT;
+        HOVER, GRID, ON_ACCENT, AUDIO, AUDIO_SOFT, AUDIO_BAR, WAVE;
 
         String cssProperty() {
             return "-afx-palette-" + name().toLowerCase(Locale.ROOT).replace('_', '-');

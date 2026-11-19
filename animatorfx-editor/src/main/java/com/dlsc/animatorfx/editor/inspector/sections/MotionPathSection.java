@@ -119,7 +119,7 @@ public final class MotionPathSection extends SectionBase {
 
     @Override
     public boolean appliesTo(InspectorContext context) {
-        return context.layers().size() == 1;
+        return context.layers().size() == 1 && context.allVisual();
     }
 
     private static void show(javafx.scene.Node node, boolean visible) {

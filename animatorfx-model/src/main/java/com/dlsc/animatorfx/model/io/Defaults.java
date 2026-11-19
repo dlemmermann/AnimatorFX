@@ -34,6 +34,9 @@ final class Defaults {
 
     static final Animatable<Rgba> SHADOW_COLOR = Animatable.of(Rgba.BLACK);
 
+    static final Animatable<Double> VOLUME = Animatable.of(1.0);
+    static final double CUE_VOLUME = 1;
+
     private Defaults() {
     }
 }

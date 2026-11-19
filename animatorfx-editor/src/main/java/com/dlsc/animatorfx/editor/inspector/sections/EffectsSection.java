@@ -199,6 +199,6 @@ public final class EffectsSection extends SectionBase {
 
     @Override
     public boolean appliesTo(InspectorContext context) {
-        return !context.layers().isEmpty();
+        return context.allVisual();
     }
 }

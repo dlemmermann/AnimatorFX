@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.importer;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
 import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
@@ -583,7 +584,7 @@ class LottieImporterTest {
                 "The even-odd fill rule is not supported; the non-zero rule is used (1 fill)",
                 "Trim paths apply to strokes only; trimmed fills are drawn whole (1 shape)",
                 "Only one additive mask per layer is supported (3 masks ignored)",
-                "Audio layers are not supported (1 layer ignored)",
+                "Audio layers that reference external sound files were skipped (1 layer)",
                 "Camera layers are not supported (1 layer ignored)",
                 "Time remapping is not supported (1 layer)",
                 "Time stretch is not supported; the layers play at normal speed (1 layer)",
@@ -719,5 +720,158 @@ class LottieImporterTest {
                 + "{\"ty\": 1, \"sc\": \"nope\", \"parent\": 1, \"tt\": 1, \"tp\": 77}]}");
         assertEquals(0, result.file().animation().duration());
         assertFalse(result.warnings().isEmpty());
+    }
+
+    @Test
+    void audioLayersWithAnEmbeddedSoundBecomeAudioLayers() throws IOException {
+        ImportResult result = lottie("audio");
+        Animation animation = result.file().animation();
+        assertEquals(2, animation.duration(), EPS);
+        assertEquals(List.of("Box", "Nested", "Quiet", "Late", "Beep"), names(animation.layers()));
+        assertEquals(List.of(
+                "Different audio levels for the left and right channel are not supported; the louder one is used"
+                        + " (1 layer)",
+                "Audio layers that reference external sound files were skipped (2 layers)",
+                "The bounds of precompositions do not clip their content (1 precomposition)"), result.warnings());
+
+        // one asset per embedded sound, however many layers use it
+        assertEquals(2, animation.assets().size());
+        Asset beepAsset = animation.assets().get(0);
+        assertEquals(Asset.Kind.AUDIO, beepAsset.kind());
+        assertEquals("beep", beepAsset.name());
+        assertEquals("assets/" + beepAsset.id() + ".wav", beepAsset.path());
+        assertEquals("assets/" + animation.assets().get(1).id() + ".wav", animation.assets().get(1).path());
+        byte[] bytes = result.file().assets().get(beepAsset.id());
+        // the WAV file as it was embedded: 400 frames of 16 bit mono at 8 kHz
+        assertEquals(44 + 800, bytes.length);
+        assertEquals("RIFF", new String(bytes, 0, 4, StandardCharsets.US_ASCII));
+        assertEquals(8000, (bytes[24] & 0xFF) | (bytes[25] & 0xFF) << 8);
+
+        AudioLayer beep = named(animation, "Beep", AudioLayer.class);
+        assertEquals(beepAsset.id(), beep.assetId());
+        assertEquals(0, beep.base().inPoint(), EPS);
+        assertEquals(1, beep.base().outPoint(), EPS);
+        assertEquals(0, beep.clipOffset(), EPS);
+        assertEquals(Animatable.of(1.0), beep.volume());
+        assertEquals(Animatable.of(0.0), beep.balance());
+        assertFalse(beep.loop());
+        assertFalse(beep.muted());
+        assertTrue(beep.base().visible());
+
+        // the sound starts 15 frames before the layer does; the levels are percentages
+        AudioLayer late = named(animation, "Late", AudioLayer.class);
+        assertEquals(beepAsset.id(), late.assetId());
+        assertEquals(0.5, late.base().inPoint(), EPS);
+        assertEquals(1.5, late.base().outPoint(), EPS);
+        assertEquals(0.5, late.clipOffset(), EPS);
+        assertEquals(2, late.volume().keyframes().size());
+        assertKey(0.5, Easing.LINEAR, late.volume().keyframes().get(0));
+        assertEquals(0.5, late.volume().keyframes().get(0).value(), EPS);
+        assertKey(1.5, Easing.LINEAR, late.volume().keyframes().get(1));
+        assertEquals(1, late.volume().keyframes().get(1).value(), EPS);
+
+        // starts before the document does; hidden; parent, matte and mask mean nothing to a sound
+        AudioLayer quiet = named(animation, "Quiet", AudioLayer.class);
+        assertEquals(animation.assets().get(1).id(), quiet.assetId());
+        assertEquals(0, quiet.base().inPoint(), EPS);
+        assertEquals(2, quiet.base().outPoint(), EPS);
+        assertEquals(1 / 3.0, quiet.clipOffset(), EPS);
+        assertEquals(0.1, quiet.volume().at(0), EPS);
+        assertFalse(quiet.base().visible());
+        assertNull(quiet.base().mask());
+        assertSame(quiet, animation.layers().get(2));
+        assertTrue(late.base().visible());
+
+        // inside a precomposition that starts 15 frames into the composition
+        List<Layer> nested = children(named(animation, "Nested"));
+        assertEquals(List.of("Nested beep"), names(nested));
+        AudioLayer nestedBeep = assertInstanceOf(AudioLayer.class, nested.get(0));
+        assertEquals(beepAsset.id(), nestedBeep.assetId());
+        assertEquals(5 / 30.0, nestedBeep.base().inPoint(), EPS);
+        assertEquals(35 / 30.0, nestedBeep.base().outPoint(), EPS);
+        assertEquals(0, nestedBeep.clipOffset(), EPS);
+    }
+
+    @Test
+    void theFileExtensionOfASoundFollowsItsMimeType() throws IOException {
+        String[][] cases = {{"audio/mpeg", "mp3"}, {"audio/mp3", "mp3"}, {"audio/wav", "wav"}, {"audio/x-wav", "wav"},
+                {"audio/wave", "wav"}, {"AUDIO/WAV", "wav"}, {"audio/aiff", "aiff"}, {"audio/x-aiff", "aiff"},
+                {"audio/mp4", "m4a"}, {"audio/x-m4a", "m4a"}, {"audio/aac", "aac"}};
+        for (String[] each : cases) {
+            ImportResult result = read(soundDocument("data:" + each[0] + ";base64,AAECAw==", ""));
+            Animation animation = result.file().animation();
+            assertEquals(List.of(), result.warnings(), each[0]);
+            assertEquals(1, animation.assets().size(), each[0]);
+            assertTrue(animation.assets().get(0).path().endsWith("." + each[1]), each[0]);
+            assertEquals(Asset.Kind.AUDIO, animation.assets().get(0).kind());
+            assertEquals(4, result.file().assets().get(animation.assets().get(0).id()).length);
+            // without a name of its own the asset is named after its id
+            assertEquals("s", animation.assets().get(0).name());
+        }
+        ImportResult unknown = read(soundDocument("data:audio/ogg;base64,AAECAw==", ""));
+        assertEquals(List.of(), unknown.file().animation().layers());
+        assertEquals(List.of(), unknown.file().animation().assets());
+        assertEquals(List.of("Embedded sounds in a format that is not supported were skipped (1 layer)"),
+                unknown.warnings());
+    }
+
+    @Test
+    void audioLevelsThatAreNotUnderstoodGiveFullVolume() throws IOException {
+        ImportResult result = read(soundDocument("data:audio/wav;base64,AAECAw==",
+                ",\"au\":{\"lv\":{\"a\":0,\"k\":\"loud\"}}"));
+        AudioLayer layer = assertInstanceOf(AudioLayer.class, result.file().animation().layers().get(0));
+        assertEquals(Animatable.of(1.0), layer.volume());
+        assertEquals(List.of("Audio levels that are not understood are ignored; the sound plays at full volume"
+                + " (1 layer)"), result.warnings());
+
+        // percentages: the louder channel counts, more than 100 % is full volume, a single number serves both
+        String[][] cases = {{"[50, 50]", "0.5"}, {"[100, 0]", "1"}, {"[0, 100]", "1"}, {"[150, 150]", "1"},
+                {"[0, 0]", "0"}, {"[25]", "0.25"}, {"40", "0.4"}, {"[-30, -30]", "0"}};
+        for (String[] each : cases) {
+            result = read(soundDocument("data:audio/wav;base64,AAECAw==",
+                    ",\"au\":{\"lv\":{\"a\":0,\"k\":" + each[0] + "}}"));
+            assertEquals(Double.parseDouble(each[1]),
+                    ((AudioLayer) result.file().animation().layers().get(0)).volume().at(0), EPS, each[0]);
+        }
+        // no levels at all: full volume, nothing to report
+        result = read(soundDocument("data:audio/wav;base64,AAECAw==", ""));
+        assertEquals(Animatable.of(1.0), ((AudioLayer) result.file().animation().layers().get(0)).volume());
+        assertEquals(List.of(), result.warnings());
+        result = read(soundDocument("data:audio/wav;base64,AAECAw==", ",\"au\":{}"));
+        assertEquals(Animatable.of(1.0), ((AudioLayer) result.file().animation().layers().get(0)).volume());
+    }
+
+    @Test
+    void aSoundDoesNotStartBeforeItsStartTime() throws IOException {
+        // the layer is in from frame 0, its sound starts at frame 15: nothing can sound before that
+        ImportResult result = read(soundDocument("data:audio/wav;base64,AAECAw==", "")
+                .replace("\"st\":0", "\"st\":15"));
+        AudioLayer layer = (AudioLayer) result.file().animation().layers().get(0);
+        assertEquals(0.5, layer.base().inPoint(), EPS);
+        assertEquals(2, layer.base().outPoint(), EPS);
+        assertEquals(0, layer.clipOffset(), EPS);
+
+        // a start after the out point leaves a layer without a duration, at the out point
+        result = read(soundDocument("data:audio/wav;base64,AAECAw==", "")
+                .replace("\"op\":60,\"st\":0", "\"op\":30,\"st\":45"));
+        layer = (AudioLayer) result.file().animation().layers().get(0);
+        assertEquals(1, layer.base().inPoint(), EPS);
+        assertEquals(1, layer.base().outPoint(), EPS);
+        assertEquals(0, layer.clipOffset(), EPS);
+    }
+
+    @Test
+    void anImageLayerThatRefersToASoundSaysSo() throws IOException {
+        ImportResult result = read(soundDocument("data:audio/wav;base64,AAECAw==", "")
+                .replace("{\"ty\":6,", "{\"ty\":2,"));
+        assertEquals(List.of(), result.file().animation().layers());
+        assertEquals(List.of(), result.file().animation().assets());
+        assertEquals(List.of("Image layers whose asset is a sound are ignored (1 layer ignored)"), result.warnings());
+    }
+
+    private static String soundDocument(String source, String layerMembers) {
+        return "{\"fr\":30,\"ip\":0,\"op\":60,\"w\":100,\"h\":100,\"assets\":[{\"id\":\"s\",\"u\":\"\",\"e\":1,"
+                + "\"p\":\"" + source + "\"}],\"layers\":[{\"ty\":6,\"nm\":\"Sound\",\"refId\":\"s\",\"ip\":0,"
+                + "\"op\":60,\"st\":0" + layerMembers + "}]}";
     }
 }

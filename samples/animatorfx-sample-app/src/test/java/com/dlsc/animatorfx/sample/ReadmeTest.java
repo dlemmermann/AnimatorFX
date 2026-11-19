@@ -1,26 +1,35 @@
 package com.dlsc.animatorfx.sample;
 
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.Paint;
 import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.Vec2;
 import com.dlsc.animatorfx.model.io.AnimationFile;
 import com.dlsc.animatorfx.model.io.AnimationIO;
+import com.dlsc.animatorfx.model.io.AnimationJson;
+import com.dlsc.animatorfx.model.io.Json;
 import com.dlsc.animatorfx.player.AnimationPlayer;
 import com.dlsc.animatorfx.player.AnimationView;
 import com.dlsc.animatorfx.player.Evaluator;
 import com.dlsc.animatorfx.player.Fit;
+import com.dlsc.animatorfx.player.LayerState;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Slider;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URL;
@@ -67,7 +76,7 @@ class ReadmeTest {
     @Test
     void theFormatExampleLoadsAndAnimates() throws IOException {
         List<String> json = blocks("json");
-        assertEquals(1, json.size(), "the README has one JSON example");
+        assertEquals(2, json.size(), "the README has two JSON examples");
         AnimationFile file = AnimationIO.read(new ByteArrayInputStream(json.get(0).getBytes(StandardCharsets.UTF_8)));
         Animation animation = file.animation();
         assertEquals("pulse", animation.name());
@@ -88,6 +97,45 @@ class ReadmeTest {
         assertTrue(eased < 1.08, "eased: " + eased);
     }
 
+    /** The second example needs its sound in the archive, so it is read as a document without assets' content. */
+    @Test
+    void theSoundExampleIsAValidDocument() throws IOException {
+        String json = blocks("json").get(1);
+        Animation animation = AnimationJson.fromJson(Json.parse(json));
+        assertEquals("jingle", animation.name());
+        assertEquals(Animation.CURRENT_FORMAT, animation.formatVersion());
+        assertTrue(json.contains("\"formatVersion\": " + Animation.CURRENT_FORMAT + ","));
+        assertEquals(List.of(new Asset("chime", Asset.Kind.AUDIO, "assets/chime.wav", "chime.wav")),
+                animation.assets());
+
+        AudioLayer layer = assertInstanceOf(AudioLayer.class, animation.layers().get(0));
+        assertEquals("Chime", layer.name());
+        assertEquals("chime", layer.assetId());
+        assertEquals(0.5, layer.base().inPoint());
+        assertEquals(1.5, layer.base().outPoint());
+        assertEquals(0.1, layer.clipOffset());
+        assertTrue(layer.volume().isAnimated());
+        assertEquals(0.5, layer.volume().at(0.6), 1e-9);
+        assertEquals(-0.25, layer.balance().at(0));
+        assertTrue(layer.loop());
+        assertFalse(layer.muted());
+        LayerState sampled = Evaluator.sample(animation, 0.6).get(layer.id());
+        assertEquals(0.5, sampled.volume(), 1e-9);
+        assertEquals(-0.25, sampled.balance());
+
+        assertEquals(1, animation.cues().size());
+        assertEquals(new SoundCue("cue-1", "Tick", 1.2, "chime", 0.8, false), animation.cues().get(0));
+
+        // with the sound in place it is a file that saves and loads
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        AnimationIO.write(new AnimationFile(animation, Map.of("chime", SampleGenerator.wav(SampleGenerator.tick()))),
+                out);
+        assertEquals(animation, AnimationIO.read(new ByteArrayInputStream(out.toByteArray())).animation());
+
+        // the first example states the current version as well
+        assertTrue(blocks("json").get(0).contains("\"formatVersion\": " + Animation.CURRENT_FORMAT + ","));
+    }
+
     @Test
     void theJavaSnippetsOnlyCallMethodsThatExist() throws IOException {
         Map<String, Class<?>> receivers = Map.of("view", AnimationView.class, "player", AnimationPlayer.class,
@@ -104,7 +152,7 @@ class ReadmeTest {
                 calls++;
             }
         }
-        assertTrue(calls >= 15, "the snippets were found, calls: " + calls);
+        assertTrue(calls >= 20, "the snippets were found, calls: " + calls);
     }
 
     @Test
@@ -117,6 +165,8 @@ class ReadmeTest {
                 // loading and playing
                 AnimationFile file = AnimationIO.read(url);
                 AnimationView view = new AnimationView(file);
+                // not in the README: this sample has sound, and a test must not be heard
+                view.setMuted(true);
                 view.setFit(Fit.CONTAIN);
                 view.setCycleCount(AnimationPlayer.INDEFINITE);
                 view.setRate(1.5);
@@ -158,6 +208,7 @@ class ReadmeTest {
                 Button button = new Button("Save");
                 VBox root = new VBox(button);
                 AnimationPlayer player = new AnimationPlayer(AnimationIO.read(attentionUrl));
+                player.setMuted(true);
                 player.bindInPlace("target", button);
                 player.setOnFinished(event -> player.unbind("target"));
                 player.play();
@@ -179,6 +230,24 @@ class ReadmeTest {
                 assertEquals(Set.of("target"), attention.getPlayer().getBoundSlots());
                 attention.unbind("target");
                 view.stop();
+
+                // sound
+                view.setMuted(true);
+                view.setVolume(0.5);
+                CheckBox muteCheckBox = new CheckBox();
+                Slider volumeSlider = new Slider(0, 1, 1);
+                muteCheckBox.selectedProperty().bindBidirectional(view.mutedProperty());
+                volumeSlider.valueProperty().bindBidirectional(view.volumeProperty());
+                assertTrue(muteCheckBox.isSelected());
+                assertEquals(0.5, volumeSlider.getValue());
+                volumeSlider.setValue(0.25);
+                assertEquals(0.25, view.getVolume());
+                assertSame(view.getPlayer().mutedProperty(), view.mutedProperty());
+                view.dispose();
+                player.setMuted(true);
+                player.setVolume(0.5);
+                player.dispose();
+                assertEquals(0.5, player.getVolume());
             } catch (IOException e) {
                 throw new AssertionError(e);
             }

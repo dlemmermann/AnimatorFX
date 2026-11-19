@@ -7,6 +7,7 @@ import com.dlsc.animatorfx.editor.timeline.TimelineRow.PropertyRow;
 import com.dlsc.animatorfx.editor.timeline.TrackPane.BarPart;
 import com.dlsc.animatorfx.editor.timeline.TrackPane.Hit;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Keyframe;
 import com.dlsc.animatorfx.model.Layer;
@@ -37,8 +38,10 @@ import javafx.scene.input.MouseEvent;
  * a property row adds a keyframe, the secondary button opens the keyframe menu.</li>
  * <li>Free space: a drag selects the keyframes inside a marquee (Shift or Shortcut adds).</li>
  * <li>In/out bars: dragging the body moves the range, dragging an end trims it.</li>
+ * <li>Bars of audio layers: the same, but trimming the start keeps the sound in place, and
+ * Alt-dragging the body slides the sound under the bar; see {@link #dragAudioBar}.</li>
  * </ul>
- * Times snap to frames unless Alt is held. Escape cancels a drag.
+ * Times snap to frames unless Alt is held (always on audio bars). Escape cancels a drag.
  */
 final class TrackInteraction {
 
@@ -65,6 +68,8 @@ final class TrackInteraction {
     private double latest;
     // bar
     private Hit.Bar bar;
+    /** Alt was held when the body of an audio bar was pressed: the drag slides the sound under the bar. */
+    private boolean slip;
     // marquee, in content coordinates: x, y (scrolled), width, height
     private double[] marquee;
     private boolean additive;
@@ -144,6 +149,7 @@ final class TrackInteraction {
                 // a locked layer can be selected here, but its range stays as it is
                 if (!timeline.getKeyframeActions().isLocked(barHit.layerId())) {
                     bar = barHit;
+                    slip = event.isAltDown() && barHit.part() == BarPart.BODY;
                     mode = Mode.BAR;
                 }
             }
@@ -282,6 +288,10 @@ final class TrackInteraction {
         if (layer == null) {
             return;
         }
+        if (layer instanceof AudioLayer audio) {
+            dragAudioBar(doc, start, audio, delta, free);
+            return;
+        }
         double duration = start.duration();
         double frame = Math.min(TimeScale.frame(start.frameRate()), duration);
         double in = layer.base().inPoint();
@@ -308,6 +318,55 @@ final class TrackInteraction {
         doc.executeCoalesced(gestureKey, Commands.setDocument(name, current -> Layers.replace(start, bar.layerId(), l -> {
             LayerBase base = l.base().withInPoint(newIn).withOutPoint(newOut);
             return base.equals(l.base()) ? l : l.withBase(base);
+        })));
+    }
+
+    /**
+     * The bar of an audio layer. Times always snap to frames here, because Alt has another
+     * meaning: Alt-dragging the body slides the sound under the bar (the clip offset changes,
+     * the bar stays). Dragging the start trims it and moves the clip offset along, so the sound
+     * stays where it is in time; with Alt only the in-point moves and the sound moves with it.
+     * Dragging the body moves the bar with its sound, dragging the end trims the end.
+     */
+    private void dragAudioBar(EditorDocument doc, Animation start, AudioLayer layer, double delta, boolean alt) {
+        double duration = start.duration();
+        double frame = Math.min(TimeScale.frame(start.frameRate()), duration);
+        double in = layer.base().inPoint();
+        double out = layer.base().outPoint();
+        double offset = layer.clipOffset();
+        String name;
+        if (bar.part() == BarPart.BODY && slip) {
+            double clip = timeline.clipDurationOf(layer.assetId());
+            double rate = start.frameRate();
+            offset = AudioClips.slide(offset, rate > 0 ? Math.round(delta * rate) / rate : delta, clip);
+            name = "Slide Clip";
+        } else if (bar.part() == BarPart.START) {
+            double wanted = Math.clamp(snap(in + delta, false, start), 0, Math.max(0, Math.min(out, duration) - frame));
+            if (alt) {
+                in = wanted;
+            } else {
+                AudioClips.Trim trim = AudioClips.trimStart(in, Math.min(out, duration), offset, wanted, frame);
+                in = trim.inPoint();
+                offset = trim.clipOffset();
+            }
+            name = "Trim Layer";
+        } else if (bar.part() == BarPart.END) {
+            out = Math.clamp(snap(out + delta, false, start), Math.min(duration, Math.max(in, 0) + frame), duration);
+            name = "Trim Layer";
+        } else {
+            double length = out - in;
+            in = Math.clamp(snap(in + delta, false, start), 0, Math.max(0, duration - length));
+            out = in + length;
+            name = "Move Layer Range";
+        }
+        double newIn = in;
+        double newOut = out;
+        double newOffset = offset;
+        doc.executeCoalesced(gestureKey, Commands.setDocument(name, current -> Layers.replace(start, bar.layerId(), l -> {
+            AudioLayer audio = (AudioLayer) l;
+            LayerBase base = audio.base().withInPoint(newIn).withOutPoint(newOut);
+            return base.equals(audio.base()) && newOffset == audio.clipOffset() ? l
+                    : audio.withBase(base).withClipOffset(newOffset);
         })));
     }
 
@@ -384,6 +443,7 @@ final class TrackInteraction {
         marquee = null;
         pressedKey = null;
         bar = null;
+        slip = false;
         original = null;
         movingKeys = List.of();
         timeline.requestLayout();

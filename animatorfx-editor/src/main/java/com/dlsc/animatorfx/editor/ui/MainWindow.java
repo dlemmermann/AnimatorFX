@@ -1,5 +1,7 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.audio.SoundPreview;
+import com.dlsc.animatorfx.editor.audio.AudioImport;
 import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.inspector.sections.MotionPathSection;
@@ -21,6 +23,7 @@ import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextInputControl;
+import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
@@ -143,7 +146,11 @@ public final class MainWindow {
         stage.setScene(scene);
         stage.setMinWidth(900);
         stage.setMinHeight(560);
-        stage.setOnCloseRequest(e -> shutdown());
+        stage.setOnCloseRequest(e -> {
+            if (!tryShutdown()) {
+                e.consume();
+            }
+        });
         // The first layout of a window can run before the window has its real size, which moves the
         // dividers. So they are positioned once the window is up; from then on side panel and
         // timeline keep their size when the window is resized.
@@ -169,12 +176,32 @@ public final class MainWindow {
     }
 
     /**
-     * Persists the session and the recovery copies of dirty documents, as quitting does. It does
-     * not ask to save and does not hide the window; further calls do nothing.
+     * Stops playback and previews, then persists the session and dirty recovery copies. It does
+     * not ask to save or hide the window. A close request is cancelled if recovery cannot safely
+     * drain, leaving the window open.
      */
     public void shutdown() {
-        session.shutdown();
-        theme.dispose();
+        tryShutdown();
+    }
+
+    private boolean tryShutdown() {
+        runShutdownSteps(List.of(canvasView::pausePlayback, SoundPreview.shared()::stop));
+        if (!session.shutdown()) {
+            return false;
+        }
+        runShutdownSteps(List.of(canvasView::dispose, theme::dispose));
+        return true;
+    }
+
+    private static void runShutdownSteps(List<Runnable> steps) {
+        for (Runnable step : steps) {
+            try {
+                step.run();
+            } catch (RuntimeException | LinkageError | StackOverflowError e) {
+                System.getLogger(MainWindow.class.getName()).log(System.Logger.Level.WARNING,
+                        "A step of closing the window failed", e);
+            }
+        }
     }
 
     public Stage getStage() {
@@ -367,9 +394,22 @@ public final class MainWindow {
         canvasView.loopProperty().bind(toolBar.loopProperty());
         toolBar.playingProperty().bind(canvasView.playingProperty());
         toolBar.setOnPlayPause(canvasView::togglePlayback);
+        canvasView.mutedProperty().bindBidirectional(toolBar.mutedProperty());
+        // a preview and playback do not sound at the same time
+        canvasView.playingProperty().addListener((obs, was, playing) -> {
+            if (playing) {
+                SoundPreview.shared().stop();
+            }
+        });
+        timelineView.setScrubber(time -> {
+            if (!isDialogShowing()) {
+                canvasView.scrub(time);
+            }
+        });
         canvasView.setNotifier(noticeBar::show);
         canvasView.setKeyboardTaken(this::isDialogShowing);
         timelineView.setNotifier(noticeBar::show);
+        timelineView.setSoundImporter(() -> importActions.chooseAndImportCue(timelineView::selectCue));
         sidePanel.getInspector().section(MotionPathSection.class)
                 .ifPresent(section -> section.setActions(canvasView::drawMotionPath, canvasView::editMotionPath));
     }
@@ -410,13 +450,19 @@ public final class MainWindow {
     }
 
     /**
-     * A tool key pressed without modifiers selects the tool, unless a dialog is showing, the user
-     * is typing text or is in the middle of drawing or editing a path.
+     * A tool key pressed without modifiers selects the tool, and M switches the sound off and on,
+     * unless a dialog is showing, the user is typing text or is in the middle of drawing or
+     * editing a path.
      */
     private void installToolShortcuts() {
         scene.addEventHandler(KeyEvent.KEY_PRESSED, event -> {
             if (isDialogShowing() || event.isShortcutDown() || event.isControlDown() || event.isAltDown() || event.isMetaDown()
                     || scene.getFocusOwner() instanceof TextInputControl || canvasView.blocksToolShortcuts()) {
+                return;
+            }
+            if (event.getCode() == KeyCode.M && !event.isShiftDown()) {
+                toolBar.setMuted(!toolBar.isMuted());
+                event.consume();
                 return;
             }
             ToolKind.forShortcut(event.getCode()).ifPresent(kind -> {
@@ -442,14 +488,22 @@ public final class MainWindow {
     /**
      * Opens the {@code .afx} files among the dropped files and imports the SVG ({@code .svg}),
      * Lottie ({@code .json}) and FXML ({@code .fxml}) files, each as a document of its own.
-     * Images are taken by the canvas.
+     * Sound files become audio layers of the active document. Images are taken by the canvas.
      *
-     * @return whether any file became a document
+     * @return whether any file was taken
      */
     boolean openDropped(List<File> files) {
         boolean opened = false;
         for (File file : files) {
             if (!isDroppable(file)) {
+                continue;
+            }
+            if (AudioImport.isAudio(file.toPath())) {
+                EditorDocument document = workspace.getActiveDocument();
+                if (document != null) {
+                    importActions.importAudio(document, file.toPath());
+                    opened = true;
+                }
                 continue;
             }
             Optional<ImportActions.Kind> kind = ImportActions.Kind.of(file.toPath());
@@ -461,7 +515,7 @@ public final class MainWindow {
 
     static boolean isDroppable(File file) {
         return file.isFile() && (file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".afx")
-                || ImportActions.Kind.of(file.toPath()).isPresent());
+                || ImportActions.Kind.of(file.toPath()).isPresent() || AudioImport.isAudio(file.toPath()));
     }
 
     private void bindTitle(EditorDocument document) {

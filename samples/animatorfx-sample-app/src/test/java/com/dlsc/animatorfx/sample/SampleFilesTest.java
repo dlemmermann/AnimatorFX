@@ -1,6 +1,8 @@
 package com.dlsc.animatorfx.sample;
 
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Asset;
+import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Effect;
 import com.dlsc.animatorfx.model.Geometry;
 import com.dlsc.animatorfx.model.Layer;
@@ -11,6 +13,7 @@ import com.dlsc.animatorfx.model.Paint;
 import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.Stroke;
 import com.dlsc.animatorfx.model.Vec2;
 import com.dlsc.animatorfx.model.io.AnimationFile;
@@ -23,13 +26,29 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -64,8 +83,40 @@ class SampleFilesTest {
     @ParameterizedTest
     @MethodSource("names")
     void theCommittedFileIsWhatTheGeneratorProduces(String name) throws IOException {
-        assertEquals(SampleGenerator.all().get(name), committed(name),
-                "Run the generator again, see SampleGenerator");
+        String hint = "Run the generator again, see SampleGenerator";
+        AnimationFile generated = SampleGenerator.files().get(name);
+        AnimationFile committed = AnimationIO.read(DIRECTORY.resolve(name + ".afx"));
+        assertEquals(generated.animation(), committed.animation(), hint);
+        assertEquals(generated.assets().keySet(), committed.assets().keySet(), hint);
+        for (String id : generated.assets().keySet()) {
+            assertArrayEquals(generated.assets().get(id), committed.assets().get(id), hint + ": " + id);
+        }
+        // and what is in the archives, entry by entry. Not the archives themselves: how the entries
+        // are compressed is up to the zip library of the JDK that wrote them.
+        ByteArrayOutputStream written = new ByteArrayOutputStream();
+        AnimationIO.write(generated, written);
+        Map<String, byte[]> expected = entries(new ByteArrayInputStream(written.toByteArray()));
+        Map<String, byte[]> actual;
+        try (InputStream in = Files.newInputStream(DIRECTORY.resolve(name + ".afx"))) {
+            actual = entries(in);
+        }
+        assertEquals(new ArrayList<>(expected.keySet()), new ArrayList<>(actual.keySet()), hint);
+        assertEquals(new String(expected.get("animation.json"), StandardCharsets.UTF_8),
+                new String(actual.get("animation.json"), StandardCharsets.UTF_8), hint);
+        for (String entry : expected.keySet()) {
+            assertArrayEquals(expected.get(entry), actual.get(entry), hint + ": " + entry);
+        }
+    }
+
+    /** The uncompressed content of every entry of a zip archive, in the order of the archive. */
+    private static Map<String, byte[]> entries(InputStream archive) throws IOException {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+        try (ZipInputStream zip = new ZipInputStream(archive)) {
+            for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                entries.put(entry.getName(), zip.readAllBytes());
+            }
+        }
+        return entries;
     }
 
     @ParameterizedTest
@@ -75,7 +126,7 @@ class SampleFilesTest {
         assumeFalse(WRITE, "the samples are being regenerated");
         AnimationFile resource = Samples.load(name);
         assertEquals(committed(name), resource.animation());
-        assertTrue(resource.assets().isEmpty());
+        assertEquals(SampleGenerator.files().get(name).assets().keySet(), resource.assets().keySet());
     }
 
     @Test
@@ -143,6 +194,100 @@ class SampleFilesTest {
         Frame to = Evaluator.sample(success, 2.6);
         assertEquals(from.get("success-badge").scale(), to.get("success-badge").scale());
         assertEquals(from.get("success-ring").opacity(), to.get("success-ring").opacity());
+    }
+
+    @Test
+    void successPlaysAChimeAtItsMarkerAndASwellWithAVolumeFadeUnderTheIntro() throws IOException {
+        AnimationFile file = AnimationIO.read(DIRECTORY.resolve("success.afx"));
+        Animation success = file.animation();
+        assertEquals(List.of("success-rise", "success-chime"), success.assets().stream().map(Asset::id).toList());
+        assertTrue(success.assets().stream().allMatch(asset -> asset.kind() == Asset.Kind.AUDIO));
+
+        assertEquals(1, success.cues().size());
+        SoundCue chime = success.cues().get(0);
+        assertEquals("success-chime", chime.assetId());
+        assertEquals(success.marker("success").orElseThrow().start(), chime.time());
+        assertEquals(1, chime.volume());
+        assertFalse(chime.muted());
+        assertEquals(0.6, seconds(file.assets().get("success-chime")), 1e-3);
+
+        AudioLayer swell = assertInstanceOf(AudioLayer.class, Layers.find(success, "success-swell").orElseThrow());
+        assertEquals("success-rise", swell.assetId());
+        assertEquals(0, swell.base().inPoint());
+        assertEquals(0.6, swell.base().outPoint());
+        assertTrue(swell.base().outPoint() <= success.marker("intro").orElseThrow().end());
+        assertFalse(swell.muted());
+        // the volume fades in and out again
+        assertTrue(swell.volume().isAnimated());
+        assertEquals(0, swell.volume().at(0));
+        assertEquals(0.8, swell.volume().at(0.3), 1e-9);
+        assertEquals(0, swell.volume().at(0.6));
+        LayerState early = Evaluator.sample(success, 0.1).get("success-swell");
+        assertTrue(early.volume() > 0 && early.volume() < 0.8, "fading in: " + early.volume());
+        // the sound is as long as the layer
+        assertEquals(0.6, seconds(file.assets().get("success-rise")), 1e-3);
+    }
+
+    @Test
+    void theOtherShowcaseSamplesAreSilent() throws IOException {
+        for (String name : List.of("loader", "morph", "card", "orbit")) {
+            AnimationFile file = AnimationIO.read(DIRECTORY.resolve(name + ".afx"));
+            assertTrue(file.animation().cues().isEmpty(), name);
+            assertTrue(file.animation().assets().isEmpty(), name);
+            assertTrue(file.assets().isEmpty(), name);
+            assertTrue(Layers.flatten(file.animation()).stream().noneMatch(AudioLayer.class::isInstance), name);
+        }
+    }
+
+    /** Every sound is a WAV file that the JDK decodes: 16 bit mono, gentle, without a click at either end. */
+    @Test
+    void theSoundsAreGentleWavFiles() throws Exception {
+        int sounds = 0;
+        for (String name : SampleGenerator.all().keySet()) {
+            AnimationFile file = AnimationIO.read(DIRECTORY.resolve(name + ".afx"));
+            for (Asset asset : file.animation().assets()) {
+                assertEquals(Asset.Kind.AUDIO, asset.kind());
+                assertTrue(asset.path().endsWith(".wav"), asset.path());
+                short[] samples = decode(file.assets().get(asset.id()));
+                sounds++;
+                int peak = 0;
+                for (short sample : samples) {
+                    peak = Math.max(peak, Math.abs(sample));
+                }
+                double decibels = 20 * Math.log10(peak / 32768.0);
+                assertTrue(decibels <= -11.9 && decibels >= -20, asset.id() + " peaks at " + decibels + " dBFS");
+                assertTrue(Math.abs(samples[0]) < 40, asset.id() + " starts at " + samples[0]);
+                assertTrue(Math.abs(samples[samples.length - 1]) < 40,
+                        asset.id() + " ends at " + samples[samples.length - 1]);
+            }
+        }
+        assertEquals(3, sounds);
+    }
+
+    private static double seconds(byte[] wav) throws IOException {
+        try {
+            return (double) decode(wav).length / SampleGenerator.SAMPLE_RATE;
+        } catch (UnsupportedAudioFileException e) {
+            throw new IOException(e);
+        }
+    }
+
+    private static short[] decode(byte[] wav) throws IOException, UnsupportedAudioFileException {
+        try (AudioInputStream audio = AudioSystem.getAudioInputStream(new ByteArrayInputStream(wav))) {
+            AudioFormat format = audio.getFormat();
+            assertEquals(AudioFormat.Encoding.PCM_SIGNED, format.getEncoding());
+            assertEquals(SampleGenerator.SAMPLE_RATE, format.getSampleRate());
+            assertEquals(16, format.getSampleSizeInBits());
+            assertEquals(1, format.getChannels());
+            assertFalse(format.isBigEndian());
+            byte[] data = audio.readAllBytes();
+            assertEquals(audio.getFrameLength() * 2, data.length);
+            short[] samples = new short[data.length / 2];
+            for (int i = 0; i < samples.length; i++) {
+                samples[i] = (short) (data[2 * i] & 0xFF | data[2 * i + 1] << 8);
+            }
+            return samples;
+        }
     }
 
     @Test
@@ -220,6 +365,12 @@ class SampleFilesTest {
         SlotLayer slot = Layers.slots(attention).get(0);
         assertEquals("target", slot.slotName());
         assertEquals(1, Layers.flatten(attention).size());
+        // a tick the moment the wiggle starts
+        assertEquals(1, attention.cues().size());
+        assertEquals(0, attention.cues().get(0).time());
+        assertEquals("attention-tick", attention.cues().get(0).assetId());
+        assertEquals(List.of(new Asset("attention-tick", Asset.Kind.AUDIO, "assets/attention-tick.wav", "tick.wav")),
+                attention.assets());
         LayerState moving = Evaluator.sample(attention, 0.1).get(slot.id());
         assertNotEquals(0, moving.rotation());
         assertNotEquals(Vec2.ONE, moving.scale());

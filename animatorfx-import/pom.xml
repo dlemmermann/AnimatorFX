@@ -41,6 +41,12 @@
                 <artifactId>javafx-fxml</artifactId>
                 <version>${javafx.editor.version}</version>
             </dependency>
+            <!-- required by the AnimatorFX player (sound) -->
+            <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-media</artifactId>
+                <version>${javafx.editor.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

@@ -26,7 +26,7 @@ public record PropertyUnits(double factor, String suffix) {
     public static PropertyUnits of(String propertyKey) {
         String member = propertyKey.substring(propertyKey.lastIndexOf('.') + 1);
         return switch (propertyKey) {
-            case "transform.scale", "opacity", "motionPath.progress" -> PERCENT;
+            case "transform.scale", "opacity", "motionPath.progress", "volume", "balance" -> PERCENT;
             case "transform.rotation", "transform.skew" -> DEGREES;
             default -> propertyKey.startsWith("trim.") || member.equals("level") || member.equals("spread")
                     ? PERCENT : PIXELS;

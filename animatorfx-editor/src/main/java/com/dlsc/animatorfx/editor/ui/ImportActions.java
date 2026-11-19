@@ -1,5 +1,13 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.timeline.Cues;
+import java.util.UUID;
+import java.util.function.Consumer;
+import com.dlsc.animatorfx.editor.audio.AudioImport;
+import com.dlsc.animatorfx.editor.audio.AudioInfo;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.function.Function;
 import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
@@ -36,8 +44,8 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 /**
- * File ▸ Import: SVG, Lottie and FXML files become new untitled documents, and an SVG can also
- * be placed into the active document. What an importer had to leave out is summed up in a
+ * File ▸ Import: SVG, Lottie and FXML files become new untitled documents, an SVG can also
+ * be placed into the active document, and sound files become audio layers of the active document. What an importer had to leave out is summed up in a
  * notice whose action lists the warnings, as often as wanted; a file that cannot be imported is reported in a notice.
  */
 public final class ImportActions {
@@ -72,8 +80,11 @@ public final class ImportActions {
     private final NoticeBar notices;
     private final Supplier<Window> owner;
     private BiFunction<Window, Kind, Optional<Path>> filePicker = this::chooseFile;
+    private Function<Window, List<Path>> audioPicker = this::chooseAudioFiles;
     private BiConsumer<String, List<String>> warningsViewer;
     private Path lastDirectory;
+    /** Completes when the sound imports started so far are applied; they are applied in order. */
+    private CompletableFuture<Void> audioImports = CompletableFuture.completedFuture(null);
 
     ImportActions(Workspace workspace, NoticeBar notices, Dialogs dialogs, Supplier<Window> owner) {
         this.workspace = workspace;
@@ -94,6 +105,129 @@ public final class ImportActions {
      */
     public void setWarningsViewer(BiConsumer<String, List<String>> viewer) {
         warningsViewer = Objects.requireNonNull(viewer, "viewer");
+    }
+
+    /**
+     * Replaces the file dialog of Import ▸ Audio…; it returns the chosen files, none when cancelled.
+     */
+    public void setAudioPicker(Function<Window, List<Path>> picker) {
+        audioPicker = Objects.requireNonNull(picker, "picker");
+    }
+
+    /**
+     * Asks for sound files and adds each to the active document as an audio asset with an audio
+     * layer at the playhead.
+     */
+    public void chooseAndImportAudio() {
+        EditorDocument document = workspace.getActiveDocument();
+        if (document != null) {
+            for (Path file : audioPicker.apply(owner.get())) {
+                importAudio(document, file);
+            }
+        }
+    }
+
+    /**
+     * Adds a sound file (MP3, WAV, AIFF, AAC) to the document as an audio asset together with an
+     * audio layer named after the file, on top of the other layers. The layer starts at the
+     * playhead and lasts as long as the sound, at most to the end of the document. Asset and
+     * layer are one undo step; the layer is selected. A file that is larger than 50 MB or that
+     * is no playable sound is refused with a notice and adds nothing.
+     *
+     * <p>The file is read, and its length found out, in the background, side by side with other
+     * imports: the layer appears a moment later, after the layers of the imports that were
+     * started before this one. A notice says so when it takes more than a blink.
+     *
+     * @return completes on the JavaFX application thread with the id of the new layer, or empty
+     *         when the file was refused
+     */
+    public CompletableFuture<Optional<String>> importAudio(EditorDocument document, Path file) {
+        CompletableFuture<AudioImport.Sound> read = AudioImport.read(file, message -> notices.show(message, null, null));
+        CompletableFuture<Optional<String>> done = new CompletableFuture<>();
+        // applied in the order asked for, whichever file is read first
+        CompletableFuture<Void> before = audioImports;
+        audioImports = done.handle((layer, error) -> null);
+        before.whenComplete((nothing, ignored) -> read.whenComplete((sound, error) -> {
+            Optional<String> layer = Optional.empty();
+            try {
+                if (error != null) {
+                    refused(file, error);
+                } else if (workspace.getDocuments().contains(document)) {
+                    layer = Optional.of(AudioImport.addLayer(document, sound));
+                }
+            } catch (RuntimeException e) {
+                refused(file, e);
+            } finally {
+                // also after an Error: the imports behind this one wait for it
+                done.complete(layer);
+            }
+        }));
+        return done;
+    }
+
+    /**
+     * Completes, on the JavaFX application thread, when every sound import started so far has
+     * added its layer or cue, or has been refused.
+     */
+    public CompletableFuture<Void> whenAudioImported() {
+        return audioImports;
+    }
+
+    private void refused(Path file, Throwable error) {
+        Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+        notices.show("Could not import " + file.getFileName() + ": "
+                + (cause instanceof AudioImport.Refused ? cause.getMessage() : "it cannot be read."));
+    }
+
+    /**
+     * Asks for a sound file and adds it to the active document as an audio asset together with a
+     * sound cue at the playhead, as one undo step: "Import Sound…" of the cue menu.
+     *
+     * @param onAdded receives the id of the new cue
+     */
+    public void chooseAndImportCue(Consumer<String> onAdded) {
+        EditorDocument document = workspace.getActiveDocument();
+        List<Path> files = document == null ? List.of() : audioPicker.apply(owner.get());
+        if (files.isEmpty()) {
+            return;
+        }
+        Path file = files.get(0);
+        double time = document.getPlayhead();
+        CompletableFuture<AudioImport.Sound> read = AudioImport.read(file, message -> notices.show(message, null, null));
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        CompletableFuture<Void> before = audioImports;
+        audioImports = done;
+        before.whenComplete((nothing, ignored) -> read.whenComplete((sound, error) -> {
+            try {
+                if (error != null) {
+                    refused(file, error);
+                } else if (workspace.getDocuments().contains(document)) {
+                    String cueId = UUID.randomUUID().toString();
+                    AudioImport.addWithCue(document, sound, assetId -> Cues.add(cueId, assetId, time));
+                    onAdded.accept(cueId);
+                }
+            } catch (RuntimeException e) {
+                refused(file, e);
+            } finally {
+                done.complete(null);
+            }
+        }));
+    }
+
+    private List<Path> chooseAudioFiles(Window window) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Import Audio");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Audio files",
+                AudioInfo.EXTENSIONS.stream().map(extension -> "*." + extension).toList()));
+        if (lastDirectory != null && Files.isDirectory(lastDirectory)) {
+            chooser.setInitialDirectory(lastDirectory.toFile());
+        }
+        List<File> files = chooser.showOpenMultipleDialog(window);
+        if (files == null || files.isEmpty()) {
+            return List.of();
+        }
+        lastDirectory = files.get(0).toPath().toAbsolutePath().getParent();
+        return files.stream().map(File::toPath).toList();
     }
 
     /**

@@ -10,7 +10,8 @@ import javafx.scene.layout.HBox;
 /**
  * In-place binding: the button stays where the application's own layout puts it, and an
  * {@link AnimationPlayer} without any view drives its translation, scale, rotation and opacity
- * from the slot of {@code attention.afx}.
+ * from the slot of {@code attention.afx}. The animation carries a sound cue at its start, which
+ * the player plays as well.
  */
 public final class InPlaceDemo extends HBox {
 

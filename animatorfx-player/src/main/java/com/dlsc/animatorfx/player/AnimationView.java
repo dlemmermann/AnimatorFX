@@ -47,6 +47,12 @@ import java.util.Map;
  * While the view is not part of a showing window a playing player stands still and continues
  * when the view is showing again, unless it drives nodes bound to slots in place.
  * <p>
+ * Audio layers and sound cues of the document sound during playback, see
+ * {@link #mutedProperty() muted} and {@link #volumeProperty() volume}. A view that is not
+ * showing is silent as its player stands still, again unless it drives nodes in place. A view
+ * that leaves its scene releases its media resources and gets them back when it plays in a
+ * scene again; otherwise call {@link #dispose()} when the view is no longer needed.
+ * <p>
  * Style class {@code animation-view}; CSS properties {@code -fx-fit} (contain | cover | none)
  * and {@code -fx-auto-play}.
  */
@@ -133,6 +139,10 @@ public class AnimationView extends Control {
             }
             windowListener.changed(null, before == null ? null : before.getWindow(),
                     now == null ? null : now.getWindow());
+            if (now == null && !player.hasInPlaceBindings()) {
+                // nothing sounds outside a scene; the sound comes back with the next frame that needs it
+                player.releaseAudio();
+            }
         });
         player.animationProperty().addListener(observable -> {
             requestLayout();
@@ -266,6 +276,43 @@ public class AnimationView extends Control {
         return player.getStatus();
     }
 
+    /**
+     * Whether the sound of the animation is switched off; the player's
+     * {@link AnimationPlayer#mutedProperty() muted}. Sound needs the {@code javafx.media} module;
+     * where audio is not available the animation plays silently.
+     *
+     * @return the muted property
+     */
+    public final BooleanProperty mutedProperty() {
+        return player.mutedProperty();
+    }
+
+    public final boolean isMuted() {
+        return player.isMuted();
+    }
+
+    public final void setMuted(boolean value) {
+        player.setMuted(value);
+    }
+
+    /**
+     * The volume of the animation's sound, {@code 0..1}; the player's
+     * {@link AnimationPlayer#volumeProperty() volume}.
+     *
+     * @return the volume property
+     */
+    public final DoubleProperty volumeProperty() {
+        return player.volumeProperty();
+    }
+
+    public final double getVolume() {
+        return player.getVolume();
+    }
+
+    public final void setVolume(double value) {
+        player.setVolume(value);
+    }
+
     private final StyleableObjectProperty<Fit> fit = new SimpleStyleableObjectProperty<>(FIT, this, "fit",
             Fit.CONTAIN) {
         @Override
@@ -340,6 +387,24 @@ public class AnimationView extends Control {
      */
     public void seek(double seconds) {
         player.seek(seconds);
+    }
+
+    /**
+     * Moves to a time and, while not playing, lets the audio at that time sound briefly; see
+     * {@link AnimationPlayer#scrub(double)}.
+     */
+    public void scrub(double seconds) {
+        player.scrub(seconds);
+    }
+
+    /**
+     * Stops all sound and releases the media resources and temporary files of the animation,
+     * see {@link AnimationPlayer#dispose()}. Call this when a view that played sound is no
+     * longer needed and may still be in a scene; a view that leaves its scene releases them by
+     * itself unless it drives nodes in place.
+     */
+    public void dispose() {
+        player.dispose();
     }
 
     /**

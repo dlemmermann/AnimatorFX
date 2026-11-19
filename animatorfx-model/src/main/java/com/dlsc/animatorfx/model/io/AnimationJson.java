@@ -61,7 +61,8 @@ public final class AnimationJson {
      * Brings a document tree of an older format version to {@link Animation#CURRENT_FORMAT}.
      */
     static Map<String, Object> migrate(Map<String, Object> json, int fromVersion) {
-        // Version 1 is the first format. A later version N adds: if (fromVersion < N) { json = toN(json); }
+        // Version 2 added audio assets, audio layers and cues, so a version 1 document is a valid
+        // version 2 document as it is. A later version N adds: if (fromVersion < N) { json = toN(json); }
         return json;
     }
 }

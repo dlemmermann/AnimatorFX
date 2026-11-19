@@ -243,4 +243,37 @@ class LayerPropertiesTest {
         assertEquals(new Paint.None(),
                 LayerProperties.get(LayerProperties.set(layer, "fill", Animatable.of(new Paint.None())), "fill").at(0));
     }
+
+    private static AudioLayer audioLayer() {
+        return new AudioLayer(fullBase(), "snd", 0.5, num(0.8), num(-0.25), true, false);
+    }
+
+    @Test
+    void audioLayerListsOnlyVolumeAndBalance() {
+        List<PropertyRef> refs = LayerProperties.list(audioLayer());
+
+        assertEquals(List.of("volume", "balance"), refs.stream().map(PropertyRef::key).toList());
+        assertEquals(List.of("Volume", "Balance"), refs.stream().map(PropertyRef::label).toList());
+        assertEquals(List.of(PropertyRef.ValueType.NUMBER, PropertyRef.ValueType.NUMBER),
+                refs.stream().map(PropertyRef::type).toList());
+        assertEquals(num(0.8), refs.get(0).value());
+    }
+
+    @Test
+    void audioLayerGetAndSet() {
+        AudioLayer layer = audioLayer();
+        assertEquals(num(-0.25), LayerProperties.get(layer, "balance"));
+        assertRoundTrip(layer);
+
+        Animatable<Double> fade = num(0).withKeyframe(0, 0.0, Easing.LINEAR).withKeyframe(1, 1.0, Easing.LINEAR);
+        AudioLayer changed = (AudioLayer) LayerProperties.set(layer, "volume", fade);
+        assertEquals(layer.withVolume(fade), changed);
+        assertEquals(layer.withBalance(num(1)), LayerProperties.set(layer, "balance", num(1)));
+
+        for (String key : List.of("opacity", "transform.position", "motionPath.progress", "effects[0].radius")) {
+            assertThrows(IllegalArgumentException.class, () -> LayerProperties.get(layer, key), key);
+            assertThrows(IllegalArgumentException.class, () -> LayerProperties.set(layer, key, num(1)), key);
+        }
+        assertThrows(IllegalArgumentException.class, () -> LayerProperties.set(layer, "volume", vec(1, 1)));
+    }
 }

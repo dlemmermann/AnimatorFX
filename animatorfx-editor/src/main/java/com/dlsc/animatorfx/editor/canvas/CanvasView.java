@@ -524,6 +524,36 @@ public final class CanvasView extends Region {
         playback.pause();
     }
 
+    /**
+     * Whether the sound of the document is switched off, for playback and for scrubbing.
+     *
+     * @return the muted property
+     */
+    public final BooleanProperty mutedProperty() {
+        return view.mutedProperty();
+    }
+
+    public final boolean isMuted() {
+        return view.isMuted();
+    }
+
+    public final void setMuted(boolean value) {
+        view.setMuted(value);
+    }
+
+    /**
+     * Lets the sound at a time of the document be heard for a moment: for dragging the playhead.
+     * Silent while the document plays or the sound is muted, and limited to one snippet every 50 ms.
+     */
+    public void scrub(double seconds) {
+        playback.scrub(seconds);
+    }
+
+    /** Stops playback and releases what makes the sound; for when the window closes. */
+    public void dispose() {
+        playback.dispose();
+    }
+
     // ------------------------------------------------------------------ zoom and pan
 
     public double getZoom() {

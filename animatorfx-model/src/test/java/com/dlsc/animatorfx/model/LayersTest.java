@@ -228,4 +228,64 @@ class LayersTest {
         assertTrue(created.effects().isEmpty());
         assertFalse(created.id().equals(LayerBase.create("Layer", 4).id()));
     }
+
+    @Test
+    void audioLayersAreLeafLayers() {
+        AudioLayer audio = AudioLayer.create("Music", "snd", 1, 4);
+        Animation withAudio = Layers.insert(doc, "g2", 1, audio);
+
+        assertEquals(List.of("a", "g1", "b", "g2", "c", audio.id(), "slot", "d", "e"), ids(Layers.flatten(withAudio)));
+        assertSame(audio, Layers.find(withAudio, audio.id()).orElseThrow());
+        assertEquals("g2", Layers.parentOf(withAudio, audio.id()).orElseThrow().id());
+        assertEquals(List.of(slot), Layers.slots(withAudio));
+
+        Animation muted = Layers.replace(withAudio, audio.id(), l -> ((AudioLayer) l).withMuted(true));
+        assertEquals(audio.withMuted(true), Layers.find(muted, audio.id()).orElseThrow());
+        assertSame(a, muted.layers().get(0));
+
+        Animation moved = Layers.move(withAudio, audio.id(), null, 0);
+        assertEquals(List.of(audio.id(), "a", "g1", "e"), ids(moved.layers()));
+        assertThrows(IllegalArgumentException.class, () -> Layers.insert(withAudio, audio.id(), 0, shape("x")),
+                "an audio layer is not a group");
+        assertEquals(doc, Layers.remove(withAudio, audio.id()));
+    }
+
+    @Test
+    void audioLayerAndCueFactories() {
+        AudioLayer audio = AudioLayer.create("Music", "snd", 1, 4);
+        assertEquals(new AudioLayer(audio.base(), "snd", 0, Animatable.of(1.0), Animatable.of(0.0), false, false),
+                audio);
+        assertEquals("Music", audio.name());
+        assertEquals(1, audio.base().inPoint());
+        assertEquals(4, audio.base().outPoint());
+        assertTrue(audio.base().visible());
+        assertFalse(audio.id().equals(AudioLayer.create("Music", "snd", 1, 4).id()));
+        assertEquals(new AudioLayer(audio.base(), "other", 2, Animatable.of(0.5), Animatable.of(1.0), true, true),
+                audio.withAssetId("other").withClipOffset(2).withVolume(Animatable.of(0.5))
+                        .withBalance(Animatable.of(1.0)).withLoop(true).withMuted(true));
+
+        SoundCue cue = SoundCue.create("Tick", 1.5, "snd");
+        assertEquals(new SoundCue(cue.id(), "Tick", 1.5, "snd", 1, false), cue);
+        assertFalse(cue.id().equals(SoundCue.create("Tick", 1.5, "snd").id()));
+        assertEquals(new SoundCue("id", "Tock", 2, "other", 0.5, true),
+                cue.withId("id").withName("Tock").withTime(2).withAssetId("other").withVolume(0.5).withMuted(true));
+    }
+
+    @Test
+    void animationCues() {
+        Animation created = Animation.create("New", 640, 480, 3);
+        assertEquals(2, created.formatVersion());
+        assertTrue(created.cues().isEmpty());
+        assertTrue(new Animation(2, "New", 640, 480, 60, 3, Rgba.TRANSPARENT, List.of(), List.of(), List.of())
+                .cues().isEmpty());
+
+        SoundCue cue = SoundCue.create("Tick", 1, "snd");
+        Animation withCue = created.withCues(List.of(cue));
+        assertEquals(List.of(cue), withCue.cues());
+        assertFalse(created.equals(withCue));
+        assertThrows(UnsupportedOperationException.class, () -> withCue.cues().add(cue));
+        assertEquals(List.of(cue), withCue.withName("x").withWidth(1).withHeight(1).withFrameRate(1).withDuration(1)
+                .withBackground(Rgba.BLACK).withMarkers(List.of()).withAssets(List.of()).withLayers(List.of())
+                .withFormatVersion(1).cues());
+    }
 }
