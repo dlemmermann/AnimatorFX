@@ -66,7 +66,7 @@ public final class RecoveryStore {
      *                                  {@link com.dlsc.animatorfx.model.io.AnimationFormatException}
      *                                  when the document could not be read back
      */
-    public void store(String docId, AnimationFile file, Path originalPathOrNull) {
+    public synchronized void store(String docId, AnimationFile file, Path originalPathOrNull) {
         if (!isSafe(docId)) {
             throw new IllegalArgumentException("Not a usable document id: " + docId);
         }
@@ -85,7 +85,7 @@ public final class RecoveryStore {
      * The recovery copy of the document; empty when there is none or when it cannot be read. A
      * copy that cannot be read is renamed, see {@link #takeUnreadable()}.
      */
-    public Optional<Recovered> load(String docId) {
+    public synchronized Optional<Recovered> load(String docId) {
         if (!isSafe(docId) || !Files.exists(copyOf(docId))) {
             return Optional.empty();
         }
@@ -95,7 +95,7 @@ public final class RecoveryStore {
     /**
      * Deletes the recovery copy of the document, if there is one.
      */
-    public void discard(String docId) {
+    public synchronized void discard(String docId) {
         if (!isSafe(docId) || !Files.exists(dir)) {
             return;
         }
@@ -115,7 +115,7 @@ public final class RecoveryStore {
      * Every readable recovery copy. A copy without an index entry is recovered as untitled; one
      * that cannot be read is renamed, see {@link #takeUnreadable()}.
      */
-    public List<Recovered> all() {
+    public synchronized List<Recovered> all() {
         if (!Files.exists(dir)) {
             return List.of();
         }
@@ -141,7 +141,7 @@ public final class RecoveryStore {
     /**
      * The unreadable copies that were moved aside since the last call, for telling the user.
      */
-    public List<Unreadable> takeUnreadable() {
+    public synchronized List<Unreadable> takeUnreadable() {
         List<Unreadable> taken = List.copyOf(unreadable);
         unreadable.clear();
         return taken;

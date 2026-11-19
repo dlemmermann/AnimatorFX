@@ -1,5 +1,11 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import java.util.Collections;
+import java.util.WeakHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import javafx.application.Platform;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
 import com.dlsc.animatorfx.editor.doc.ViewState;
 import com.dlsc.animatorfx.editor.session.RecoveryStore;
@@ -38,7 +44,7 @@ import java.util.Set;
 /**
  * Keeps the session state and the recovery copies of a window up to date: restores them on
  * start, writes {@code session.json} 500 ms after the last change and on shutdown, and stores a
- * recovery copy of every dirty document every 5 seconds. A document that becomes clean or is
+ * recovery copy of every dirty document every 5 seconds (on a background thread) and on shutdown. A document that becomes clean or is
  * closed loses its recovery copy. A recovery copy that cannot be read on start is kept under
  * another name and reported.
  */
@@ -54,7 +60,7 @@ public final class SessionController {
     private final RecoveryStore recoveryStore;
 
     private final PauseTransition saveTimer = new PauseTransition(SAVE_DELAY);
-    private final Timeline autosaveTimer = new Timeline(new KeyFrame(AUTOSAVE_INTERVAL, e -> autosaveNow()));
+    private final Timeline autosaveTimer = new Timeline(new KeyFrame(AUTOSAVE_INTERVAL, e -> autosaveInBackground()));
     private final InvalidationListener changed = obs -> scheduleSave();
     /** For properties: unlike an invalidation listener it is told about every change, read or not. */
     private final ChangeListener<Object> valueChanged = (obs, oldValue, newValue) -> scheduleSave();
@@ -71,6 +77,19 @@ public final class SessionController {
 
     private record RecoveryNotice(Runnable dismiss, ChangeListener<AnimationFile> contentListener) {
     }
+
+    private record AutosaveJob(EditorDocument document, String id, AnimationFile content, Path path) {
+    }
+
+    /** Writes the periodic recovery copies of all windows, one after the other. */
+    private static final ExecutorService AUTOSAVER = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "animatorfx-autosave");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private CompletableFuture<Void> backgroundAutosave;
+    /** The background runs whose files are on disk. */
+    private final Set<CompletableFuture<Void>> written = Collections.newSetFromMap(new WeakHashMap<>());
     private WindowState normalBounds;
     private boolean closed;
 
@@ -178,36 +197,134 @@ public final class SessionController {
     }
 
     /**
-     * Stores a recovery copy of every dirty document that changed since its last copy. A
-     * document whose copy could not be read back keeps its previous copy; the user is told
-     * once per document, and the same content is not tried again.
+     * Stores a recovery copy of every dirty document that changed since its last copy, now, on
+     * the calling thread. A document whose copy could not be read back keeps its previous copy;
+     * the user is told once per document, and the same content is not tried again.
      */
     public void autosaveNow() {
+        awaitBackgroundAutosave();
         for (EditorDocument document : workspace.getDocuments()) {
-            String id = document.getId();
-            AnimationFile content = document.getFileContent();
-            if (!document.isDirty() || stored.get(id) == content || unstorable.get(id) == content) {
-                continue;
-            }
-            try {
-                recoveryStore.store(id, content, document.getPath());
-                stored.put(id, content);
-                unstorable.remove(id);
-                autosavedAt.put(id, LocalTime.now());
-            } catch (RuntimeException e) {
-                Throwable cause = e.getCause() == null ? e : e.getCause();
-                if (cause instanceof AnimationFormatException) {
-                    unstorable.put(id, content);
-                }
-                if (reportedStoreFailures.add(id)) {
-                    LOG.log(System.Logger.Level.WARNING, "Could not store a recovery copy of " + document.getTitle(), e);
-                    String reason = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
-                    window.getNoticeBar().show("Recovery copy could not be written: " + reason + " ("
-                            + document.getTitle() + ")");
-                }
+            AutosaveJob job = jobFor(document);
+            if (job != null) {
+                stored(job, write(job));
             }
         }
         updateStatus();
+    }
+
+    /**
+     * What the timer does: like {@link #autosaveNow()}, but the copies are written on a
+     * background thread, because serialising, reading back and writing a document with a large
+     * sound takes a few hundred milliseconds. The results are taken note of on the JavaFX
+     * application thread. While one run is under way the next one is skipped.
+     *
+     * @return completes when the copies have been written; done already when there was nothing to do
+     */
+    public CompletableFuture<Void> autosaveInBackground() {
+        if (backgroundAutosave != null && !backgroundAutosave.isDone()) {
+            return backgroundAutosave;
+        }
+        List<AutosaveJob> jobs = new ArrayList<>();
+        for (EditorDocument document : workspace.getDocuments()) {
+            AutosaveJob job = jobFor(document);
+            if (job != null) {
+                jobs.add(job);
+            }
+        }
+        if (jobs.isEmpty() || closed) {
+            updateStatus();
+            return CompletableFuture.completedFuture(null);
+        }
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        backgroundAutosave = done;
+        AUTOSAVER.execute(() -> {
+            List<RuntimeException> failures = new ArrayList<>();
+            for (AutosaveJob job : jobs) {
+                failures.add(write(job));
+            }
+            Platform.runLater(() -> {
+                for (int i = 0; i < jobs.size(); i++) {
+                    AutosaveJob job = jobs.get(i);
+                    stored(job, failures.get(i));
+                    // closed or saved while its copy was being written: the copy must not outlive that
+                    if (!workspace.getDocuments().contains(job.document()) || !job.document().isDirty()) {
+                        forget(job.document());
+                    }
+                }
+                updateStatus();
+                done.complete(null);
+            });
+            // for a caller that blocks the JavaFX thread to wait for the files
+            markWritten(done);
+        });
+        return done;
+    }
+
+    /** The copy to write for a document; {@code null} when it needs none. */
+    private AutosaveJob jobFor(EditorDocument document) {
+        String id = document.getId();
+        AnimationFile content = document.getFileContent();
+        if (!document.isDirty() || stored.get(id) == content || unstorable.get(id) == content) {
+            return null;
+        }
+        return new AutosaveJob(document, id, content, document.getPath());
+    }
+
+    /** Writes the copy; may run on any thread. Returns what went wrong, or {@code null}. */
+    private RuntimeException write(AutosaveJob job) {
+        try {
+            recoveryStore.store(job.id(), job.content(), job.path());
+            return null;
+        } catch (RuntimeException e) {
+            return e;
+        }
+    }
+
+    /** Takes note of a written, or failed, copy; on the JavaFX application thread. */
+    private void stored(AutosaveJob job, RuntimeException failure) {
+        String id = job.id();
+        if (failure == null) {
+            stored.put(id, job.content());
+            unstorable.remove(id);
+            autosavedAt.put(id, LocalTime.now());
+            return;
+        }
+        Throwable cause = failure.getCause() == null ? failure : failure.getCause();
+        if (cause instanceof AnimationFormatException) {
+            unstorable.put(id, job.content());
+        }
+        if (reportedStoreFailures.add(id)) {
+            LOG.log(System.Logger.Level.WARNING, "Could not store a recovery copy of " + job.document().getTitle(), failure);
+            String reason = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
+            window.getNoticeBar().show("Recovery copy could not be written: " + reason + " ("
+                    + job.document().getTitle() + ")");
+        }
+    }
+
+    private void markWritten(CompletableFuture<Void> run) {
+        synchronized (written) {
+            written.add(run);
+            written.notifyAll();
+        }
+    }
+
+    /** Blocks until the files of a background run are on disk; its results are taken note of later. */
+    private void awaitBackgroundAutosave() {
+        CompletableFuture<Void> running = backgroundAutosave;
+        if (running == null || running.isDone()) {
+            return;
+        }
+        long deadline = System.nanoTime() + 30_000_000_000L;
+        synchronized (written) {
+            while (!written.contains(running) && System.nanoTime() < deadline) {
+                try {
+                    written.wait(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
     }
 
     /**
