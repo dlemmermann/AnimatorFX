@@ -6,6 +6,7 @@ import com.dlsc.animatorfx.model.Asset;
 import java.util.Optional;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
 import javafx.util.StringConverter;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -47,8 +48,18 @@ final class SoundFields {
         return button;
     }
 
-    /** {@code "1.250 s · WAVE · 44.1 kHz · stereo"}; a dash while nothing is known. */
+    /** The length, and under it {@code "WAV · 44.1 kHz · stereo"}; a dash while nothing is known. */
     static String describe(Optional<AudioInfo> info) {
-        return info.map(i -> i.durationText() + " · " + i.describe()).orElse("—");
+        return info.map(i -> i.durationText() + "\n" + i.describe()).orElse("—");
+    }
+
+    /** The read-only label for {@link #describe}: muted, monospaced, two lines. */
+    static Label readout(String id) {
+        Label label = new Label();
+        label.setId(id);
+        label.getStyleClass().addAll("field-readout", "mono");
+        label.setMinWidth(0);
+        label.setWrapText(true);
+        return label;
     }
 }

@@ -358,10 +358,13 @@ public final class AssetsView extends VBox {
             case FONT -> "Font";
             case AUDIO -> "Audio";
         };
-        String length = asset.kind() != Asset.Kind.AUDIO ? ""
-                : AudioImport.info(doc, asset).map(info -> info.durationText() + " · ").orElse("");
-        return kind + " · " + size + " · " + length
-                + (users == 0 ? "unused" : "used " + users + "×");
+        String usage = users == 0 ? "unused" : "used " + users + "×";
+        if (asset.kind() == Asset.Kind.AUDIO) {
+            // two lines: with the length there is more to say than the panel is wide
+            return kind + AudioImport.info(doc, asset).map(info -> " · " + info.durationText()).orElse("")
+                    + "\n" + size + " · " + usage;
+        }
+        return kind + " · " + size + " · " + usage;
     }
 
     private Node row(EditorDocument doc, Asset asset) {

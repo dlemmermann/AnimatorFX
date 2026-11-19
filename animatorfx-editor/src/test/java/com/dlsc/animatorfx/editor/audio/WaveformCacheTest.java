@@ -45,7 +45,7 @@ class WaveformCacheTest {
         assertEquals(0.5, info.duration(), 1e-9);
         assertEquals(8000, info.sampleRate());
         assertEquals(1, info.channels());
-        assertEquals("WAVE · 8 kHz · mono", info.describe());
+        assertEquals("WAV · 8 kHz · mono", info.describe());
         assertEquals("0.500 s", info.durationText());
 
         WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> fx(() -> cache.waveform(wav, "wav").isPresent()));

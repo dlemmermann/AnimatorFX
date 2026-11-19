@@ -36,7 +36,7 @@ public final class AudioSection extends SectionBase {
     public static final String PREVIEW_ID = "inspector-audio-preview";
 
     private final ComboBox<Asset> asset = SoundFields.assetCombo(ASSET_ID);
-    private final Label info = new Label();
+    private final Label info = SoundFields.readout(INFO_ID);
     private final NumberField offset = new NumberField(PropertyUnits.SECONDS);
     private final CheckBox loop = new CheckBox("Loop");
     private final CheckBox mute = new CheckBox("Mute");
@@ -54,9 +54,6 @@ public final class AudioSection extends SectionBase {
         });
         row("Asset", asset);
 
-        info.setId(INFO_ID);
-        info.getStyleClass().addAll("field-readout", "mono");
-        info.setMinWidth(0);
         row("Clip", info);
 
         offset.setId(OFFSET_ID);

@@ -41,8 +41,9 @@ public record AudioInfo(double duration, double sampleRate, int channels, String
                 frames = file.getByteLength() / format.getFrameSize();
             }
             double duration = frames > 0 && rate > 0 ? frames / rate : Double.NaN;
+            String type = file.getType().toString().toUpperCase(Locale.ROOT);
             return Optional.of(new AudioInfo(duration, Math.max(0, rate), Math.max(0, format.getChannels()),
-                    file.getType().toString().toUpperCase(Locale.ROOT)));
+                    type.equals("WAVE") ? "WAV" : type));
         } catch (UnsupportedAudioFileException | IOException | RuntimeException e) {
             return Optional.empty();
         }
@@ -53,7 +54,7 @@ public record AudioInfo(double duration, double sampleRate, int channels, String
         return switch (extension.toLowerCase(Locale.ROOT)) {
             case "m4a", "aac" -> "AAC";
             case "aif", "aiff" -> "AIFF";
-            case "wav" -> "WAVE";
+            case "wav" -> "WAV";
             default -> extension.toUpperCase(Locale.ROOT);
         };
     }
@@ -63,7 +64,7 @@ public record AudioInfo(double duration, double sampleRate, int channels, String
         return hasDuration() ? String.format(Locale.ROOT, "%.3f s", duration) : "—";
     }
 
-    /** {@code "WAVE · 44.1 kHz · stereo"}: what is known, in that order. */
+    /** {@code "WAV · 44.1 kHz · stereo"}: what is known, in that order. */
     public String describe() {
         StringBuilder out = new StringBuilder(format == null || format.isBlank() ? "Audio" : format);
         if (sampleRate > 0) {

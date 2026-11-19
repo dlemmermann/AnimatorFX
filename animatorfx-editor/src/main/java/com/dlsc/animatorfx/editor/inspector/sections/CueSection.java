@@ -37,7 +37,7 @@ public final class CueSection extends SectionBase {
     private final TextValueField name = new TextValueField();
     private final NumberField time = new NumberField(PropertyUnits.SECONDS);
     private final ComboBox<Asset> asset = SoundFields.assetCombo(ASSET_ID);
-    private final Label info = new Label();
+    private final Label info = SoundFields.readout(INFO_ID);
     private final NumberField volume = new NumberField(PropertyUnits.PERCENT);
     private final CheckBox mute = new CheckBox("Mute");
     private final FontIcon previewIcon = new FontIcon(Material2MZ.PLAY_ARROW);
@@ -67,9 +67,6 @@ public final class CueSection extends SectionBase {
             }
         });
         row("Asset", asset);
-        info.setId(INFO_ID);
-        info.getStyleClass().addAll("field-readout", "mono");
-        info.setMinWidth(0);
         row("Clip", info);
 
         volume.setId(VOLUME_ID);

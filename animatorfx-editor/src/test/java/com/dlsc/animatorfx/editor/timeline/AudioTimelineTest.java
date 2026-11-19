@@ -76,6 +76,20 @@ class AudioTimelineTest extends EditorUiTest {
     }
 
     @Test
+    void theSpeakerOfALayerThatIsMutedInTheInspectorIsOffAndSwitchesItOnAgain() {
+        execute(Commands.updateLayer("Mute Layer", "a", l -> ((AudioLayer) l).withMuted(true)));
+        layout();
+        assertEquals(Material2MZ.VOLUME_OFF, ((FontIcon) ((Button) cell().lookup(".eye")).getGraphic()).getIconCode());
+
+        run(() -> ((Button) cell().lookup(".eye")).fire());
+        layout();
+
+        assertFalse(audio().muted());
+        assertTrue(audio().base().visible());
+        assertEquals(Material2MZ.VOLUME_UP, ((FontIcon) ((Button) cell().lookup(".eye")).getGraphic()).getIconCode());
+    }
+
+    @Test
     void draggingTheBarMovesInAndOutTogetherAndLeavesTheClipOffset() {
         drag(tracks, x(1.5), y(), x(1.75), y());
 

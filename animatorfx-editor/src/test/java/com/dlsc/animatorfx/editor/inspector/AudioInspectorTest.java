@@ -194,7 +194,7 @@ class AudioInspectorTest extends EditorUiTest {
 
         WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> fx(() -> info.getText().startsWith("1.000 s")));
 
-        assertEquals("1.000 s · WAVE · 8 kHz · mono", fx(info::getText));
+        assertEquals("1.000 s\nWAV · 8 kHz · mono", fx(info::getText));
     }
 
     @Test

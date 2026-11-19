@@ -54,7 +54,7 @@ public final class TrackPane extends Region {
     private static final double KEY_REACH = 6;
     private static final double BAR_INSET = 6;
     private static final double BAR_GRIP = 4;
-    private static final double AUDIO_BAR_INSET = 3;
+    private static final double AUDIO_BAR_INSET = 2;
     private static final double HATCH = 5;
 
     private final TimelineView timeline;

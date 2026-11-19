@@ -50,7 +50,7 @@ class AudioAssetsTest extends EditorUiTest {
         WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> fx(() -> row().lookup(".asset-waveform") != null));
         layout();
 
-        assertEquals("Audio · 21.6 KB · 0.500 s · unused", detail());
+        assertEquals("Audio · 0.500 s\n21.6 KB · unused", detail());
         assertNotNull(row().lookup(".asset-waveform"));
         assertNull(row().lookup(".asset-sound-icon"), "the waveform replaced the speaker");
     }

@@ -668,9 +668,15 @@ public final class LayerTreeColumn extends Region {
             });
             eye.setOnAction(e -> {
                 boolean visible = row.layer().base().visible();
-                boolean audio = row.layer() instanceof AudioLayer;
-                doc().execute(Commands.updateLayer(audio ? (visible ? "Mute Layer" : "Unmute Layer")
-                                : visible ? "Hide Layer" : "Show Layer", row.layerId(),
+                if (row.layer() instanceof AudioLayer audio) {
+                    // the speaker: off silences the layer, on makes it sound whatever kept it silent
+                    boolean audible = visible && !audio.muted();
+                    doc().execute(Commands.updateLayer(audible ? "Mute Layer" : "Unmute Layer", row.layerId(),
+                            l -> audible ? l.withBase(l.base().withVisible(false))
+                                    : ((AudioLayer) l).withMuted(false).withBase(l.base().withVisible(true))));
+                    return;
+                }
+                doc().execute(Commands.updateLayer(visible ? "Hide Layer" : "Show Layer", row.layerId(),
                         l -> l.withBase(l.base().withVisible(!visible))));
             });
             lock.setOnAction(e -> {
@@ -700,11 +706,12 @@ public final class LayerTreeColumn extends Region {
             name.setText(layer instanceof SlotLayer slot ? layer.name() + "  ·  " + slot.slotName() : layer.name());
             // an audio layer is not seen but heard: its eye is a speaker
             boolean audio = layer instanceof AudioLayer;
-            eyeIcon.setIconCode(audio ? (layer.base().visible() ? Material2MZ.VOLUME_UP : Material2MZ.VOLUME_OFF)
-                    : layer.base().visible() ? Material2MZ.VISIBILITY : Material2MZ.VISIBILITY_OFF);
+            boolean shown = layer.base().visible() && !(layer instanceof AudioLayer sound && sound.muted());
+            eyeIcon.setIconCode(audio ? (shown ? Material2MZ.VOLUME_UP : Material2MZ.VOLUME_OFF)
+                    : shown ? Material2MZ.VISIBILITY : Material2MZ.VISIBILITY_OFF);
             pseudoClassStateChanged(AUDIO, audio);
             lockIcon.setIconCode(layer.base().locked() ? Material2AL.LOCK : Material2AL.LOCK_OPEN);
-            eye.pseudoClassStateChanged(ACTIVE, !layer.base().visible());
+            eye.pseudoClassStateChanged(ACTIVE, !shown);
             lock.pseudoClassStateChanged(ACTIVE, layer.base().locked());
             // a layer that masks is not drawn itself; a masked layer is cut by another one
             boolean masks = maskIds().contains(layer.id());
@@ -714,7 +721,7 @@ public final class LayerTreeColumn extends Region {
             badge.setManaged(masks || masked);
             pseudoClassStateChanged(SELECTED, selected);
             pseudoClassStateChanged(SLOT, layer instanceof SlotLayer);
-            pseudoClassStateChanged(OFF, !layer.base().visible());
+            pseudoClassStateChanged(OFF, !shown);
         }
 
         void hide() {
