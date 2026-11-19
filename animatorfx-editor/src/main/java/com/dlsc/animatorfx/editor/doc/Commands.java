@@ -3,6 +3,7 @@ package com.dlsc.animatorfx.editor.doc;
 import com.dlsc.animatorfx.editor.doc.Selection.KeyframeRef;
 import com.dlsc.animatorfx.model.Animatable;
 import com.dlsc.animatorfx.model.Animation;
+import com.dlsc.animatorfx.model.Asset;
 import com.dlsc.animatorfx.model.AudioLayer;
 import com.dlsc.animatorfx.model.Easing;
 import com.dlsc.animatorfx.model.Effect;
@@ -20,6 +21,7 @@ import com.dlsc.animatorfx.model.PathData;
 import com.dlsc.animatorfx.model.PropertyRef;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
+import com.dlsc.animatorfx.model.SoundCue;
 import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.Trim;
 import com.dlsc.animatorfx.model.Vec2;
@@ -454,6 +456,132 @@ public final class Commands {
                 Layers.parentOf(animation, otherId).map(Layer::id).orElse(null));
     }
 
+    // ------------------------------------------------------------------ audio
+
+    /**
+     * Adds an audio layer for an audio asset on top of the other layers. It starts at the frame
+     * of the time, or at 0 when the time is the end of the document, has no clip offset and full
+     * volume, and lasts as long as its clip, at most to the end of the document; a clip of
+     * unknown length (not a positive number) lasts to the end. Does nothing when the document
+     * has no audio asset with that id.
+     */
+    public static Command addAudioLayer(String layerId, String name, String assetId, double time, double clipDuration) {
+        Objects.requireNonNull(layerId, "layerId");
+        Objects.requireNonNull(name, "name");
+        return command("Add Audio", a -> {
+            if (!isAudioAsset(a, assetId)) {
+                return a;
+            }
+            double duration = Math.max(0, a.duration());
+            double in = a.frameRate() > 0 ? Math.round(keyTime(time) * a.frameRate()) / a.frameRate() : keyTime(time);
+            if (in >= duration - Animatable.TIME_EPSILON) {
+                in = 0;
+            }
+            double out = Double.isFinite(clipDuration) && clipDuration > 0 ? Math.min(in + clipDuration, duration) : duration;
+            AudioLayer layer = AudioLayer.create(name, assetId, in, out);
+            return Layers.insert(a, null, a.layers().size(), layer.withBase(layer.base().withId(layerId)));
+        });
+    }
+
+    /** Sets where in its sound an audio layer starts, in seconds; never before the start of the sound. */
+    public static Command setClipOffset(String id, double clipOffset) {
+        return command("Change Clip Offset", a -> Double.isFinite(clipOffset) ? editLayer(a, id,
+                layer -> layer instanceof AudioLayer audio ? audio.withClipOffset(clipOffset) : layer) : a);
+    }
+
+    /**
+     * Adds a sound cue, with its time limited to the document and its volume to {@code 0..1}.
+     * Does nothing when the document has no audio asset with the id of the cue, when the time or
+     * the volume is no number, or when there is a cue with that id already.
+     */
+    public static Command addCue(SoundCue cue) {
+        Objects.requireNonNull(cue, "cue");
+        return command("Add Cue", a -> {
+            SoundCue valid = inRange(a, cue);
+            if (valid == null || a.cues().stream().anyMatch(other -> other.id().equals(cue.id()))) {
+                return a;
+            }
+            List<SoundCue> cues = new ArrayList<>(a.cues());
+            cues.add(valid);
+            return a.withCues(cues);
+        });
+    }
+
+    /**
+     * Changes a cue with a function, within the limits of {@link #addCue}; a result outside of
+     * them, or with another id that is taken, changes nothing.
+     */
+    public static Command updateCue(String name, String cueId, UnaryOperator<SoundCue> fn) {
+        Objects.requireNonNull(fn, "fn");
+        return command(name, a -> {
+            List<SoundCue> cues = new ArrayList<>(a.cues());
+            for (int i = 0; i < cues.size(); i++) {
+                SoundCue cue = cues.get(i);
+                if (cue.id().equals(cueId)) {
+                    SoundCue changed = inRange(a, fn.apply(cue));
+                    if (changed == null || changed.equals(cue) || (!changed.id().equals(cueId)
+                            && a.cues().stream().anyMatch(other -> other.id().equals(changed.id())))) {
+                        return a;
+                    }
+                    cues.set(i, changed);
+                    return a.withCues(cues);
+                }
+            }
+            return a;
+        });
+    }
+
+    /** Moves a cue to a time, limited to the document. */
+    public static Command moveCue(String cueId, double time) {
+        return updateCue("Move Cue", cueId, cue -> cue.withTime(time));
+    }
+
+    public static Command removeCues(Collection<String> cueIds) {
+        Set<String> ids = Set.copyOf(cueIds);
+        return command(ids.size() == 1 ? "Delete Cue" : "Delete Cues", a -> {
+            List<SoundCue> cues = new ArrayList<>(a.cues());
+            return cues.removeIf(cue -> ids.contains(cue.id())) ? a.withCues(cues) : a;
+        });
+    }
+
+    /** Whether the document has an audio asset with that id. */
+    public static boolean isAudioAsset(Animation animation, String assetId) {
+        return animation.assets().stream().anyMatch(a -> a.kind() == Asset.Kind.AUDIO && a.id().equals(assetId));
+    }
+
+    /** The cue as a file can hold it, or {@code null} when it cannot be made valid. */
+    private static SoundCue inRange(Animation animation, SoundCue cue) {
+        if (cue == null || !Double.isFinite(cue.time()) || !Double.isFinite(cue.volume())
+                || !isAudioAsset(animation, cue.assetId())) {
+            return null;
+        }
+        double time = Math.clamp(cue.time(), 0, Math.max(0, animation.duration()));
+        double volume = Math.clamp(cue.volume(), 0, 1);
+        return time == cue.time() && volume == cue.volume() ? cue : cue.withTime(time).withVolume(volume);
+    }
+
+    /**
+     * The audio layer as a file can hold it: the model does not check ranges, the reader does.
+     * Volume within {@code 0..1} (1 for no number), balance within {@code -1..1} (0 for no
+     * number), the clip offset not negative.
+     */
+    private static AudioLayer inRange(AudioLayer layer) {
+        Animatable<Double> volume = limited(layer.volume(), 0, 1, 1);
+        Animatable<Double> balance = limited(layer.balance(), -1, 1, 0);
+        double offset = Double.isFinite(layer.clipOffset()) ? Math.max(0, layer.clipOffset()) : 0;
+        if (volume == layer.volume() && balance == layer.balance() && offset == layer.clipOffset()) {
+            return layer;
+        }
+        return layer.withVolume(volume).withBalance(balance).withClipOffset(offset);
+    }
+
+    private static Animatable<Double> limited(Animatable<Double> value, double min, double max, double fallback) {
+        boolean valid = value.isAnimated()
+                ? value.keyframes().stream().allMatch(k -> k.value() >= min && k.value() <= max)
+                : value.at(0) >= min && value.at(0) <= max;
+        return valid ? value : mapValues(value, v -> Double.isNaN(v) ? fallback : Math.clamp(v, min, max));
+    }
+
     public static Command setDocument(String name, UnaryOperator<Animation> fn) {
         Objects.requireNonNull(fn, "fn");
         return command(name, before -> {
@@ -796,10 +924,16 @@ public final class Commands {
         });
     }
 
-    /** Like {@link Layers#replace}, but a result that equals the layer also counts as "no change". */
+    /**
+     * Like {@link Layers#replace}, but a result that equals the layer also counts as "no change".
+     * An audio layer is kept within what a file can hold, see {@link #inRange(AudioLayer)}.
+     */
     private static Animation editLayer(Animation animation, String id, UnaryOperator<Layer> fn) {
         return Layers.replace(animation, id, layer -> {
             Layer result = fn.apply(layer);
+            if (result instanceof AudioLayer audio) {
+                result = inRange(audio);
+            }
             return layer.equals(result) ? layer : result;
         });
     }
