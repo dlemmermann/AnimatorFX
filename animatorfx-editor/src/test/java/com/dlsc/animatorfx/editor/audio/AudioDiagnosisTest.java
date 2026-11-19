@@ -18,6 +18,15 @@ class AudioDiagnosisTest extends ApplicationTest {
         assertTrue(result.line().startsWith("audio: ok (PLAYING, 0.30 s"), result.line());
     }
 
+    /** AIFF is among the formats the editor imports; this is the one place where one is played. */
+    @Test
+    void anAiffFileIsPlayedToo() {
+        byte[] aiff = TestSounds.wav(TestSounds.sine(0.3, 22_050, 440, 0.1), 22_050, 1, 16, true);
+        AudioDiagnosis.Result result = AudioDiagnosis.probe(aiff, "aiff", 3000);
+        assertTrue(result.ok(), result.line());
+        assertTrue(result.line().startsWith("audio: ok (PLAYING, 0.30 s"), result.line());
+    }
+
     @Test
     void aFileThatIsNoSoundIsReportedAsAFailure() {
         AudioDiagnosis.Result result = AudioDiagnosis.probe("no sound at all".getBytes(StandardCharsets.US_ASCII),

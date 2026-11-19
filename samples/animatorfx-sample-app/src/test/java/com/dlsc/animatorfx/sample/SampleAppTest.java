@@ -264,7 +264,11 @@ class SampleAppTest {
     @Test
     void theBackdropCanBeSwitched() throws Exception {
         Path directory = Fx.screenshots();
-        Fx.run(() -> browser.getList().getSelectionModel().select("card"));
+        Fx.run(() -> {
+            browser.getList().getSelectionModel().select("card");
+            // for the picture; the card has no sound and nothing else plays
+            browser.setMuted(false);
+        });
         AnimationView view = browser.getShowcase("card").getView();
         await(() -> view.getCurrentTime() > 0.05);
         WritableImage dark = Fx.call(() -> {

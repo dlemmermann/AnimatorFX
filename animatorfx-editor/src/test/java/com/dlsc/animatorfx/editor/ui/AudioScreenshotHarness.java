@@ -52,7 +52,8 @@ import java.util.concurrent.Callable;
  *
  * which writes {@code DIR/task-3-dark.png}, {@code task-3-light.png} (an audio layer selected,
  * the Audio section in the inspector), {@code task-3-cue-dark.png} (a cue selected, the Cue
- * section), {@code task-3-assets-dark.png} and close-ups of the timeline in both themes. Only
+ * section), {@code task-3-assets-dark.png}, close-ups of the timeline in both themes and
+ * {@code editor-audio.png}, the picture of the README ({@code docs/images/editor-audio.png}). Only
  * the scene of the application is rendered, never the screen.
  */
 class AudioScreenshotHarness {
@@ -102,6 +103,10 @@ class AudioScreenshotHarness {
                 theme(mode);
                 String name = mode.name().toLowerCase();
                 snapshot(window.getScene().getRoot(), out.resolve("task-3-" + name + ".png"));
+                if (mode == Theme.Mode.DARK) {
+                    // the picture of the README, docs/images/editor-audio.png
+                    snapshot(window.getScene().getRoot(), out.resolve("editor-audio.png"));
+                }
                 snapshot(timeline, out.resolve("task-3-timeline-" + name + ".png"));
             }
             theme(Theme.Mode.DARK);

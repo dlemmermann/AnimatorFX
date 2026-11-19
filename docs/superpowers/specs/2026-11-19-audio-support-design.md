@@ -57,10 +57,10 @@ Animations can carry sound. Two forms, both stored in the `.afx` file and played
 
 On `AnimationPlayer`, delegated by `AnimationView`:
 
-- `mutedProperty()` — boolean, default `false`.
+- `mutedProperty()` — boolean, default `false`. Muting cuts sounding cues at once; audio layers fall silent with the next frame.
 - `volumeProperty()` — double `0..1`, default `1`.
-- `scrub(double seconds)` — seeks to the time and, when not playing, plays a short snippet (about 100 ms) of the audio at that position. For tooling.
-- `dispose()` — releases media resources and temporary files. Also happens automatically when the animation is replaced; temporary files are additionally removed at JVM exit.
+- `scrub(double seconds)` — seeks to the time and, when not playing and not muted, plays a short snippet (about 100 ms) of the audio layers at that position; no cues. For tooling.
+- `dispose()` — stops all sound and releases media resources and temporary files. It is terminal for sound: the player stays silent, and creates no media objects, until `play()` or `playMarker()` is called again or another animation is set. `AnimationView.dispose()` delegates to its player. Resources are also released when the animation is replaced, and when a view whose player has no in-place bindings leaves its scene (not terminal: the sound comes back when the view returns to a scene and plays). Temporary files are additionally removed at JVM exit.
 
 ### 4.3 Implementation constraints
 
@@ -72,18 +72,18 @@ On `AnimationPlayer`, delegated by `AnimationView`:
 ## 5. Editor (`animatorfx-editor`)
 
 - **Adding audio:** File ▸ Import ▸ Audio…, the Assets tab (audio assets listed with duration), and dropping audio files on the window. Importing creates an audio asset and an `AudioLayer` at the playhead whose out-point is the in-point plus the clip duration (clamped to the document duration), in one undo step.
-- **Timeline:** audio layers are rows with a speaker icon; the eye toggle acts as mute; the layer bar shows the waveform, positioned according to `clipOffset` and repeated when looping. Dragging the bar moves in/out as for other layers; Alt-dragging the bar slides the clip under it (changes `clipOffset`). Volume and balance appear as property rows with keyframes.
-- **Waveforms:** computed in the background and cached per asset for the session. WAV/AIFF are decoded exactly (`javax.sound.sampled`). MP3/AAC are analysed by playing the file silently through JavaFX at high rate and sampling its audio spectrum; the result is approximate and arrives after a short delay. Until a waveform is available, and if analysis fails, the bar is plain.
-- **Cue lane:** below the marker lane; cues are shown as small speaker ticks with their name. Add at the playhead (header button) or at a marker's start (marker context menu); drag to move (frame snapping); Delete removes; selecting a cue shows it in the inspector.
-- **Inspector:** an Audio section for audio layers (asset, clip offset, volume and balance with keyframe toggles, loop, mute, clip duration read-out) and a Cue section (name, time, asset, volume, mute, a preview button).
-- **Playback:** editor playback sounds through the same runtime engine. A mute toggle in the toolbar sets the runtime `muted` flag for the editor and is stored in the session. Dragging the playhead scrubs audibly (through `scrub`) unless muted.
+- **Timeline:** audio layers are rows with a note icon; in place of the eye a speaker toggles the layer silent and back (it shows silent when the layer is hidden or muted). The layer bar shows the waveform, positioned according to `clipOffset`, repeated when looping, and hatched after the end of a sound that does not loop; an animated volume is drawn as a line over it. Dragging the bar moves in/out as for other layers; dragging the left edge trims the start and advances `clipOffset` so that the sound stays in place, Alt-dragging the left edge moves the in-point only; the right edge moves the out-point; Alt-dragging the bar slides the clip under it (changes `clipOffset`). Audio bar gestures always snap to frames. Volume and balance appear as property rows with keyframes.
+- **Waveforms:** computed in the background and cached per asset for the session. WAV/AIFF are decoded exactly (`javax.sound.sampled`). MP3/AAC are analysed by playing the file silently through JavaFX and sampling its audio spectrum, at rate 2 (measured: faster rates give unreliable data); on macOS the media stack plays these formats in real time whatever rate is asked for, so the analysis takes as long as the sound. The result is approximate, normalised to its loudest moment, and fills in while the analysis runs. The length of a compressed sound is probed separately, so it is known without waiting for the waveform. Until a waveform is available, and if analysis fails, the bar is plain.
+- **Cue lane:** below the marker lane; cues are shown as small speaker ticks with their name. Add at the playhead (header button) or at a marker's start (marker context menu); drag to move (frame snapping); Delete removes; selecting a cue shows it in the inspector. Layers and cues are never selected together.
+- **Inspector:** an Audio section for audio layers (asset, clip offset, volume and balance with keyframe toggles, loop, mute, clip duration read-out) and a Cue section (name, time, asset, volume, mute, a preview button). The preview buttons are audible also while the editor is muted: they are an explicit request for one sound.
+- **Playback:** editor playback sounds through the same runtime engine. A mute toggle in the toolbar, View ▸ Mute Sound and the key `M` (handled by the window, not a menu accelerator, and not while a text input has the focus) set the runtime `muted` flag for the editor; it is stored in the session. Dragging the playhead scrubs audibly (through `scrub`) unless muted. An edit during playback keeps the sound going: the editor keeps the audio output across edits that leave the sounds and their layers as they are. Stopping playback or moving the playhead cuts sounding cues.
 - **Canvas:** audio layers have no canvas presence and cannot be hit or selected there.
-- **Lottie import:** audio layers (`ty` 6) with an embedded sound asset become `AudioLayer`s; sounds referenced by external path are skipped with a warning.
+- **Lottie import:** audio layers (`ty` 6) with an embedded sound asset (base64 `data:` URI, at most 50 MB) become `AudioLayer`s: in/out from `ip`/`op`, clip offset from the start time `st`, volume from the audio levels `au.lv` read as decibels (louder channel; no balance). Sounds referenced by external path or URL are never fetched; those layers are skipped with a warning.
 - Removing an audio asset is refused while a layer or cue uses it, as for other assets.
 
 ## 6. Samples and documentation
 
-- The generator synthesises its sounds (sine-based chime and tick, written as WAV), so no third-party audio is shipped. `success.afx` gets a cue at the `success` marker and a short audio layer under the intro; the sample app gets mute and volume controls.
+- The generator synthesises its sounds (sine-based chime and tick, written as WAV), so no third-party audio is shipped. `success.afx` gets a cue at the `success` marker and a short audio layer with a volume fade under the intro, `attention.afx` a tick cue at its start; the sample app gets mute and volume controls and disposes its views when its window closes.
 - README: audio in the feature list, the embedding guide (`muted`, `volume`, the `javafx.media` requirement), the format section and the limitations.
 - The main spec's module table and §10 are updated to match.
 
