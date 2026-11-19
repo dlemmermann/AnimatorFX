@@ -191,28 +191,49 @@ class AnimationPlayerAudioTest {
     }
 
     @Test
-    void aTickThatSpansSeveralCyclesFiresEachCueOnce() {
+    void aTickThatSpansSeveralCyclesFiresEachCueOncePerCrossing() {
+        Animation animation = sounding().animation().withCues(List.of(
+                new SoundCue("start", "", 0, "click", 1, false),
+                new SoundCue("middle", "", 1, "snd", 0.5, false),
+                new SoundCue("end", "", 2, "click", 0.25, false)));
+        player.setAnimation(new AnimationFile(animation, Map.of()));
         player.setCycleCount(3);
         player.play();
         clock.tick(5.5);
 
         assertEquals(1.5, player.getCurrentTime(), EPS);
-        assertEquals(List.of("cue:click:1.0", "cue:snd:0.5"), output.cues());
+        assertEquals(List.of(
+                "cue:click:1.0", "cue:snd:0.5", "cue:click:0.25",
+                "cue:click:1.0", "cue:snd:0.5", "cue:click:0.25",
+                "cue:click:1.0", "cue:snd:0.5"), output.cues());
 
         clock.tick(5);
         assertEquals(Status.STOPPED, player.getStatus());
-        assertEquals(List.of("cue:click:1.0", "cue:snd:0.5"), output.cues());
+        assertEquals(List.of(
+                "cue:click:1.0", "cue:snd:0.5", "cue:click:0.25",
+                "cue:click:1.0", "cue:snd:0.5", "cue:click:0.25",
+                "cue:click:1.0", "cue:snd:0.5", "cue:click:0.25"), output.cues());
     }
 
     @Test
-    void aCueExactlyAtTheSeekTargetFiresOnTheNextTickWhilePlaying() {
+    void seekingDoesNotFireItsCueButLaterForwardCrossingsStillFire() {
+        Animation animation = sounding().animation().withCues(List.of(
+                new SoundCue("start", "", 0, "click", 1, false),
+                new SoundCue("destination", "", 1, "snd", 0.5, false),
+                new SoundCue("later", "", 1.5, "click", 0.25, false)));
+        player.setAnimation(new AnimationFile(animation, Map.of()));
         player.play();
         clock.tick(0.1);
+        assertEquals(List.of("cue:click:1.0"), output.cues());
+
         player.seek(1);
         assertEquals(List.of("cue:click:1.0"), output.cues());
 
         clock.tick(0.1);
-        assertEquals(List.of("cue:click:1.0", "cue:snd:0.5"), output.cues());
+        assertEquals(List.of("cue:click:1.0"), output.cues());
+
+        clock.tick(0.5);
+        assertEquals(List.of("cue:click:1.0", "cue:click:0.25"), output.cues());
     }
 
     @Test

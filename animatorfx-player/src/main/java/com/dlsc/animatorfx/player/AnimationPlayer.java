@@ -501,12 +501,13 @@ public class AnimationPlayer {
 
     /**
      * Moves to a time in seconds, limited to the active range. The status does not change.
-     * Markers and sound cues that are jumped over do not fire; while playing, those exactly at
-     * the new time fire with the next frame, as they do where playback starts.
+     * Markers and sound cues that are jumped over do not fire. A cue exactly at the new time
+     * does not fire either; cues crossed by subsequent forward playback still do.
      */
     public void seek(double seconds) {
         epoch++;
         jumpTo(clamp(seconds));
+        cuesAtTimeFired = true;
     }
 
     /**
@@ -912,16 +913,13 @@ public class AnimationPlayer {
     /**
      * Adds the sound cues on the way from one time to another, the end included and the
      * beginning only if its cues have not fired yet. Only playback that runs forward at a
-     * positive rate fires cues, and a cue is added once however often a long tick crosses it.
+     * positive rate fires cues. Every crossing is retained, including multiple crossings in
+     * one delayed tick.
      */
     private void collectCues(AudioEngine sound, double from, double to, double speed, List<SoundCue> out) {
         if (speed > 0 && !reversed) {
             if (sound != null) {
-                for (SoundCue cue : AudioSchedule.crossed(getAnimation().animation(), from, to, !cuesAtTimeFired)) {
-                    if (!out.contains(cue)) {
-                        out.add(cue);
-                    }
-                }
+                out.addAll(AudioSchedule.crossed(getAnimation().animation(), from, to, !cuesAtTimeFired));
             }
             cuesAtTimeFired = true;
         }

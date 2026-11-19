@@ -146,7 +146,11 @@ public final class MainWindow {
         stage.setScene(scene);
         stage.setMinWidth(900);
         stage.setMinHeight(560);
-        stage.setOnCloseRequest(e -> shutdown());
+        stage.setOnCloseRequest(e -> {
+            if (!tryShutdown()) {
+                e.consume();
+            }
+        });
         // The first layout of a window can run before the window has its real size, which moves the
         // dividers. So they are positioned once the window is up; from then on side panel and
         // timeline keep their size when the window is resized.
@@ -172,14 +176,24 @@ public final class MainWindow {
     }
 
     /**
-     * Persists the session and the recovery copies of dirty documents, as quitting does, and then
-     * stops playback and releases the sound. It does not ask to save and does not hide the window.
+     * Stops playback and previews, then persists the session and dirty recovery copies. It does
+     * not ask to save or hide the window. A close request is cancelled if recovery cannot safely
+     * drain, leaving the window open.
      */
     public void shutdown() {
-        // what the user would lose comes first; nothing that goes wrong afterwards can skip it,
-        // and no step can skip the ones after it
-        List<Runnable> steps = List.of(session::shutdown, SoundPreview.shared()::stop, canvasView::dispose,
-                theme::dispose);
+        tryShutdown();
+    }
+
+    private boolean tryShutdown() {
+        runShutdownSteps(List.of(canvasView::pausePlayback, SoundPreview.shared()::stop));
+        if (!session.shutdown()) {
+            return false;
+        }
+        runShutdownSteps(List.of(canvasView::dispose, theme::dispose));
+        return true;
+    }
+
+    private static void runShutdownSteps(List<Runnable> steps) {
         for (Runnable step : steps) {
             try {
                 step.run();

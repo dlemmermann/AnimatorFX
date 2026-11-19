@@ -254,12 +254,14 @@ public final class SessionController {
      * Stores a recovery copy of every dirty document that changed since its last copy, now, on
      * the calling thread, after everything that was handed to the writer thread has been done.
      * A document whose copy could not be read back keeps its previous copy; the user is told
-     * once per document, and the same content is not tried again.
+     * once per document, and the same content is not tried again. Returns {@code false} when the
+     * writer could not be drained and the latest copies were not safely written.
      */
-    public void autosaveNow() {
+    public boolean autosaveNow() {
         if (!drainWriter()) {
             LOG.log(System.Logger.Level.WARNING, "The recovery writer is stuck; no recovery copies were written");
-            return;
+            window.getNoticeBar().show("The recovery writer did not finish; the window will stay open.");
+            return false;
         }
         // a write that failed in the background may work now: only what the reader rejects is left out
         failedOnce.clear();
@@ -271,6 +273,7 @@ public final class SessionController {
             }
         }
         updateStatus();
+        return true;
     }
 
     /**
@@ -425,17 +428,21 @@ public final class SessionController {
     /**
      * Persists everything for the next start: recovery copies of the latest content of the dirty
      * documents and the session state. Copies of documents that were saved or closed are gone by
-     * then, also when their removal was still waiting behind a write. Further calls do nothing.
+     * then, also when their removal was still waiting behind a write. A failed drain leaves the
+     * controller open and returns {@code false}; a completed shutdown returns {@code true}.
      */
-    void shutdown() {
+    boolean shutdown() {
         if (closed) {
-            return;
+            return true;
+        }
+        if (!autosaveNow()) {
+            return false;
         }
         autosaveTimer.stop();
-        autosaveNow();
         closed = true;
         writer.shutdown();
         saveNow();
+        return true;
     }
 
     SessionState snapshot() {

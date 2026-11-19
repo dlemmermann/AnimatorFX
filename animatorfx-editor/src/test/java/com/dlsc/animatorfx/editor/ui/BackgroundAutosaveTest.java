@@ -2,13 +2,20 @@ package com.dlsc.animatorfx.editor.ui;
 
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
+import com.dlsc.animatorfx.editor.audio.EditorAudio;
+import com.dlsc.animatorfx.editor.audio.RecordingAudioOutput;
+import com.dlsc.animatorfx.editor.audio.SoundPreview;
+import com.dlsc.animatorfx.editor.audio.TestSounds;
 import com.dlsc.animatorfx.editor.session.RecoveryStore;
 import com.dlsc.animatorfx.editor.session.SessionStore;
+import com.dlsc.animatorfx.model.Asset;
 import com.dlsc.animatorfx.model.LayerBase;
 import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.io.AnimationFile;
+import javafx.event.Event;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +33,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -356,13 +365,105 @@ class BackgroundAutosaveTest {
     }
 
     @Test
+    void closingWithAnUndrainableWriterStopsSoundFirstAndKeepsTheWindowOpen() throws Exception {
+        CountDownLatch playbackStopped = new CountDownLatch(1);
+        CountDownLatch previewStopped = new CountDownLatch(1);
+        AtomicInteger created = new AtomicInteger();
+        EditorAudio.setOutputFactory(file -> {
+            int index = created.getAndIncrement();
+            RecordingAudioOutput output = new RecordingAudioOutput(file) {
+                @Override
+                public void stopCues() {
+                    super.stopCues();
+                    if (index == 1) {
+                        playbackStopped.countDown();
+                    }
+                }
+
+                @Override
+                public void dispose() {
+                    super.dispose();
+                    if (index == 0) {
+                        previewStopped.countDown();
+                    }
+                }
+            };
+            return output;
+        });
+        CountDownLatch gate = store.hold();
+        try {
+            SoundPreview.shared().stop();
+            fx(() -> {
+                doc.addAsset(new Asset("snd", Asset.Kind.AUDIO, "assets/snd.wav", "sound.wav"),
+                        TestSounds.tone(1, 0.5));
+                doc.execute(Commands.addAudioLayer("audio", "sound", "snd", 0, 0.5));
+                SoundPreview.shared().play(this, doc.getFileContent(), "snd", 0, 1, 0, 1);
+                window.getCanvasView().togglePlayback();
+                return null;
+            });
+            WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> created.get() >= 2);
+
+            autosave();
+            store.awaitWrite();
+            edit("latest");
+
+            AtomicReference<Thread> closeThread = new AtomicReference<>();
+            AtomicReference<Boolean> closeConsumed = new AtomicReference<>(false);
+            CountDownLatch closeStarted = new CountDownLatch(1);
+            Future<Void> close = WaitForAsyncUtils.asyncFx(() -> {
+                closeThread.set(Thread.currentThread());
+                WindowEvent event = new WindowEvent(window.getStage(), WindowEvent.WINDOW_CLOSE_REQUEST);
+                closeStarted.countDown();
+                try {
+                    Event.fireEvent(window.getStage(), event);
+                    closeConsumed.set(event.isConsumed());
+                } finally {
+                    Thread.interrupted();
+                }
+                return null;
+            });
+
+            assertTrue(closeStarted.await(2, TimeUnit.SECONDS), "close request did not start");
+            boolean playbackStoppedBeforeDrain = playbackStopped.await(1, TimeUnit.SECONDS);
+            boolean previewStoppedBeforeDrain = previewStopped.await(1, TimeUnit.SECONDS);
+            Thread waitingForDrain = closeThread.get();
+            assertTrue(waitingForDrain != null);
+            waitingForDrain.interrupt();
+            close.get(3, TimeUnit.SECONDS);
+
+            assertTrue(playbackStoppedBeforeDrain, "playback must stop before recovery drain");
+            assertTrue(previewStoppedBeforeDrain, "previews must stop before recovery drain");
+            assertTrue(closeConsumed.get(), "the close request must be cancelled when recovery cannot drain");
+            assertTrue(window.getWorkspace().getDocuments().contains(doc), "the dirty document stays open");
+
+            gate.countDown();
+            settle();
+            assertEquals(Optional.of(List.of("first", "sound", "latest")), copy());
+
+            fx(() -> {
+                window.getCanvasView().togglePlayback();
+                assertTrue(window.getCanvasView().isPlaying(), "playback remains available after cancelling close");
+                window.getCanvasView().pausePlayback();
+                return null;
+            });
+        } finally {
+            gate.countDown();
+            SoundPreview.shared().stop();
+            EditorAudio.setOutputFactory(null);
+        }
+    }
+
+    @Test
     void aSynchronousAutosaveWaitsForTheOneInTheBackgroundAndWritesTheLatestContent() throws Exception {
         CountDownLatch gate = store.hold();
         autosave();
         store.awaitWrite();
         edit("later");
 
-        Future<Void> now = WaitForAsyncUtils.asyncFx(() -> window.getSession().autosaveNow());
+        Future<Void> now = WaitForAsyncUtils.asyncFx(() -> {
+            window.getSession().autosaveNow();
+            return null;
+        });
         gate.countDown();
         now.get(10, TimeUnit.SECONDS);
 
