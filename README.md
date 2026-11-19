@@ -161,7 +161,8 @@ views when the window closes. It plays the files of `samples/animations`:
 ![Frames of orbit.afx](docs/images/sample-orbit.png)
 
 The files are generated with the model API by `SampleGenerator` (test scope of the sample
-application), and a test checks that the committed files match byte for byte. The three sounds
+application), and a test checks that the committed files hold what the generator produces: the
+same `animation.json` and the same bytes for every sound. The three sounds
 are generated there as well, from sine waves, and stored as 16-bit mono WAV; no audio from
 anywhere else is shipped. The other samples are silent. To write the files again:
 
@@ -358,8 +359,9 @@ The rules:
   called again or another animation is set. A view that leaves its scene releases its sound by
   itself and gets it back when it returns, unless its player drives nodes in place. An animation
   without audio layers and cues never creates a media player or a file.
-- `view.scrub(seconds)` seeks like `seek` and, while not playing, plays about 0.1 s of the sound
-  at that time. It is meant for tools such as the editor's timeline.
+- `view.scrub(seconds)` seeks like `seek` and, while not playing and unless muted, plays about
+  0.1 s of the audio layers at that time (no cues). It is meant for tools such as the editor's
+  timeline.
 
 ## The editor
 
@@ -693,10 +695,11 @@ Lottie audio: an audio layer (`ty` 6) becomes an audio layer when its sound asse
 `data:` URI of type `audio/mpeg`, `audio/mp3`, `audio/wav` (also `x-wav`, `wave`), `audio/aiff`
 (`x-aiff`), `audio/mp4`, `audio/x-m4a` or `audio/aac`, of at most 50 MB. In and out point come
 from `ip` and `op`; the sound begins at the layer's start time `st`, so what lies between `st`
-and the in point becomes the clip offset. The audio levels `au.lv` are read as decibels (0 = the
-sound as it is) and become the volume, static or keyframed; the louder channel counts, levels
-above 0 dB are limited to full volume, and a difference between left and right is not turned
-into balance. Sounds referenced by a path or a URL are never fetched: those layers are skipped
+and the in point becomes the clip offset. The audio levels `au.lv` are read as percentages
+(100 = the sound as it is, which is how lottie-web uses them) and become the volume, static or
+keyframed; the louder channel counts, levels above 100 are limited to full volume, and a
+difference between left and right is not turned into balance. A layer without levels plays at
+full volume. A layer that is in before its sound starts begins at the start time. Sounds referenced by a path or a URL are never fetched: those layers are skipped
 with a warning, as are sounds that cannot be decoded or are of another type. The bytes are taken
 over as they are and are not checked to be playable.
 
@@ -810,7 +813,8 @@ mvn -pl animatorfx-editor test -Dtest=MainWindowTest   # one test class
 - No test is audible. The editor's tests run with `-Danimatorfx.audio=off` and observe sound
   through a recording output; the sample application's tests start it muted
   (`-Danimatorfx.sample.muted=true`); tests that use real media players run them muted or at
-  volume 0, except two short smoke tests of the player at 5 % volume.
+  volume 0. That holds for a run from an IDE as well: the UI tests of the editor and the tests
+  of the sample application set their silencing property themselves.
 - The design is described in `docs/superpowers/specs/2026-11-18-animatorfx-design.md` and, for
   sound, `docs/superpowers/specs/2026-11-19-audio-support-design.md`.
 
