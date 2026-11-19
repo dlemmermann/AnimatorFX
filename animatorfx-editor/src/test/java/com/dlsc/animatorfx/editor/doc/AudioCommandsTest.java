@@ -214,6 +214,7 @@ class AudioCommandsTest {
         assertTrue(selection.cueIds().isEmpty());
         selection.cueIds().add("c");
         assertTrue(selection.keyframes().isEmpty());
+        assertTrue(selection.cueIds().contains("c"), "the cue stays selected");
 
         selection.clear();
         assertTrue(selection.cueIds().isEmpty());

@@ -8,6 +8,8 @@ import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
@@ -70,6 +72,16 @@ public final class WaveformCache {
         boolean started;
         SpectrumAnalyser.Analysis analysis;
         Path file;
+        /** Whether the probe has got as far as asking the media stack, or needed no asking. */
+        boolean probing;
+        final List<Runnable> onProbing = new ArrayList<>();
+
+        void probing() {
+            probing = true;
+            List<Runnable> waiting = List.copyOf(onProbing);
+            onProbing.clear();
+            waiting.forEach(Runnable::run);
+        }
 
         Entry(byte[] bytes, String extension) {
             this.content = new WeakReference<>(bytes);
@@ -135,6 +147,23 @@ public final class WaveformCache {
     }
 
     /**
+     * Like {@link #info(byte[], String)}, and says when the answer is being worked on.
+     *
+     * @param onProbing called once, on the JavaFX application thread, when the media stack is
+     *                  about to be asked (see {@link AudioProbe}); at once when that has
+     *                  happened already or is not needed
+     */
+    public CompletableFuture<AudioInfo> info(byte[] bytes, String extension, Runnable onProbing) {
+        Entry entry = entry(bytes, extension);
+        if (entry.probing) {
+            onProbing.run();
+        } else {
+            entry.onProbing.add(onProbing);
+        }
+        return entry.info;
+    }
+
+    /**
      * Makes what is known, or being worked out, about a sound belong to another array with the
      * same content as well: a document copies the content it is given.
      */
@@ -163,6 +192,7 @@ public final class WaveformCache {
     private void start(Entry entry, byte[] bytes) {
         Optional<AudioInfo> header = AudioInfo.read(bytes);
         if (header.isPresent()) {
+            entry.probing();
             entry.info.complete(header.get());
             decoder.execute(() -> {
                 byte[] content = entry.content.get();
@@ -182,7 +212,7 @@ public final class WaveformCache {
             });
         } else {
             // the length comes from a probe of its own: the analysis may be a long way off
-            AudioProbe.probe(bytes, entry.extension).whenComplete((info, error) -> {
+            AudioProbe.probe(bytes, entry.extension, entry::probing).whenComplete((info, error) -> {
                 if (error != null) {
                     entry.info.completeExceptionally(error);
                 } else {

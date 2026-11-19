@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.OptionalDouble;
 
 /** A silent audio output that writes down what it is asked to do. */
-public final class RecordingAudioOutput implements AudioOutput {
+public class RecordingAudioOutput implements AudioOutput {
 
     /** Every call, in order: {@code apply}, {@code cue:<asset>}, {@code snippet}, {@code silence}, {@code dispose}. */
     public final List<String> calls = new ArrayList<>();

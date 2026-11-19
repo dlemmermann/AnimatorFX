@@ -110,6 +110,11 @@ class BackgroundAutosaveTest {
             w.show();
             return w;
         });
+        // only the tests ask for copies: a tick of the five-second timer would be one more writer
+        fx(() -> {
+            window.getSession().stopAutosaveTimer();
+            return null;
+        });
         WaitForAsyncUtils.waitForFxEvents();
         doc = window.getWorkspace().getActiveDocument();
         edit("first");
@@ -231,6 +236,54 @@ class BackgroundAutosaveTest {
 
         // the write that failed was made up for on the way out
         assertEquals(Optional.of(List.of("first")), copy());
+    }
+
+    @Test
+    void aCopyThatFailedWithAnErrorIsTriedAgainWhenTheEditorQuits() throws Exception {
+        store.failOnceWith(new OutOfMemoryError("Java heap space (test)"));
+        settle();
+        assertEquals(Optional.empty(), copy());
+        store.entered.drainPermits();
+        // the timer does not try the same content again
+        assertTrue(autosave().isDone());
+        assertFalse(store.entered.tryAcquire(), "the same content was handed to the writer again");
+
+        fx(() -> {
+            window.shutdown();
+            return null;
+        });
+
+        assertEquals(Optional.of(List.of("first")), copy());
+    }
+
+    @Test
+    void quittingPersistsTheSessionAlsoWhenReleasingTheSoundFails() throws Exception {
+        com.dlsc.animatorfx.editor.audio.EditorAudio.setOutputFactory(file -> new com.dlsc.animatorfx.editor.audio.RecordingAudioOutput(file) {
+            @Override
+            public void dispose() {
+                throw new NoClassDefFoundError("media stack gone (test)");
+            }
+        });
+        try {
+            fx(() -> {
+                doc.addAsset(new com.dlsc.animatorfx.model.Asset("snd", com.dlsc.animatorfx.model.Asset.Kind.AUDIO,
+                        "assets/snd.wav", "snd.wav"), com.dlsc.animatorfx.editor.audio.TestSounds.tone(0.5, 0.5));
+                doc.execute(Commands.addAudioLayer("a", "sound", "snd", 0, 0.5));
+                // makes the player ask for its output
+                window.getCanvasView().scrub(0.1);
+                return null;
+            });
+
+            fx(() -> {
+                window.shutdown();
+                return null;
+            });
+
+            assertTrue(copy().isPresent(), "the recovery copy");
+            assertTrue(java.nio.file.Files.exists(dir.resolve("config").resolve("session.json")), "the session");
+        } finally {
+            com.dlsc.animatorfx.editor.audio.EditorAudio.setOutputFactory(null);
+        }
     }
 
     // ------------------------------------------------------------------ (b) save while a write is under way

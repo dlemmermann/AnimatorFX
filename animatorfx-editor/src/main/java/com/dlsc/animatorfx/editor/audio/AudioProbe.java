@@ -44,9 +44,21 @@ public final class AudioProbe {
      *         sound whose header says it all; exceptionally when the bytes are no playable sound
      */
     public static CompletableFuture<AudioInfo> probe(byte[] bytes, String extension) {
+        return probe(bytes, extension, () -> {
+        });
+    }
+
+    /**
+     * @param onOpening called once, on the JavaFX application thread, when the media stack is
+     *                  about to be asked, which is after the temporary file has been written: an
+     *                  answer is due within {@link #READY_LIMIT} from then. Called at once for a
+     *                  sound whose header says it all.
+     */
+    public static CompletableFuture<AudioInfo> probe(byte[] bytes, String extension, Runnable onOpening) {
         CompletableFuture<AudioInfo> result = new CompletableFuture<>();
         Optional<AudioInfo> header = AudioInfo.read(bytes);
         if (header.isPresent()) {
+            onOpening.run();
             result.complete(header.get());
             return result;
         }
@@ -57,11 +69,17 @@ public final class AudioProbe {
                 Files.write(file, bytes);
             } catch (IOException | RuntimeException e) {
                 delete(file);
-                Platform.runLater(() -> result.completeExceptionally(e));
+                Platform.runLater(() -> {
+                    onOpening.run();
+                    result.completeExceptionally(e);
+                });
                 return;
             }
             Path written = file;
-            Platform.runLater(() -> open(written, AudioInfo.formatOf(extension == null ? "" : extension), result));
+            Platform.runLater(() -> {
+                onOpening.run();
+                open(written, AudioInfo.formatOf(extension == null ? "" : extension), result);
+            });
         });
         return result;
     }

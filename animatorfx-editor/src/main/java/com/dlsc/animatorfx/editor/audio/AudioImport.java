@@ -32,7 +32,10 @@ public final class AudioImport {
     public static final long MAX_BYTES = 50L * 1024 * 1024;
 
     private static final Duration BUSY_AFTER = Duration.millis(200);
+    /** How long the media stack has to answer once it has been asked; it answers within 4 s by itself. */
     private static final Duration GIVE_UP_AFTER = Duration.seconds(5);
+    /** How long reading a file of up to 50 MB and writing its temporary copy may take. */
+    private static final Duration READ_LIMIT = Duration.seconds(60);
 
     /** Why a file was not taken; the message completes "Could not import x: …". */
     public static final class Refused extends Exception {
@@ -79,8 +82,9 @@ public final class AudioImport {
      * WAV and AIFF files say their length in their header, for other formats the media stack is
      * asked, which takes a moment. Call on the JavaFX application thread; the result arrives
      * there, never inside this call. Fails with {@link Refused} for a file that is too large,
-     * cannot be read or is no sound the media stack plays, and, as a last resort, when there is
-     * no answer after 5 seconds: a file that was not checked is not taken.
+     * cannot be read or is no sound the media stack plays, and, as a last resort, when the media
+     * stack has not answered 5 seconds after it was asked (the time to read the file does not
+     * count; that has a minute): a file that was not checked is not taken.
      *
      * @param busy shows a message when the answer takes longer than a blink, and returns what
      *             takes the message away again
@@ -93,6 +97,9 @@ public final class AudioImport {
         Runnable[] dismiss = {null};
         PauseTransition busyTimer = new PauseTransition(BUSY_AFTER);
         busyTimer.setOnFinished(e -> dismiss[0] = busy.apply("Reading " + name + "…"));
+        // two clocks: a generous one for reading the file and writing the copy the media stack
+        // opens, and then a short one for the media stack to answer
+        PauseTransition readLimit = new PauseTransition(READ_LIMIT);
         PauseTransition giveUp = new PauseTransition(GIVE_UP_AFTER);
         // every outcome comes through here, on the JavaFX application thread
         BiConsumer<Sound, Refused> finish = (sound, refused) -> {
@@ -100,6 +107,7 @@ public final class AudioImport {
                 return;
             }
             busyTimer.stop();
+            readLimit.stop();
             giveUp.stop();
             if (dismiss[0] != null) {
                 dismiss[0].run();
@@ -111,8 +119,9 @@ public final class AudioImport {
             }
         };
         giveUp.setOnFinished(e -> finish.accept(null, new Refused("the sound could not be read in time.")));
+        readLimit.setOnFinished(e -> finish.accept(null, new Refused("reading the file took too long.")));
         busyTimer.play();
-        giveUp.play();
+        readLimit.play();
 
         AudioProbe.IO.execute(() -> {
             byte[] bytes;
@@ -136,7 +145,12 @@ public final class AudioImport {
                     return;
                 }
                 // the cache probes the sound by itself, apart from the analysis of waveforms
-                WaveformCache.shared().info(bytes, extension).whenComplete((info, error) -> finish.accept(
+                WaveformCache.shared().info(bytes, extension, () -> {
+                    if (!result.isDone()) {
+                        readLimit.stop();
+                        giveUp.playFromStart();
+                    }
+                }).whenComplete((info, error) -> finish.accept(
                         error != null || !info.hasDuration() ? null : new Sound(name, extension, bytes, info),
                         error != null || !info.hasDuration() ? new Refused("it is not a sound the editor can play.") : null));
             });

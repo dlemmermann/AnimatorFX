@@ -172,6 +172,54 @@ class CueLaneTest extends EditorUiTest {
     }
 
     @Test
+    void aCueIsSelectedAlsoWhileALayerAndOneOfItsKeyframesAre() {
+        addSound("snd", "chime.wav");
+        addCues(new SoundCue("c1", "one", 0.5, "snd", 1, false));
+        execute(Commands.setProperty("r", "opacity", com.dlsc.animatorfx.model.Animatable.keyframed(List.of(
+                new com.dlsc.animatorfx.model.Keyframe<>("o1", 1.0, 0.5, com.dlsc.animatorfx.model.Easing.LINEAR)))));
+        run(() -> doc.getViewState().getExpandedLayerIds().add("r"));
+        layout();
+        TrackPane tracks = timeline.getTrackPane();
+        click(tracks, x(1.0), fx(() -> tracks.rowCenter(tracks.rowOf("r", "opacity"))));
+        assertEquals(List.of("r"), selection());
+        assertEquals(1, doc.getSelection().keyframes().size());
+        var inspector = window.getSidePanel().getInspector();
+
+        click(lane, x(0.5), Y);
+
+        assertEquals(Set.of("c1"), selectedCues());
+        assertEquals(List.of(), selection());
+        assertTrue(doc.getSelection().keyframes().isEmpty());
+        assertEquals(List.of("Cue"), fx(() -> inspector.getVisibleSections().stream().map(s -> s.title()).toList()));
+
+        // and the button that adds a cue selects the new one
+        click(tracks, x(1.0), fx(() -> tracks.rowCenter(tracks.rowOf("r", "opacity"))));
+        assertEquals(1, doc.getSelection().keyframes().size());
+        playhead(2.0);
+        run(() -> addButton().fire());
+        layout();
+
+        assertEquals(2, cues().size());
+        assertEquals(Set.of(cues().get(1).id()), selectedCues());
+        assertEquals(List.of(), selection());
+        assertEquals(List.of("Cue"), fx(() -> inspector.getVisibleSections().stream().map(s -> s.title()).toList()));
+    }
+
+    @Test
+    void deleteOnTheCanvasRemovesTheSelectedCues() {
+        addSound("snd", "chime.wav");
+        addCues(new SoundCue("c1", "one", 0.5, "snd", 1, false), new SoundCue("c2", "two", 1.5, "snd", 1, false));
+        click(lane, x(0.5), Y);
+        run(() -> window.getCanvasView().requestFocus());
+
+        key(KeyCode.DELETE);
+
+        assertEquals(List.of("c2"), cues().stream().map(SoundCue::id).toList());
+        assertEquals(1, doc.getAnimation().layers().size());
+        assertEquals("Delete Cue", doc.getUndoName());
+    }
+
+    @Test
     void draggingACueMovesItToAFrameInOneUndoStep() {
         addSound("snd", "chime.wav");
         addCues(new SoundCue("c1", "one", 0.5, "snd", 1, false));

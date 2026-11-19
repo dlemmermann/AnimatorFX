@@ -172,14 +172,22 @@ public final class MainWindow {
     }
 
     /**
-     * Persists the session and the recovery copies of dirty documents, as quitting does. It does
-     * not ask to save and does not hide the window; further calls do nothing.
+     * Persists the session and the recovery copies of dirty documents, as quitting does, and then
+     * stops playback and releases the sound. It does not ask to save and does not hide the window.
      */
     public void shutdown() {
-        SoundPreview.shared().stop();
-        canvasView.dispose();
-        session.shutdown();
-        theme.dispose();
+        // what the user would lose comes first; nothing that goes wrong afterwards can skip it,
+        // and no step can skip the ones after it
+        List<Runnable> steps = List.of(session::shutdown, SoundPreview.shared()::stop, canvasView::dispose,
+                theme::dispose);
+        for (Runnable step : steps) {
+            try {
+                step.run();
+            } catch (RuntimeException | LinkageError | StackOverflowError e) {
+                System.getLogger(MainWindow.class.getName()).log(System.Logger.Level.WARNING,
+                        "A step of closing the window failed", e);
+            }
+        }
     }
 
     public Stage getStage() {

@@ -74,6 +74,11 @@ public final class SessionController {
     private final Map<String, LocalTime> autosavedAt = new HashMap<>();
     /** The content that could not be read back as a recovery copy, by document id; it is not tried again. */
     private final Map<String, AnimationFile> unstorable = new HashMap<>();
+    /**
+     * The content whose background copy failed with an {@code Error}, by document id: the timer
+     * leaves it alone, {@link #autosaveNow()} and quitting try it again.
+     */
+    private final Map<String, AnimationFile> failedOnce = new HashMap<>();
     /** The documents whose failing recovery copy the user has been told about. */
     private final Set<String> reportedStoreFailures = new HashSet<>();
     /** The documents whose "recovered" notice still offers to discard them. */
@@ -217,6 +222,14 @@ public final class SessionController {
     }
 
     /**
+     * Stops the timer that stores recovery copies every five seconds; they are then only stored
+     * when asked for, and when the window closes. For tests that decide when a copy is written.
+     */
+    void stopAutosaveTimer() {
+        autosaveTimer.stop();
+    }
+
+    /**
      * Writes {@code session.json} now instead of after the delay.
      */
     public void saveNow() {
@@ -248,6 +261,8 @@ public final class SessionController {
             LOG.log(System.Logger.Level.WARNING, "The recovery writer is stuck; no recovery copies were written");
             return;
         }
+        // a write that failed in the background may work now: only what the reader rejects is left out
+        failedOnce.clear();
         for (EditorDocument document : workspace.getDocuments()) {
             RecoveryJob job = jobFor(document);
             if (job != null) {
@@ -293,7 +308,8 @@ public final class SessionController {
     private RecoveryJob jobFor(EditorDocument document) {
         String id = document.getId();
         AnimationFile content = document.getFileContent();
-        if (!document.isDirty() || stored.get(id) == content || unstorable.get(id) == content) {
+        if (!document.isDirty() || stored.get(id) == content || unstorable.get(id) == content
+                || failedOnce.get(id) == content) {
             return null;
         }
         return new RecoveryJob(document.getTitle(), id, content, document.getPath(), generation(id), true);
@@ -361,13 +377,17 @@ public final class SessionController {
         if (failure == null) {
             stored.put(id, job.content);
             unstorable.remove(id);
+            failedOnce.remove(id);
             autosavedAt.put(id, LocalTime.now());
             return;
         }
         Throwable cause = failure instanceof UncheckedIOException && failure.getCause() != null ? failure.getCause() : failure;
-        if (cause instanceof AnimationFormatException || failure instanceof Error) {
-            // the same content would fail the same way every five seconds
+        if (cause instanceof AnimationFormatException) {
+            // the reader rejects this content, now and always
             unstorable.put(id, job.content);
+        } else if (failure instanceof Error) {
+            // out of memory, most likely: not again every five seconds, but once more when quitting
+            failedOnce.put(id, job.content);
         }
         if (reportedStoreFailures.add(id)) {
             LOG.log(System.Logger.Level.WARNING, "Could not store a recovery copy of " + job.title, failure);
@@ -618,6 +638,7 @@ public final class SessionController {
         generations.merge(id, 1, Integer::sum);
         stored.remove(id);
         unstorable.remove(id);
+        failedOnce.remove(id);
         inFlight.remove(id);
         reportedStoreFailures.remove(id);
         autosavedAt.remove(id);

@@ -243,6 +243,31 @@ class AudioImportUiTest extends EditorUiTest {
     }
 
     @Test
+    void anImportThatBreaksDoesNotHoldUpTheNextOne() throws Exception {
+        Path broken = sound("broken.wav", 0.5);
+        Path good = sound("good.wav", 0.5);
+        // adding the first layer runs into an error: its document refuses with one
+        var listener = new javafx.beans.value.ChangeListener<com.dlsc.animatorfx.model.Animation>() {
+            @Override
+            public void changed(javafx.beans.value.ObservableValue<? extends com.dlsc.animatorfx.model.Animation> o,
+                                com.dlsc.animatorfx.model.Animation before, com.dlsc.animatorfx.model.Animation after) {
+                doc.animationProperty().removeListener(this);
+                throw new StackOverflowError("test");
+            }
+        };
+        run(() -> {
+            doc.animationProperty().addListener(listener);
+            window.getImportActions().importAudio(doc, broken);
+            window.getImportActions().importAudio(doc, good);
+        });
+
+        settle();
+
+        assertTrue(doc.getAnimation().layers().stream().anyMatch(l -> l.name().equals("good")),
+                doc.getAnimation().layers().toString());
+    }
+
+    @Test
     void aSoundDroppedOnTheWindowBecomesAnAudioLayer() throws Exception {
         Path file = sound("drop.wav", 0.5);
 

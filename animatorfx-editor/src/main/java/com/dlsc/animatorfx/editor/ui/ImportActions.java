@@ -148,18 +148,18 @@ public final class ImportActions {
         CompletableFuture<Void> before = audioImports;
         audioImports = done.handle((layer, error) -> null);
         before.whenComplete((nothing, ignored) -> read.whenComplete((sound, error) -> {
+            Optional<String> layer = Optional.empty();
             try {
                 if (error != null) {
                     refused(file, error);
-                    done.complete(Optional.empty());
-                } else if (!workspace.getDocuments().contains(document)) {
-                    done.complete(Optional.empty());
-                } else {
-                    done.complete(Optional.of(AudioImport.addLayer(document, sound)));
+                } else if (workspace.getDocuments().contains(document)) {
+                    layer = Optional.of(AudioImport.addLayer(document, sound));
                 }
             } catch (RuntimeException e) {
                 refused(file, e);
-                done.complete(Optional.empty());
+            } finally {
+                // also after an Error: the imports behind this one wait for it
+                done.complete(layer);
             }
         }));
         return done;

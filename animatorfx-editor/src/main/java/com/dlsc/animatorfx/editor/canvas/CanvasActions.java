@@ -96,6 +96,11 @@ public final class CanvasActions {
     // ------------------------------------------------------------------ selection
 
     public void delete() {
+        // sound cues are selected instead of layers
+        if (doc() != null && !doc().getSelection().cueIds().isEmpty()) {
+            doc().execute(Commands.removeCues(List.copyOf(doc().getSelection().cueIds())));
+            return;
+        }
         List<String> ids = selected();
         if (!ids.isEmpty()) {
             doc().execute(Commands.removeLayers(ids));
