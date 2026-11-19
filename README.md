@@ -748,6 +748,12 @@ How a document is laid out in Lottie:
   group that is a mask becomes a precomposition.
 - **Keyframes** keep their times and easings.
 - **Motion paths** become one position keyframe per frame.
+- **Values that keyframes cannot follow** are written frame by frame as well: the opacity of a layer
+  inside a group when both are animated, and the offset of an animated drop shadow, which Lottie
+  stores as a direction and a distance.
+- **Clip masks** are reduced to their outlines, as the player does: filled, opaque, without stroke
+  or effects.
+- **Text colours** have no alpha in Lottie; the alpha of the fill becomes the opacity of the layer.
 - **Images and sounds** are embedded as data URIs. Audio layers and sound cues become Lottie audio
   layers.
 - **The background colour** goes into the manifest of the dotLottie archive; plain Lottie JSON has

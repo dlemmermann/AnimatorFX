@@ -20,6 +20,7 @@ import com.dlsc.animatorfx.model.Rgba;
 import com.dlsc.animatorfx.model.ShapeLayer;
 import com.dlsc.animatorfx.model.SlotLayer;
 import com.dlsc.animatorfx.model.SoundCue;
+import com.dlsc.animatorfx.model.TextLayer;
 import com.dlsc.animatorfx.model.Transform;
 import com.dlsc.animatorfx.model.Vec2;
 import com.dlsc.animatorfx.model.io.AnimationFile;
@@ -297,6 +298,163 @@ class LottieExporterTest {
         assertEquals("#ffffff", read.manifest().animations().get(0).background());
         assertEquals(1, read.animations().size());
         assertEquals("Box", read.animations().get(0).layers().get(0).name());
+    }
+
+    private static Animatable<Double> fade() {
+        return Animatable.keyframed(List.of(key(0, 0.0, Easing.LINEAR), key(1, 1.0, Easing.LINEAR)));
+    }
+
+    private static double valueAt(com.lottie4j.core.model.animation.Animated property, double frame) {
+        for (var keyframe : property.keyframes()) {
+            TimedKeyframe timed = (TimedKeyframe) keyframe;
+            if (Math.abs(timed.time() - frame) < EPS) {
+                return timed.values().get(0).doubleValue();
+            }
+        }
+        throw new AssertionError("no keyframe at frame " + frame);
+    }
+
+    @Test
+    void twoFadesMultiplyAtEveryFrameAndNotOnlyAtTheirKeyframes() throws IOException {
+        ShapeLayer box = rect("Box", 10, 10, Rgba.BLACK);
+        GroupLayer group = new GroupLayer(LayerBase.create("Group", 2).withOpacity(fade()),
+                List.of(box.withBase(box.base().withOpacity(fade()))));
+        LottieExport export = LottieExporter.convert(file(document(group)));
+
+        var opacity = export.animation().layers().get(0).transform().opacity();
+        assertEquals(0, valueAt(opacity, 0), EPS);
+        // a half times a half, where a line between the keyframes would say a half
+        assertEquals(25, valueAt(opacity, 15), EPS);
+        assertEquals(100, valueAt(opacity, 30), EPS);
+        assertEquals(List.of("The opacity of a layer and of a group around it that are both animated are exported"
+                + " as one keyframe per frame (1 layer)"), export.warnings());
+    }
+
+    @Test
+    void aStaticGroupOpacityScalesTheKeyframesOfItsLayer() throws IOException {
+        ShapeLayer box = rect("Box", 10, 10, Rgba.BLACK);
+        GroupLayer group = new GroupLayer(LayerBase.create("Group", 2).withOpacity(Animatable.of(0.5)),
+                List.of(box.withBase(box.base().withOpacity(fade()))));
+
+        var opacity = layers(document(group)).get(0).transform().opacity();
+        assertEquals(2, opacity.keyframes().size());
+        assertEquals(50, valueAt(opacity, 30), EPS);
+    }
+
+    @Test
+    void aShadowThatCrossesTheLayerPassesThroughIt() throws IOException {
+        ShapeLayer box = rect("Box", 10, 10, Rgba.BLACK);
+        Animatable<Double> across = Animatable.keyframed(List.of(key(0, -10.0, Easing.LINEAR),
+                key(1, 10.0, Easing.LINEAR)));
+        box = box.withBase(box.base().withEffects(List.of(new Effect.DropShadow(Animatable.of(Rgba.BLACK),
+                Animatable.of(3.0), across, Animatable.of(0.0), Animatable.of(0.0)))));
+        LottieExport export = LottieExporter.convert(file(document(box)));
+
+        var values = export.animation().layers().get(0).effects().get(0).values();
+        var direction = values.get(2).value();
+        var distance = values.get(3).value();
+        assertEquals(10, valueAt(distance, 0), EPS);
+        assertEquals(0, valueAt(distance, 15), EPS);
+        assertEquals(10, valueAt(distance, 30), EPS);
+        // to the left first, to the right in the end: 0 is up, clockwise
+        assertEquals(-90, valueAt(direction, 0), EPS);
+        assertEquals(-90, valueAt(direction, 14), EPS);
+        assertEquals(90, valueAt(direction, 30), EPS);
+        assertEquals(List.of("Animated shadow offsets are exported as one keyframe per frame (1 effect)"),
+                export.warnings());
+    }
+
+    @Test
+    void aClipMaskIsItsOutlineWhateverItIsPaintedWith() throws IOException {
+        // not filled, half transparent and blurred: as a clip it is a sharp, solid rectangle
+        ShapeLayer outline = new ShapeLayer(LayerBase.create("Mask", 2).withOpacity(Animatable.of(0.5))
+                .withEffects(List.of(new Effect.Blur(Animatable.of(9.0)))),
+                new Geometry.Rect(Animatable.of(new Vec2(50, 50)), Animatable.of(0.0)),
+                Animatable.of(new Paint.None()), null, null);
+        ShapeLayer masked = rect("Masked", 100, 100, Rgba.BLACK);
+        masked = masked.withBase(masked.base().withMask(new Mask(outline.id(), Mask.Mode.CLIP)));
+
+        var matte = layers(document(outline, masked)).get(0);
+        assertEquals(1, matte.matteTarget());
+        assertNull(matte.effects());
+        assertEquals(List.of(100.0), numbers(matte.transform().opacity()));
+        assertInstanceOf(Fill.class, ((Group) matte.shapes().get(0)).shapes().get(1));
+    }
+
+    @Test
+    void aGroupAsClipMaskIsReducedToItsOutlinesAllTheWayDown() throws IOException {
+        ShapeLayer outline = new ShapeLayer(LayerBase.create("Outline", 2).withOpacity(Animatable.of(0.5)),
+                new Geometry.Rect(Animatable.of(new Vec2(50, 50)), Animatable.of(0.0)),
+                Animatable.of(new Paint.None()), null, null);
+        GroupLayer group = new GroupLayer(LayerBase.create("Mask", 2), List.of(outline));
+        ShapeLayer clipped = rect("Clipped", 100, 100, Rgba.BLACK);
+        clipped = clipped.withBase(clipped.base().withMask(new Mask(group.id(), Mask.Mode.CLIP)));
+        var animation = LottieExporter.convert(file(document(group, clipped))).animation();
+
+        var inner = animation.assets().get(0).layers().get(0);
+        assertEquals("Outline", inner.name());
+        assertEquals(List.of(100.0), numbers(inner.transform().opacity()));
+        assertInstanceOf(Fill.class, ((Group) inner.shapes().get(0)).shapes().get(1));
+    }
+
+    @Test
+    void theSameGroupAsClipAndAsAlphaMaskIsTwoCompositions() throws IOException {
+        GroupLayer group = new GroupLayer(LayerBase.create("Mask", 2),
+                List.of(rect("A", 10, 10, new Rgba(1, 1, 1, 0.5)), rect("B", 20, 20, Rgba.WHITE)));
+        ShapeLayer clipped = rect("Clipped", 100, 100, Rgba.BLACK);
+        clipped = clipped.withBase(clipped.base().withMask(new Mask(group.id(), Mask.Mode.CLIP)));
+        ShapeLayer faded = rect("Faded", 100, 100, Rgba.BLACK);
+        faded = faded.withBase(faded.base().withMask(new Mask(group.id(), Mask.Mode.ALPHA)));
+
+        assertEquals(2, LottieExporter.convert(file(document(group, clipped, faded))).animation().assets().size());
+    }
+
+    private static TextLayer text(Paint fill, com.dlsc.animatorfx.model.Stroke stroke) {
+        return new TextLayer(LayerBase.create("Text", 2), "Hello", "System", null, Animatable.of(20.0),
+                TextLayer.Weight.NORMAL, false, TextLayer.Align.LEFT, Animatable.of(fill), stroke);
+    }
+
+    private static final String TEXT_WARNING =
+            "Text is placed approximately: the baseline is estimated without the font (1 text)";
+
+    @Test
+    void theAlphaOfATextColourBecomesTheOpacityOfTheLayer() throws IOException {
+        LottieExport export = LottieExporter.convert(file(document(text(
+                new Paint.Solid(new Rgba(1, 0, 0, 0.5)), null))));
+
+        var layer = export.animation().layers().get(0);
+        assertEquals(List.of(50.0), numbers(layer.transform().opacity()));
+        assertEquals(3, layer.textData().document().keyframes().get(0).getFontColor().length);
+        assertEquals(List.of(TEXT_WARNING), export.warnings());
+    }
+
+    @Test
+    void aTextFillThatCannotBeSeenIsLeftOut() throws IOException {
+        com.dlsc.animatorfx.model.Stroke stroke = new com.dlsc.animatorfx.model.Stroke(
+                Animatable.of(new Paint.Solid(new Rgba(0, 0, 1, 0.25))), Animatable.of(2.0),
+                com.dlsc.animatorfx.model.Stroke.Cap.BUTT, com.dlsc.animatorfx.model.Stroke.Join.MITER, 4,
+                List.of(), Animatable.of(0.0));
+        var layer = layers(document(text(new Paint.Solid(new Rgba(1, 0, 0, 0)), stroke))).get(0);
+
+        var document = layer.textData().document().keyframes().get(0);
+        assertNull(document.getFontColor());
+        assertNotNull(document.getStrokeColor());
+        // the stroke alone is seen, with its own transparency
+        assertEquals(List.of(25.0), numbers(layer.transform().opacity()));
+    }
+
+    @Test
+    void textFillAndStrokeOfDifferentTransparencyAreReported() throws IOException {
+        com.dlsc.animatorfx.model.Stroke stroke = new com.dlsc.animatorfx.model.Stroke(
+                Animatable.of(new Paint.Solid(new Rgba(0, 0, 1, 1))), Animatable.of(2.0),
+                com.dlsc.animatorfx.model.Stroke.Cap.BUTT, com.dlsc.animatorfx.model.Stroke.Join.MITER, 4,
+                List.of(), Animatable.of(0.0));
+        LottieExport export = LottieExporter.convert(file(document(text(
+                new Paint.Solid(new Rgba(1, 0, 0, 0.5)), stroke))));
+
+        assertEquals(List.of(50.0), numbers(export.animation().layers().get(0).transform().opacity()));
+        assertEquals(List.of(TEXT_WARNING, "Text fill and stroke of different transparency are not supported; both"
+                + " get the one of the fill (1 text)"), export.warnings());
     }
 
     /**

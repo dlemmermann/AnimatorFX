@@ -313,13 +313,12 @@ final class LottieDocumentWriter {
             warnings.add("The mask of a layer that is a mask itself is not supported", "mask ignored",
                     "masks ignored");
         }
-        if (source instanceof GroupLayer group) {
-            return precomposition(group, matte.context(), out);
+        boolean clip = matte.mode() == Mask.Mode.CLIP;
+        if (clip) {
+            source = geometryOnly(source);
         }
-        if (matte.mode() == Mask.Mode.CLIP && source instanceof ShapeLayer shape) {
-            // the outline clips, whatever it is painted with
-            source = shape.withFill(Animatable.of(new Paint.Solid(Rgba.WHITE))).withStroke(null)
-                    .withBase(shape.base().withOpacity(ONE));
+        if (source instanceof GroupLayer group) {
+            return precomposition(group, clip, matte.context(), out);
         }
         int before = out.size();
         write(source, matte.context(), out);
@@ -327,15 +326,42 @@ final class LottieDocumentWriter {
     }
 
     /**
+     * A layer as a {@code CLIP} mask uses it: the outline alone clips, whatever it is painted
+     * with. Shapes and text are filled and opaque, without stroke; nothing has an opacity or an
+     * effect, all the way down a group.
+     */
+    private static Layer geometryOnly(Layer layer) {
+        LayerBase base = layer.base().withOpacity(ONE).withEffects(List.of());
+        Animatable<Paint> opaque = Animatable.of(new Paint.Solid(Rgba.WHITE));
+        return switch (layer) {
+            case ShapeLayer shape -> shape.withFill(opaque).withStroke(null).withTrim(null).withBase(base);
+            case TextLayer text -> text.withFill(opaque).withStroke(null).withBase(base);
+            case GroupLayer group -> {
+                List<Layer> children = new ArrayList<>();
+                for (Layer child : group.children()) {
+                    children.add(geometryOnly(child));
+                }
+                yield group.withChildren(children).withBase(base);
+            }
+            default -> layer.withBase(base);
+        };
+    }
+
+    /**
      * A group as one layer. The precomposition is as large as the animation and lies in its
      * coordinates, with the transforms of the groups around repeated inside, so that its bounds
      * cut nothing off that would be visible.
+     *
+     * @param clip whether the group was reduced to its outlines, which is another composition
+     *             than the group as it is painted
      */
-    private Integer precomposition(GroupLayer group, Context context, List<Map<String, Object>> out) {
-        String id = compositionIds.get(group.id());
+    private Integer precomposition(GroupLayer group, boolean clip, Context context,
+                                   List<Map<String, Object>> out) {
+        String key = group.id() + (clip ? ":clip" : ":alpha");
+        String id = compositionIds.get(key);
         if (id == null) {
             id = "comp_" + compositionIds.size();
-            compositionIds.put(group.id(), id);
+            compositionIds.put(key, id);
             List<Map<String, Object>> inner = new ArrayList<>();
             Integer parent = null;
             for (Map<String, Object> ks : context.chain()) {
@@ -444,13 +470,30 @@ final class LottieDocumentWriter {
     private Map<String, Object> dropShadow(Effect.DropShadow shadow) {
         Animatable<Double> x = shadow.offsetX();
         Animatable<Double> y = shadow.offsetY();
-        Animatable<Double> direction = Keyframes.combine(time -> {
+        // Direction and distance do not move in a straight line when the offsets do: a shadow that
+        // crosses the layer would swing around it instead. They are taken frame by frame.
+        double[] previous = {Double.NaN};
+        Animatable<Double> direction = perFrame(time -> {
             double dx = x.at(time);
             double dy = y.at(time);
-            return dx == 0 && dy == 0 ? 0.0 : Math.toDegrees(Math.atan2(dx, -dy)) + 0.0;
-        }, this::sampled, x, y);
-        Animatable<Double> distance = Keyframes.combine(time -> Math.hypot(x.at(time), y.at(time)), this::sampled,
-                x, y);
+            if (dx == 0 && dy == 0) {
+                return Double.isNaN(previous[0]) ? 0.0 : previous[0];
+            }
+            double angle = Math.toDegrees(Math.atan2(dx, -dy)) + 0.0;
+            // an angle in a circle: a keyframe must not turn the long way round
+            while (angle - previous[0] > 180) {
+                angle -= 360;
+            }
+            while (angle - previous[0] < -180) {
+                angle += 360;
+            }
+            previous[0] = angle;
+            return angle;
+        }, x, y);
+        Animatable<Double> distance = perFrame(time -> Math.hypot(x.at(time), y.at(time)), x, y);
+        if (x.isAnimated() || y.isAnimated()) {
+            warnings.add("Animated shadow offsets are exported as one keyframe per frame", "effect", "effects");
+        }
         for (double spread : values(shadow.spread())) {
             if (spread != 0) {
                 warnings.add("The spread of a drop shadow is not supported", "effect", "effects");
@@ -727,6 +770,21 @@ final class LottieDocumentWriter {
             warnings.add("Font files are not exported; the font must be installed where the animation plays",
                     "text", "texts");
         }
+        // Lottie text colours have no alpha. A colour that cannot be seen is left out; what alpha
+        // remains becomes the opacity of the layer, which fill and stroke share.
+        Rgba fill = visible(solid(layer.fill(), "text fill"));
+        Rgba stroke = layer.stroke() == null || !(layer.stroke().width().at(0) > 0) ? null
+                : visible(solid(layer.stroke().paint(), "text stroke"));
+        // text without a colour would be black in a player: it is exported, but cannot be seen
+        double alpha = fill != null ? fill.a() : stroke != null ? stroke.a() : 0;
+        if (fill != null && stroke != null && Math.abs(fill.a() - stroke.a()) > 1e-9) {
+            warnings.add("Text fill and stroke of different transparency are not supported; both get the one of"
+                    + " the fill", "text", "texts");
+        }
+        if (alpha < 1) {
+            LayerBase base = layer.base();
+            layer = layer.withBase(base.withOpacity(multiply(base.opacity(), Animatable.of(alpha))));
+        }
         Vec2 origin = new Vec2(0, LottieLayers.ASCENT * size);
         Transform transform = layer.base().transform();
         Map<String, Object> map = visual(layer,
@@ -747,20 +805,19 @@ final class LottieDocumentWriter {
                     case RIGHT -> 1;
                     case CENTER -> 2;
                 }, "tr", 0, "lh", number(size * 1.2), "ls", 0);
-        Rgba fill = solid(layer.fill(), "text fill");
         if (fill != null) {
             document.put("fc", List.of(number(fill.r()), number(fill.g()), number(fill.b())));
         }
-        if (layer.stroke() != null) {
-            Rgba stroke = solid(layer.stroke().paint(), "text stroke");
-            double width = layer.stroke().width().at(0);
-            if (stroke != null && width > 0) {
-                document.put("sc", List.of(number(stroke.r()), number(stroke.g()), number(stroke.b())));
-                document.put("sw", number(width));
-            }
+        if (stroke != null) {
+            document.put("sc", List.of(number(stroke.r()), number(stroke.g()), number(stroke.b())));
+            document.put("sw", number(layer.stroke().width().at(0)));
         }
         map.put("t", object("d", object("k", List.of(object("s", document, "t", 0))), "p", object(),
                 "m", object("g", 1, "a", constant(0, 0)), "a", List.of()));
+    }
+
+    private static Rgba visible(Rgba color) {
+        return color == null || color.a() <= 0 ? null : color;
     }
 
     /** The colour text is painted with: Lottie text has one plain colour that does not change. */
@@ -957,7 +1014,49 @@ final class LottieDocumentWriter {
         if (ONE.equals(b)) {
             return a;
         }
-        return Keyframes.combine(time -> a.at(time) * b.at(time), this::sampled, a, b);
+        if (!a.isAnimated()) {
+            double factor = a.at(0);
+            return Keyframes.map(b, value -> value * factor);
+        }
+        if (!b.isAnimated()) {
+            double factor = b.at(0);
+            return Keyframes.map(a, value -> value * factor);
+        }
+        // The product of two values that both move is no straight line between their keyframes:
+        // two fades from 0 to 1 are at a quarter halfway, not at a half.
+        warnings.add("The opacity of a layer and of a group around it that are both animated are exported as one"
+                + " keyframe per frame", "layer", "layers");
+        return perFrame(time -> a.at(time) * b.at(time), a, b);
+    }
+
+    /**
+     * A value that depends on its inputs in a way keyframes cannot follow, taken at every frame
+     * from the first to the last keyframe of any input and connected by straight lines.
+     *
+     * @param sampler the value at a time in seconds; it is asked in the order of time
+     */
+    private <T> Animatable<T> perFrame(java.util.function.DoubleFunction<T> sampler, Animatable<?>... inputs) {
+        double from = Double.POSITIVE_INFINITY;
+        double to = Double.NEGATIVE_INFINITY;
+        for (Animatable<?> input : inputs) {
+            if (input.isAnimated()) {
+                for (Keyframe<?> keyframe : input.keyframes()) {
+                    from = Math.min(from, keyframe.time());
+                    to = Math.max(to, keyframe.time());
+                }
+            }
+        }
+        if (from > to) {
+            return Animatable.of(sampler.apply(0));
+        }
+        long first = (long) Math.floor(from * frameRate);
+        long last = Math.max(first + 1, (long) Math.ceil(to * frameRate));
+        List<Keyframe<T>> keyframes = new ArrayList<>();
+        for (long f = first; f <= last; f++) {
+            double time = f / frameRate;
+            keyframes.add(Keyframes.key(time, sampler.apply(time), Easing.LINEAR));
+        }
+        return Keyframes.of(keyframes);
     }
 
     private static <T> List<T> concat(List<T> a, List<T> b) {
