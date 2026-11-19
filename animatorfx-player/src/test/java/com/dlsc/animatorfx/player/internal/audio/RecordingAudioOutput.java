@@ -9,7 +9,7 @@ import java.util.OptionalDouble;
 /** An audio output that makes no sound and remembers what it was asked to do. */
 public final class RecordingAudioOutput implements AudioOutput {
 
-    /** Every call in order: {@code apply}, {@code cue:<asset>:<volume>}, {@code snippet}, {@code silence}, {@code dispose}. */
+    /** Every call in order: {@code apply}, {@code cue:<asset>:<volume>}, {@code snippet}, {@code silence}, {@code stopCues}, {@code dispose}. */
     public final List<String> calls = new ArrayList<>();
     public final List<List<VoiceTarget>> applied = new ArrayList<>();
     public final List<List<VoiceTarget>> snippets = new ArrayList<>();
@@ -55,6 +55,11 @@ public final class RecordingAudioOutput implements AudioOutput {
     @Override
     public void silence() {
         call("silence");
+    }
+
+    @Override
+    public void stopCues() {
+        call("stopCues");
     }
 
     @Override

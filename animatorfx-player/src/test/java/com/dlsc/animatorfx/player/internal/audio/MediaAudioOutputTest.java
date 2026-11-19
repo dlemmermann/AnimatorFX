@@ -219,4 +219,77 @@ class MediaAudioOutputTest {
         player.stop();
         player.dispose();
     }
+
+    /** A real output for a document with one layer on a 0.3 s tone and a 5 s sound for cues. */
+    private MediaAudioOutput output(boolean loop) {
+        AudioLayer tone = new AudioLayer(LayerBase.create("tone", 4).withId("tone"), "tone", 0, Animatable.of(1.0),
+                Animatable.of(0.0), loop, false);
+        Animation animation = Animation.create("direct", 10, 10, 4)
+                .withAssets(List.of(new Asset("tone", Asset.Kind.AUDIO, "assets/tone.wav", "tone.wav"),
+                        new Asset("long", Asset.Kind.AUDIO, "assets/long.wav", "long.wav")))
+                .withLayers(List.of(tone));
+        MediaAudioOutput output = new MediaAudioOutput(
+                new AnimationFile(animation, Map.of("tone", wav(0.3), "long", wav(5))), logger);
+        outputs.add(output);
+        return output;
+    }
+
+    private static VoiceTarget inaudibleAt(double mediaTime) {
+        return new VoiceTarget("tone", "tone", true, mediaTime, 0, 0, 1);
+    }
+
+    @Test
+    void aLoopingVoiceFirstHeardBeyondOneClipLengthIsPositionedInsideTheClip() {
+        MediaAudioOutput output = output(true);
+        // the clip length is not known yet, so the target is not wrapped
+        output.apply(List.of(inaudibleAt(1.0)));
+        boolean played = await(() -> output.hasPlayed() || output.failedAssets().contains("tone"), 8);
+        try {
+            assumeTrue(played && output.hasPlayed(), "JavaFX media does not play in this environment: "
+                    + logger.warnings);
+
+            assertEquals(0.1, output.maxSeekPosition(), 1e-6);
+        } finally {
+            output.dispose();
+        }
+    }
+
+    @Test
+    void theFirstSnippetSoundsOnceItsVoiceIsReadyAndThenEnds() {
+        MediaAudioOutput output = output(false);
+        output.snippet(List.of(inaudibleAt(0.05)), 0.1);
+        boolean played = await(() -> output.hasPlayed() || output.failedAssets().contains("tone"), 8);
+        try {
+            assumeTrue(played && output.hasPlayed(), "JavaFX media does not play in this environment: "
+                    + logger.warnings);
+
+            await(() -> false, 0.4);
+            double held = output.mediaTime("tone");
+            await(() -> false, 0.2);
+            assertEquals(held, output.mediaTime("tone"), 0.02, "the snippet ended");
+            assertTrue(held < 0.29, "and did not run to the end of the sound: " + held);
+        } finally {
+            output.dispose();
+        }
+    }
+
+    @Test
+    void cuesRingOutThroughSilenceAndAreCutByStopCues() {
+        MediaAudioOutput output = output(false);
+        try {
+            // inaudible: volume 0
+            output.playCue("long", 0);
+            assumeTrue(await(output::cuesSounding, 3), "JavaFX media does not play in this environment: "
+                    + logger.warnings);
+
+            output.silence();
+            await(() -> false, 0.2);
+            assertTrue(output.cuesSounding(), "silence leaves a cue alone");
+
+            output.stopCues();
+            assertTrue(await(() -> !output.cuesSounding(), 1), "stopCues cuts it");
+        } finally {
+            output.dispose();
+        }
+    }
 }

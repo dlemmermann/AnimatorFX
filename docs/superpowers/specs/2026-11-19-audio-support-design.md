@@ -49,7 +49,7 @@ Animations can carry sound. Two forms, both stored in the `.afx` file and played
 - The animation clock is the master. Each audio layer has one media voice; a voice is repositioned when it drifts more than 80 ms from where it should be.
 - Effective volume = layer volume × runtime `volume`; silent when the layer is muted, not visible, or the runtime is `muted`. Balance is applied per layer.
 - Audio follows the playback rate for rates in `(0, 8]` (the JavaFX limit). Rate 0, negative rates, and the reverse leg of auto-reverse are silent.
-- Cues fire when playback crosses their time going forward (including a cue exactly at the start time on the first tick after `play`), never on seeks or while reversing. A cue plays to its end independently; cue volume × runtime `volume`; skipped when the cue or the runtime is muted.
+- Cues fire when playback crosses their time going forward (including a cue exactly at the start time on the first tick after `play`), never on seeks or while reversing. A cue plays to its end independently; cue volume × runtime `volume`; skipped when the cue or the runtime is muted. A cue that already sounds rings out through `pause()`, the natural end of playback and the suspension of a view that is not showing; an explicit `stop()`, `setMuted(true)`, `dispose()` and replacing the animation cut it.
 - Marker playback (`playMarker`) and cycles behave the same way within the active range; wrapping to the range start repositions audio.
 - A player with no audio content creates no media objects.
 

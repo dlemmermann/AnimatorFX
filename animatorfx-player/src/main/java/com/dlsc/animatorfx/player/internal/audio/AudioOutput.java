@@ -38,6 +38,11 @@ public interface AudioOutput {
     void silence();
 
     /**
+     * Cuts the cues that are sounding. The voices are not affected.
+     */
+    void stopCues();
+
+    /**
      * Stops everything and releases all resources. Further calls do nothing.
      */
     void dispose();

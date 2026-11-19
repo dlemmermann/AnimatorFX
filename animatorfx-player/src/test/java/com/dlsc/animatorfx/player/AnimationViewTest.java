@@ -18,6 +18,7 @@ import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.List;
 import java.util.Map;
 
 import static com.dlsc.animatorfx.player.TestDocs.doc;
@@ -375,5 +376,89 @@ class AnimationViewTest {
         assertTrue(player.isMuted());
         assertEquals(0.3, player.getVolume(), EPS);
         assertEquals(1.5, player.getCurrentTime(), EPS);
+    }
+
+    /** A view on a player whose sound is recorded, playing a document with one audio layer. */
+    private static AnimationView sounding(ManualClock clock,
+                                          com.dlsc.animatorfx.player.internal.audio.RecordingAudioOutput output) {
+        AnimationPlayer player = new AnimationPlayer(clock, System.getLogger("test"), output);
+        AnimationView view = new AnimationView(player);
+        view.setAnimation(file(doc(rect("card", 10, 10), new com.dlsc.animatorfx.model.AudioLayer(TestDocs.base("music"),
+                "snd", 0, com.dlsc.animatorfx.model.Animatable.of(1.0), com.dlsc.animatorfx.model.Animatable.of(0.0),
+                false, false))));
+        view.setCycleCount(AnimationPlayer.INDEFINITE);
+        return view;
+    }
+
+    @Test
+    void disposeReleasesTheSoundOfThePlayer() {
+        var output = new com.dlsc.animatorfx.player.internal.audio.RecordingAudioOutput();
+        AnimationView sounding = sounding(clock, output);
+        Stage stage = new Stage();
+        stage.setScene(new Scene(new Pane(sounding), 300, 200));
+        stage.show();
+        try {
+            sounding.play();
+            clock.tick(0.1);
+            sounding.dispose();
+            clock.tick(0.1);
+
+            assertEquals(1, output.count("dispose"));
+            assertEquals(1, output.applied.size());
+        } finally {
+            stage.hide();
+        }
+    }
+
+    @Test
+    void aViewThatLeavesItsSceneReleasesItsSoundAndGetsItBackWhenItReturns() {
+        var output = new com.dlsc.animatorfx.player.internal.audio.RecordingAudioOutput();
+        AnimationView sounding = sounding(clock, output);
+        Stage stage = new Stage();
+        Pane root = new Pane(sounding);
+        stage.setScene(new Scene(root, 300, 200));
+        stage.show();
+        try {
+            sounding.play();
+            clock.tick(0.1);
+
+            stage.hide();
+            assertEquals(0, output.count("dispose"), "a hidden view keeps its sound ready");
+            stage.show();
+
+            root.getChildren().clear();
+            assertEquals(1, output.count("dispose"));
+
+            root.getChildren().add(sounding);
+            clock.tick(0.1);
+            assertEquals(2, output.applied.size());
+        } finally {
+            stage.hide();
+        }
+    }
+
+    @Test
+    void aViewThatDrivesNodesInPlaceKeepsItsSoundWhenItLeavesItsScene() {
+        var output = new com.dlsc.animatorfx.player.internal.audio.RecordingAudioOutput();
+        AnimationView sounding = sounding(clock, output);
+        sounding.setAnimation(file(sounding.getAnimation().animation().withLayers(List.of(
+                sounding.getAnimation().animation().layers().get(1),
+                new SlotLayer(TestDocs.base("s"), "card", 10, 10, Transform.IDENTITY)))));
+        Stage stage = new Stage();
+        Pane root = new Pane(sounding);
+        stage.setScene(new Scene(root, 300, 200));
+        stage.show();
+        try {
+            sounding.getPlayer().bindInPlace("card", new Rectangle(10, 10));
+            sounding.play();
+            clock.tick(0.1);
+            root.getChildren().clear();
+            clock.tick(0.1);
+
+            assertEquals(0, output.count("dispose"));
+            assertEquals(2, output.applied.size());
+        } finally {
+            stage.hide();
+        }
     }
 }

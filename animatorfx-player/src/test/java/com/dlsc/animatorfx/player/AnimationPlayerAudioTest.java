@@ -128,12 +128,140 @@ class AnimationPlayerAudioTest {
     }
 
     @Test
-    void stopSilences() {
+    void stopSilencesAndCutsTheCues() {
         player.play();
         clock.tick(0.6);
         player.stop();
 
-        assertEquals("silence", output.calls.get(output.calls.size() - 1));
+        assertEquals(1, output.count("silence"));
+        assertEquals(1, output.count("stopCues"));
+    }
+
+    @Test
+    void mutingCutsTheCuesAtOnce() {
+        player.play();
+        clock.tick(0.6);
+        player.setMuted(true);
+        assertEquals(1, output.count("stopCues"));
+
+        player.setMuted(false);
+        assertEquals(1, output.count("stopCues"));
+    }
+
+    @Test
+    void pauseFinishAndSuspensionLetCuesRingOut() {
+        player.play();
+        clock.tick(0.6);
+        player.pause();
+        player.play();
+        player.setSuspended(true);
+        player.setSuspended(false);
+        clock.tick(5);
+
+        assertEquals(Status.STOPPED, player.getStatus());
+        assertEquals(3, output.count("silence"));
+        assertEquals(0, output.count("stopCues"));
+    }
+
+    @Test
+    void aCueAtTheRangeStartFiresOnEveryForwardLegOfAutoReverse() {
+        player.setAutoReverse(true);
+        player.setCycleCount(4);
+        player.play();
+        for (int i = 0; i < 8; i++) {
+            clock.tick(1);
+        }
+
+        assertEquals(Status.STOPPED, player.getStatus());
+        assertEquals(List.of("cue:click:1.0", "cue:snd:0.5", "cue:click:1.0", "cue:snd:0.5"), output.cues());
+    }
+
+    @Test
+    void aCueAtAMarkerStartFiresOnEveryForwardLegOfAutoReverse() {
+        player.setAnimation(new AnimationFile(sounding().animation().withCues(List.of(
+                new SoundCue("c", "", 0.5, "click", 1, false))), Map.of()));
+        player.setAutoReverse(true);
+        player.setCycleCount(AnimationPlayer.INDEFINITE);
+        player.playMarker("a");
+        for (int i = 0; i < 12; i++) {
+            clock.tick(0.5);
+        }
+
+        assertEquals(List.of("cue:click:1.0", "cue:click:1.0", "cue:click:1.0"), output.cues());
+    }
+
+    @Test
+    void aTickThatSpansSeveralCyclesFiresEachCueOnce() {
+        player.setCycleCount(3);
+        player.play();
+        clock.tick(5.5);
+
+        assertEquals(1.5, player.getCurrentTime(), EPS);
+        assertEquals(List.of("cue:click:1.0", "cue:snd:0.5"), output.cues());
+
+        clock.tick(5);
+        assertEquals(Status.STOPPED, player.getStatus());
+        assertEquals(List.of("cue:click:1.0", "cue:snd:0.5"), output.cues());
+    }
+
+    @Test
+    void aCueExactlyAtTheSeekTargetFiresOnTheNextTickWhilePlaying() {
+        player.play();
+        clock.tick(0.1);
+        player.seek(1);
+        assertEquals(List.of("cue:click:1.0"), output.cues());
+
+        clock.tick(0.1);
+        assertEquals(List.of("cue:click:1.0", "cue:snd:0.5"), output.cues());
+    }
+
+    @Test
+    void disposeWhilePlayingStaysSilentUntilPlayIsCalledAgain() {
+        AnimationPlayer counted = new AnimationPlayer(clock, logger);
+        List<RecordingAudioOutput> created = new ArrayList<>();
+        counted.setAudioOutputFactory(file -> {
+            created.add(new RecordingAudioOutput());
+            return created.get(created.size() - 1);
+        });
+        counted.setAnimation(sounding());
+        counted.setCycleCount(AnimationPlayer.INDEFINITE);
+        counted.play();
+        clock.tick(0.1);
+        assertEquals(1, created.size());
+
+        counted.dispose();
+        clock.tick(0.1);
+        clock.tick(0.1);
+        counted.scrub(0.8);
+        clock.tick(0.1);
+        assertEquals(Status.PLAYING, counted.getStatus());
+        assertEquals(1, created.size());
+        assertEquals("dispose", created.get(0).calls.get(created.get(0).calls.size() - 1));
+
+        counted.play();
+        clock.tick(0.1);
+        assertEquals(2, created.size());
+        assertEquals(1, created.get(1).applied.size());
+    }
+
+    @Test
+    void aNewAnimationSoundsAgainAfterDispose() {
+        player.play();
+        clock.tick(0.1);
+        player.dispose();
+        player.setAnimation(sounding());
+        clock.tick(0.1);
+
+        assertEquals(1, output.count("dispose"));
+        assertEquals(2, output.applied.size());
+    }
+
+    @Test
+    void installingAnOutputFactoryDoesNotSwitchSoundOff() {
+        player.setAudioOutputFactory(file -> output);
+        player.scrub(0.8);
+
+        assertEquals(List.of("snippet"), output.calls);
     }
 
     @Test

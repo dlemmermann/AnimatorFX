@@ -127,6 +127,17 @@ public final class AudioEngine {
     }
 
     /**
+     * Cuts the cues that are sounding.
+     */
+    public void stopCues() {
+        run(() -> {
+            if (output != null) {
+                output.stopCues();
+            }
+        });
+    }
+
+    /**
      * Releases the output. The engine is silent afterwards.
      */
     public void dispose() {
@@ -136,7 +147,7 @@ public final class AudioEngine {
         if (old != null) {
             try {
                 old.dispose();
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | LinkageError e) {
                 logger.log(System.Logger.Level.WARNING, "Audio output could not be released", e);
             }
         }

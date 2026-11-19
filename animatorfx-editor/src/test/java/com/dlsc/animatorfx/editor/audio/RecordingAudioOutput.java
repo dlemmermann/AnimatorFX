@@ -21,6 +21,8 @@ public final class RecordingAudioOutput implements AudioOutput {
     public final Map<String, Double> durations = new HashMap<>();
     public final AnimationFile file;
     public boolean disposed;
+    /** How often the sounding cues were cut; not part of {@link #calls}. */
+    public int cuesStopped;
 
     public RecordingAudioOutput(AnimationFile file) {
         this.file = file;
@@ -72,6 +74,11 @@ public final class RecordingAudioOutput implements AudioOutput {
     @Override
     public void silence() {
         calls.add("silence");
+    }
+
+    @Override
+    public void stopCues() {
+        cuesStopped++;
     }
 
     @Override

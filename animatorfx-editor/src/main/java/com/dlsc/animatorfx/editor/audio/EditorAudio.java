@@ -194,6 +194,13 @@ public final class EditorAudio {
             }
 
             @Override
+            public void stopCues() {
+                if (current()) {
+                    real.stopCues();
+                }
+            }
+
+            @Override
             public void dispose() {
                 if (!current()) {
                     return;

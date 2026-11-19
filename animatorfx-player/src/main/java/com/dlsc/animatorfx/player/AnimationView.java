@@ -48,8 +48,10 @@ import java.util.Map;
  * when the view is showing again, unless it drives nodes bound to slots in place.
  * <p>
  * Audio layers and sound cues of the document sound during playback, see
- * {@link #mutedProperty() muted} and {@link #volumeProperty() volume}; a view that is not
- * showing is silent.
+ * {@link #mutedProperty() muted} and {@link #volumeProperty() volume}. A view that is not
+ * showing is silent as its player stands still, again unless it drives nodes in place. A view
+ * that leaves its scene releases its media resources and gets them back when it plays in a
+ * scene again; otherwise call {@link #dispose()} when the view is no longer needed.
  * <p>
  * Style class {@code animation-view}; CSS properties {@code -fx-fit} (contain | cover | none)
  * and {@code -fx-auto-play}.
@@ -137,6 +139,10 @@ public class AnimationView extends Control {
             }
             windowListener.changed(null, before == null ? null : before.getWindow(),
                     now == null ? null : now.getWindow());
+            if (now == null && !player.hasInPlaceBindings()) {
+                // nothing sounds outside a scene; the sound comes back with the next frame that needs it
+                player.releaseAudio();
+            }
         });
         player.animationProperty().addListener(observable -> {
             requestLayout();
@@ -389,6 +395,16 @@ public class AnimationView extends Control {
      */
     public void scrub(double seconds) {
         player.scrub(seconds);
+    }
+
+    /**
+     * Stops all sound and releases the media resources and temporary files of the animation,
+     * see {@link AnimationPlayer#dispose()}. Call this when a view that played sound is no
+     * longer needed and may still be in a scene; a view that leaves its scene releases them by
+     * itself unless it drives nodes in place.
+     */
+    public void dispose() {
+        player.dispose();
     }
 
     /**

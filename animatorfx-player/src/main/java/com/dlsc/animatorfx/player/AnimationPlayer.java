@@ -132,6 +132,8 @@ public class AnimationPlayer {
     private boolean reversed;
     /** Whether the markers starting exactly at the current time have fired already. */
     private boolean markersAtTimeFired;
+    /** The same for the sound cues exactly at the current time; forward playback only. */
+    private boolean cuesAtTimeFired;
     private boolean ticking;
     private boolean clockRunning;
     private boolean suspended;
@@ -144,6 +146,8 @@ public class AnimationPlayer {
     private AudioEngine audio;
     /** Whether the current animation has audio layers or sound cues. */
     private boolean hasSound;
+    /** Set by {@link #dispose()}: no sound until playback is started again or the animation is replaced. */
+    private boolean audioReleased;
 
     /**
      * Creates a player without an animation.
@@ -212,6 +216,7 @@ public class AnimationPlayer {
             }
             if (!ticking) {
                 markersAtTimeFired = false;
+                cuesAtTimeFired = false;
             }
             refresh();
         }
@@ -293,12 +298,19 @@ public class AnimationPlayer {
         autoReverse.set(value);
     }
 
-    private final BooleanProperty muted = new SimpleBooleanProperty(this, "muted");
+    private final BooleanProperty muted = new SimpleBooleanProperty(this, "muted") {
+        @Override
+        protected void invalidated() {
+            if (get() && audio != null) {
+                audio.stopCues();
+            }
+        }
+    };
 
     /**
      * Whether the sound of the animation is switched off: audio layers are silent and sound
-     * cues are skipped. A change while playing takes effect with the next frame; a cue that
-     * already sounds plays to its end.
+     * cues are skipped. Muting cuts the cues that are sounding at once; for the audio layers a
+     * change while playing takes effect with the next frame.
      *
      * @return the muted property
      */
@@ -429,6 +441,7 @@ public class AnimationPlayer {
      * animation; an empty range finishes at once.
      */
     public void play() {
+        audioReleased = false;
         Status current = getStatus();
         if (getAnimation() == null || current == Status.PLAYING) {
             return;
@@ -456,7 +469,8 @@ public class AnimationPlayer {
     }
 
     /**
-     * Interrupts playback and keeps the current time.
+     * Interrupts playback and keeps the current time. The audio layers fall silent; a sound cue
+     * that already sounds plays to its end, as it does when playback finishes.
      */
     public void pause() {
         if (getStatus() == Status.PLAYING) {
@@ -468,7 +482,8 @@ public class AnimationPlayer {
 
     /**
      * Ends playback and goes back to the start of the active range: to time 0, or to the start
-     * of the marker being played, which then no longer is the active range.
+     * of the marker being played, which then no longer is the active range. All sound stops,
+     * sound cues that are sounding included.
      */
     public void stop() {
         epoch++;
@@ -479,10 +494,15 @@ public class AnimationPlayer {
         updateRange();
         status.set(Status.STOPPED);
         updateClock();
+        if (audio != null) {
+            audio.stopCues();
+        }
     }
 
     /**
      * Moves to a time in seconds, limited to the active range. The status does not change.
+     * Markers and sound cues that are jumped over do not fire; while playing, those exactly at
+     * the new time fire with the next frame, as they do where playback starts.
      */
     public void seek(double seconds) {
         epoch++;
@@ -492,7 +512,8 @@ public class AnimationPlayer {
     /**
      * Moves to a time like {@link #seek(double)} and, unless the player is playing or
      * {@link #mutedProperty() muted}, lets the audio layers at that time sound for about a tenth
-     * of a second. Sound cues do not fire. For tooling: dragging a playhead.
+     * of a second. Sound cues do not fire while not playing; while playing this is
+     * {@link #seek(double)}. For tooling: dragging a playhead.
      */
     public void scrub(double seconds) {
         seek(seconds);
@@ -505,12 +526,19 @@ public class AnimationPlayer {
     }
 
     /**
-     * Stops all sound and releases the media resources and temporary files of the current
-     * animation. The player stays usable: sound comes back when it is needed again. Replacing
-     * the animation does the same for the previous one. Has no effect on a player that made no
-     * sound yet.
+     * Stops all sound, sound cues included, and releases the media resources and temporary
+     * files of the current animation. From then on the player is silent and creates no media,
+     * even if it goes on playing, until {@link #play()} or {@link #playMarker(String)} is called
+     * or the animation is replaced. Replacing the animation releases the sound of the previous
+     * one by itself. Call this when a player that played sound is no longer needed.
      */
     public void dispose() {
+        releaseAudio();
+        audioReleased = true;
+    }
+
+    /** Releases the sound of the current animation; it comes back when it is next needed. */
+    void releaseAudio() {
         if (audio != null) {
             audio.dispose();
             audio = null;
@@ -522,16 +550,16 @@ public class AnimationPlayer {
      * audible. The factory is asked once per animation, when sound is first needed, and never for
      * an animation without audio layers and sound cues; it may return {@code null} for silence.
      * {@code null} as the factory restores JavaFX media. The output of the current animation is
-     * disposed.
+     * disposed; the new factory is asked when sound is next needed.
      */
     public void setAudioOutputFactory(Function<AnimationFile, AudioOutput> factory) {
-        dispose();
+        releaseAudio();
         audioOutputFactory = factory;
     }
 
     /** The sound of the current animation, or {@code null} if it has none. */
     private AudioEngine audio() {
-        if (audio == null && hasSound) {
+        if (audio == null && hasSound && !audioReleased) {
             Function<AnimationFile, AudioOutput> factory = audioOutputFactory != null ? audioOutputFactory
                     : document -> new MediaAudioOutput(document, logger);
             audio = new AudioEngine(getAnimation(), factory, logger);
@@ -556,6 +584,7 @@ public class AnimationPlayer {
             throw new IllegalArgumentException("Unknown marker: " + name);
         }
         epoch++;
+        audioReleased = false;
         activeMarker.set(name);
         updateRange();
         completedCycles = 0;
@@ -668,7 +697,8 @@ public class AnimationPlayer {
 
     private void animationChanged(AnimationFile file) {
         epoch++;
-        dispose();
+        releaseAudio();
+        audioReleased = false;
         hasSound = file != null && AudioEngine.hasAudio(file.animation());
         slots.clear();
         if (file != null) {
@@ -735,6 +765,7 @@ public class AnimationPlayer {
             currentTime.set(time);
         }
         markersAtTimeFired = false;
+        cuesAtTimeFired = false;
     }
 
     private void refresh() {
@@ -766,7 +797,7 @@ public class AnimationPlayer {
         }
     }
 
-    private boolean hasInPlaceBindings() {
+    boolean hasInPlaceBindings() {
         for (SlotBinding binding : bindings.values()) {
             if (!binding.isEmbedded()) {
                 return true;
@@ -821,9 +852,14 @@ public class AnimationPlayer {
             }
             if (isAutoReverse()) {
                 reversed = !reversed;
+                if (!reversed) {
+                    // forward again: the cues at the turning point are due once more
+                    cuesAtTimeFired = false;
+                }
             } else {
                 time = forward ? rangeStart : rangeEnd;
                 markersAtTimeFired = false;
+                cuesAtTimeFired = false;
             }
         }
 
@@ -874,13 +910,20 @@ public class AnimationPlayer {
     }
 
     /**
-     * Adds the sound cues on the way from one time to another, with the rule of
-     * {@link #collectMarkers} for the beginning. Call before it. Only playback that runs forward
-     * at a positive rate fires cues.
+     * Adds the sound cues on the way from one time to another, the end included and the
+     * beginning only if its cues have not fired yet. Only playback that runs forward at a
+     * positive rate fires cues, and a cue is added once however often a long tick crosses it.
      */
     private void collectCues(AudioEngine sound, double from, double to, double speed, List<SoundCue> out) {
-        if (sound != null && speed > 0 && !reversed) {
-            out.addAll(AudioSchedule.crossed(getAnimation().animation(), from, to, !markersAtTimeFired));
+        if (speed > 0 && !reversed) {
+            if (sound != null) {
+                for (SoundCue cue : AudioSchedule.crossed(getAnimation().animation(), from, to, !cuesAtTimeFired)) {
+                    if (!out.contains(cue)) {
+                        out.add(cue);
+                    }
+                }
+            }
+            cuesAtTimeFired = true;
         }
     }
 

@@ -26,6 +26,9 @@ import java.util.Set;
  */
 public final class MediaAudioOutput implements AudioOutput {
 
+    /** A snippet whose voices are not ready after this long is dropped: the user has moved on. */
+    private static final long SNIPPET_PATIENCE_NANOS = 1_000_000_000L;
+
     /** A voice is not repositioned again before its last seek had time to take effect. */
     private static final long SEEK_SETTLE_NANOS = 250_000_000L;
 
@@ -50,12 +53,13 @@ public final class MediaAudioOutput implements AudioOutput {
             if (loop) {
                 player.setCycleCount(MediaPlayer.INDEFINITE);
             }
-            player.setOnReady(() -> {
+            player.setOnReady(() -> guarded(assetId, () -> {
                 ready = true;
                 sync();
-            });
+                snippetVoiceReady();
+            }));
             player.setOnPlaying(() -> played = true);
-            player.setOnEndOfMedia(this::ended);
+            player.setOnEndOfMedia(() -> guarded(assetId, this::ended));
             player.setOnError(() -> {
                 broken = true;
                 fail(assetId, player.getError());
@@ -127,9 +131,16 @@ public final class MediaAudioOutput implements AudioOutput {
         }
 
         private void seek(VoiceTarget target, long now) {
-            player.seek(Duration.seconds(target.mediaTime()));
+            double position = target.mediaTime();
+            Double duration = durations.get(assetId);
+            if (loop && duration != null && position >= duration) {
+                // the target was worked out before the length of the clip was known
+                position %= duration;
+            }
+            player.seek(Duration.seconds(position));
             lastSeek = now;
             seeks++;
+            maxSeek = Math.max(maxSeek, position);
         }
 
         private boolean drifted(VoiceTarget target) {
@@ -156,9 +167,13 @@ public final class MediaAudioOutput implements AudioOutput {
     private final Map<String, Double> durations = new HashMap<>();
     private final Set<String> failed = new HashSet<>();
     private PauseTransition snippetEnd;
+    /** The length of the snippet that waits for its voices to get ready; 0 for none. */
+    private double pendingSnippet;
+    private long snippetRequested;
     private boolean disposed;
     private boolean played;
     private int seeks;
+    private double maxSeek;
 
     public MediaAudioOutput(AnimationFile file, System.Logger logger) {
         this.logger = logger;
@@ -198,12 +213,62 @@ public final class MediaAudioOutput implements AudioOutput {
         }
         cancelSnippet();
         match(targets, true);
+        // a voice that is not ready yet would miss a snippet that is timed from now
+        boolean waiting = false;
+        boolean sounding = false;
+        for (Optional<Voice> voice : voices.values()) {
+            if (voice.isPresent() && voice.get().wanted != null && !voice.get().broken) {
+                waiting |= !voice.get().ready;
+                sounding |= voice.get().ready;
+            }
+        }
+        if (waiting) {
+            pendingSnippet = seconds;
+            snippetRequested = System.nanoTime();
+        }
+        if (sounding || !waiting) {
+            endSnippetAfter(seconds);
+        }
+    }
+
+    private void endSnippetAfter(double seconds) {
+        if (snippetEnd != null) {
+            snippetEnd.stop();
+        }
         snippetEnd = new PauseTransition(Duration.seconds(seconds));
-        snippetEnd.setOnFinished(event -> {
+        snippetEnd.setOnFinished(event -> guarded(null, () -> {
             snippetEnd = null;
+            pendingSnippet = 0;
             stopVoices();
-        });
+        }));
         snippetEnd.play();
+    }
+
+    /** A voice got ready: a snippet that waited for it starts to count now. */
+    private void snippetVoiceReady() {
+        if (pendingSnippet > 0) {
+            if (System.nanoTime() - snippetRequested > SNIPPET_PATIENCE_NANOS) {
+                pendingSnippet = 0;
+                if (snippetEnd == null) {
+                    stopVoices();
+                }
+            } else {
+                endSnippetAfter(pendingSnippet);
+            }
+        }
+    }
+
+    /** Runs what the media stack calls back; a failure is logged once and never thrown at the toolkit. */
+    private void guarded(String assetId, Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException | LinkageError e) {
+            if (assetId != null) {
+                fail(assetId, e);
+            } else if (!disposed && failed.add("")) {
+                logger.log(System.Logger.Level.WARNING, "A scrubbing snippet could not be ended", e);
+            }
+        }
     }
 
     private void match(List<VoiceTarget> targets, boolean fromTheirMediaTime) {
@@ -230,11 +295,21 @@ public final class MediaAudioOutput implements AudioOutput {
         }
     }
 
+    @Override
+    public void stopCues() {
+        if (disposed) {
+            return;
+        }
+        clips.values().forEach(clip -> clip.ifPresent(c -> release(c::stop)));
+        List.copyOf(oneShots).forEach(this::release);
+    }
+
     private void stopVoices() {
         voices.values().forEach(voice -> voice.ifPresent(v -> v.want(null, false)));
     }
 
     private void cancelSnippet() {
+        pendingSnippet = 0;
         if (snippetEnd != null) {
             snippetEnd.stop();
             snippetEnd = null;
@@ -243,7 +318,7 @@ public final class MediaAudioOutput implements AudioOutput {
 
     @Override
     public void playCue(String assetId, double volume) {
-        if (disposed || !(volume > 0)) {
+        if (disposed) {
             return;
         }
         Optional<AudioClip> clip = clips.computeIfAbsent(assetId, this::clip);
@@ -281,11 +356,11 @@ public final class MediaAudioOutput implements AudioOutput {
             MediaPlayer player = new MediaPlayer(source.get());
             oneShots.add(player);
             player.setVolume(volume);
-            player.setOnEndOfMedia(() -> release(player));
-            player.setOnError(() -> {
+            player.setOnEndOfMedia(() -> guarded(assetId, () -> release(player)));
+            player.setOnError(() -> guarded(assetId, () -> {
                 fail(assetId, player.getError());
                 release(player);
-            });
+            }));
             player.play();
         } catch (RuntimeException | LinkageError e) {
             fail(assetId, e);
@@ -399,6 +474,17 @@ public final class MediaAudioOutput implements AudioOutput {
     double mediaTime(String layerId) {
         Optional<Voice> voice = voices.get(layerId);
         return voice == null || voice.isEmpty() ? Double.NaN : voice.get().player.getCurrentTime().toSeconds();
+    }
+
+    /** The furthest position a voice was moved to so far, in seconds. */
+    double maxSeekPosition() {
+        return maxSeek;
+    }
+
+    /** Whether a cue is sounding. */
+    boolean cuesSounding() {
+        return !oneShots.isEmpty()
+                || clips.values().stream().anyMatch(clip -> clip.isPresent() && clip.get().isPlaying());
     }
 
     /** The asset ids that failed and were logged. */
