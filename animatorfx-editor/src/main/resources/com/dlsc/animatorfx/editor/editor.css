@@ -185,6 +185,16 @@
     -fx-icon-color: -afx-accent;
 }
 
+/* sound off is a warning, not a mode that is "on" */
+.mute-toggle:selected {
+    -fx-background-color: -afx-playhead-soft, -afx-panel-alt;
+    -fx-border-color: -afx-playhead;
+}
+
+.mute-toggle:selected .ikonli-font-icon {
+    -fx-icon-color: -afx-playhead;
+}
+
 .icon-button {
     -fx-background-color: transparent;
     -fx-background-radius: 3;

@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import javafx.beans.property.BooleanProperty;
 import com.dlsc.animatorfx.editor.canvas.CanvasActions;
 import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.doc.Commands;
@@ -318,6 +319,21 @@ final class MenuBarFactory {
         timeline.setAccelerator(shortcut(KeyCode.T, KeyCombination.ALT_DOWN));
         timeline.selectedProperty().bindBidirectional(window.timelineVisibleProperty());
 
+        // M without a modifier is handled by the window: as an accelerator of the system menu bar
+        // it would take the letter away from text fields
+        CheckMenuItem mute = new CheckMenuItem("Mute Sound (M)");
+        mute.setId("menu-view-mute");
+        BooleanProperty muted = window.getToolBar().mutedProperty();
+        mute.setSelected(muted.get());
+        muted.addListener((obs, was, now) -> mute.setSelected(now));
+        // a click has toggled the check mark already, a fired item has not: the flag decides
+        mute.setOnAction(e -> {
+            if (!window.isDialogShowing()) {
+                muted.set(!muted.get());
+            }
+            mute.setSelected(muted.get());
+        });
+
         Menu menu = new Menu("View");
         menu.setId("menu-view");
         menu.getItems().addAll(
@@ -325,6 +341,7 @@ final class MenuBarFactory {
                 item("menu-view-zoom-out", "Zoom Out", shortcut(KeyCode.MINUS), canvas::zoomOut),
                 item("menu-view-zoom-fit", "Zoom to Fit", shortcut(KeyCode.DIGIT0), canvas::zoomToFit),
                 item("menu-view-actual-size", "Actual Size", shortcut(KeyCode.DIGIT1), canvas::zoomToActualSize),
+                new SeparatorMenuItem(), mute,
                 new SeparatorMenuItem(), themes, new SeparatorMenuItem(), sidePanel, timeline);
         return menu;
     }

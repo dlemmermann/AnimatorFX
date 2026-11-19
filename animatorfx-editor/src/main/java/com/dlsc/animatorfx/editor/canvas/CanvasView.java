@@ -11,6 +11,7 @@ import com.dlsc.animatorfx.editor.canvas.tools.ShapeTool;
 import com.dlsc.animatorfx.editor.canvas.tools.SlotTool;
 import com.dlsc.animatorfx.editor.canvas.tools.TextTool;
 import com.dlsc.animatorfx.editor.canvas.tools.Tool;
+import com.dlsc.animatorfx.editor.audio.EditorAudio;
 import com.dlsc.animatorfx.editor.doc.Command;
 import com.dlsc.animatorfx.editor.doc.Commands;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
@@ -100,6 +101,8 @@ public final class CanvasView extends Region {
     private final Pane editorLayer = new Pane();
     private final LayerGeometry geometry = new LayerGeometry(this);
     private final Playback playback = new Playback(view);
+    /** Lets go of the audio output that is kept across edits of a document. */
+    private final Runnable releaseAudio = EditorAudio.install(view.getPlayer(), playback::isPlaying);
     private final CanvasActions actions;
     private final Map<ToolKind, Tool> tools = new EnumMap<>(ToolKind.class);
     private final Tool idleTool = new Tool() {
@@ -407,6 +410,7 @@ public final class CanvasView extends Region {
             state.canvasPanYProperty().removeListener(refresh);
         }
         playback.setDocument(newDoc);
+        releaseAudio.run();
         if (newDoc != null) {
             view.animationProperty().bind(newDoc.fileContentProperty());
             view.seek(newDoc.getPlayhead());
@@ -522,6 +526,37 @@ public final class CanvasView extends Region {
 
     public void pausePlayback() {
         playback.pause();
+    }
+
+    /**
+     * Whether the sound of the document is switched off, for playback and for scrubbing.
+     *
+     * @return the muted property
+     */
+    public final BooleanProperty mutedProperty() {
+        return view.mutedProperty();
+    }
+
+    public final boolean isMuted() {
+        return view.isMuted();
+    }
+
+    public final void setMuted(boolean value) {
+        view.setMuted(value);
+    }
+
+    /**
+     * Lets the sound at a time of the document be heard for a moment: for dragging the playhead.
+     * Silent while the document plays or the sound is muted, and limited to one snippet every 50 ms.
+     */
+    public void scrub(double seconds) {
+        playback.scrub(seconds);
+    }
+
+    /** Stops playback and releases what makes the sound; for when the window closes. */
+    public void dispose() {
+        playback.pause();
+        releaseAudio.run();
     }
 
     // ------------------------------------------------------------------ zoom and pan

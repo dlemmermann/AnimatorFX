@@ -1,5 +1,6 @@
 package com.dlsc.animatorfx.editor.ui;
 
+import com.dlsc.animatorfx.editor.audio.SoundPreview;
 import com.dlsc.animatorfx.editor.audio.AudioImport;
 import com.dlsc.animatorfx.editor.canvas.CanvasView;
 import com.dlsc.animatorfx.editor.doc.EditorDocument;
@@ -22,6 +23,7 @@ import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextInputControl;
+import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
@@ -174,6 +176,8 @@ public final class MainWindow {
      * not ask to save and does not hide the window; further calls do nothing.
      */
     public void shutdown() {
+        SoundPreview.shared().stop();
+        canvasView.dispose();
         session.shutdown();
         theme.dispose();
     }
@@ -368,6 +372,18 @@ public final class MainWindow {
         canvasView.loopProperty().bind(toolBar.loopProperty());
         toolBar.playingProperty().bind(canvasView.playingProperty());
         toolBar.setOnPlayPause(canvasView::togglePlayback);
+        canvasView.mutedProperty().bindBidirectional(toolBar.mutedProperty());
+        // a preview and playback do not sound at the same time
+        canvasView.playingProperty().addListener((obs, was, playing) -> {
+            if (playing) {
+                SoundPreview.shared().stop();
+            }
+        });
+        timelineView.setScrubber(time -> {
+            if (!isDialogShowing()) {
+                canvasView.scrub(time);
+            }
+        });
         canvasView.setNotifier(noticeBar::show);
         canvasView.setKeyboardTaken(this::isDialogShowing);
         timelineView.setNotifier(noticeBar::show);
@@ -412,13 +428,19 @@ public final class MainWindow {
     }
 
     /**
-     * A tool key pressed without modifiers selects the tool, unless a dialog is showing, the user
-     * is typing text or is in the middle of drawing or editing a path.
+     * A tool key pressed without modifiers selects the tool, and M switches the sound off and on,
+     * unless a dialog is showing, the user is typing text or is in the middle of drawing or
+     * editing a path.
      */
     private void installToolShortcuts() {
         scene.addEventHandler(KeyEvent.KEY_PRESSED, event -> {
             if (isDialogShowing() || event.isShortcutDown() || event.isControlDown() || event.isAltDown() || event.isMetaDown()
                     || scene.getFocusOwner() instanceof TextInputControl || canvasView.blocksToolShortcuts()) {
+                return;
+            }
+            if (event.getCode() == KeyCode.M && !event.isShiftDown()) {
+                toolBar.setMuted(!toolBar.isMuted());
+                event.consume();
                 return;
             }
             ToolKind.forShortcut(event.getCode()).ifPresent(kind -> {

@@ -16,9 +16,10 @@ import java.util.Objects;
  * @param theme            {@code DARK}, {@code LIGHT} or {@code SYSTEM}
  * @param activeDocumentId the id of the active document, or {@code null}
  * @param recentFiles      most recent first, at most {@value #MAX_RECENT_FILES}
+ * @param audioMuted       whether the sound of the editor is switched off
  */
 public record SessionState(WindowState window, Layout layout, String theme, List<DocumentState> documents,
-                           String activeDocumentId, List<Path> recentFiles) {
+                           String activeDocumentId, List<Path> recentFiles, boolean audioMuted) {
 
     public static final int MAX_RECENT_FILES = 20;
 
@@ -69,15 +70,26 @@ public record SessionState(WindowState window, Layout layout, String theme, List
                 ? List.copyOf(recentFiles.subList(0, MAX_RECENT_FILES)) : List.copyOf(recentFiles);
     }
 
+    /** A state with the sound switched on. */
+    public SessionState(WindowState window, Layout layout, String theme, List<DocumentState> documents,
+                        String activeDocumentId, List<Path> recentFiles) {
+        this(window, layout, theme, documents, activeDocumentId, recentFiles, false);
+    }
+
     public static SessionState defaults() {
-        return new SessionState(null, Layout.DEFAULT, "SYSTEM", List.of(), null, List.of());
+        return new SessionState(null, Layout.DEFAULT, "SYSTEM", List.of(), null, List.of(), false);
+    }
+
+    public SessionState withAudioMuted(boolean muted) {
+        return new SessionState(window, layout, theme, documents, activeDocumentId, recentFiles, muted);
     }
 
     /**
      * A copy with the file at the front of the recent files.
      */
     public SessionState withRecentFile(Path file) {
-        return new SessionState(window, layout, theme, documents, activeDocumentId, addRecent(recentFiles, file));
+        return new SessionState(window, layout, theme, documents, activeDocumentId, addRecent(recentFiles, file),
+                audioMuted);
     }
 
     /**
@@ -143,6 +155,7 @@ public record SessionState(WindowState window, Layout layout, String theme, List
         out.put("documents", docs);
         out.put("activeDocumentId", activeDocumentId);
         out.put("recentFiles", recentFiles.stream().map(Path::toString).toList());
+        out.put("audioMuted", audioMuted);
         return out;
     }
 
@@ -192,7 +205,7 @@ public record SessionState(WindowState window, Layout layout, String theme, List
         }
         List<Path> recent = strings(root, "recentFiles").stream().map(Path::of).toList();
         return new SessionState(window, layout, string(root, "theme", defaults.theme()), documents,
-                string(root, "activeDocumentId", null), recent);
+                string(root, "activeDocumentId", null), recent, bool(root, "audioMuted", false));
     }
 
     private static double finite(double value, double fallback) {

@@ -10,15 +10,19 @@ import javafx.beans.property.SimpleBooleanProperty;
 
 /**
  * Plays the document in the canvas: the player of the canvas view runs and drives the playhead
- * of the document, so everything that follows the playhead follows playback.
+ * of the document, so everything that follows the playhead follows playback. It is also the one
+ * player of the editor that makes sound: while playing, and for a moment when scrubbing.
  */
 final class Playback {
+
+    private static final long SCRUB_INTERVAL_NANOS = 50_000_000L;
 
     private final AnimationView view;
     private final ReadOnlyBooleanWrapper playing = new ReadOnlyBooleanWrapper(this, "playing");
     private final BooleanProperty loop = new SimpleBooleanProperty(this, "loop");
     private EditorDocument document;
     private boolean driving;
+    private long lastScrub;
 
     Playback(AnimationView view) {
         this.view = view;
@@ -83,6 +87,23 @@ final class Playback {
 
     void pause() {
         view.pause();
+    }
+
+    /**
+     * Lets the sound at a time be heard for a moment, as the user drags the playhead. Not while
+     * playing, and not more often than every {@link #SCRUB_INTERVAL_NANOS}: a fast drag would
+     * otherwise ask for a snippet on every pixel.
+     */
+    void scrub(double seconds) {
+        if (document == null || isPlaying()) {
+            return;
+        }
+        long now = System.nanoTime();
+        if (lastScrub != 0 && now - lastScrub < SCRUB_INTERVAL_NANOS) {
+            return;
+        }
+        lastScrub = now;
+        view.scrub(seconds);
     }
 
     /** The playhead was moved: by playback itself, or by the user, which the view then follows. */
