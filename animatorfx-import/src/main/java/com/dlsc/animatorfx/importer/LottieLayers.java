@@ -203,6 +203,15 @@ final class LottieLayers {
 
     private void build(Unit unit, double frameOffset) {
         com.lottie4j.core.model.layer.Layer source = unit.source;
+        if (source.layerType() == LayerType.AUDIO) {
+            unit.audio = true;
+            Layer sound = sounds.layer(source, unit.name, frameOffset);
+            if (sound != null) {
+                unit.core = sound;
+                unit.tops = List.of(sound);
+            }
+            return;
+        }
         // The mask layer is asked for before the content: a layer that cannot have its mask is
         // left out as a whole, and must not have used up the budget by then.
         com.lottie4j.core.model.layer.Mask mask = chooseMask(source);
@@ -235,7 +244,6 @@ final class LottieLayers {
             case IMAGE -> image(source, base);
             case TEXT -> text(source, base);
             case PRECOMPOSITION -> precomposition(source, base, frameOffset);
-            case AUDIO -> ignored("Audio layers are not supported");
             case CAMERA -> ignored("Camera layers are not supported");
             case null -> ignored("Layers of an unknown type are not supported");
             default -> ignored("Layers of type " + type.value() + " are not supported");
@@ -297,8 +305,11 @@ final class LottieLayers {
     private Layer image(com.lottie4j.core.model.layer.Layer source, LayerBase base) {
         String reference = source.referenceId() != null ? source.referenceId() : "";
         com.lottie4j.core.model.asset.Asset asset = lottieAssets.get(reference);
-        ImageData data = ImageData.fromDataUri(
-                asset != null && asset.fileName() instanceof String uri ? uri : null);
+        String uri = asset != null && asset.fileName() instanceof String name ? name : null;
+        ImageData data = ImageData.fromDataUri(uri);
+        if (data == null && uri != null && uri.trim().regionMatches(true, 0, "data:audio/", 0, 11)) {
+            return ignored("Image layers whose asset is a sound are ignored");
+        }
         if (data == null) {
             warnings.add("External images are not supported", "layer ignored", "layers ignored");
             return null;
@@ -446,7 +457,7 @@ final class LottieLayers {
                 continue;
             }
             Unit source = matteSource(sources, i, byIndex, unitOf);
-            if (source == null || source == unit) {
+            if (source == null || source == unit || unit.audio || source.audio) {
                 continue;
             }
             if (mode != MatteMode.ALPHA) {
