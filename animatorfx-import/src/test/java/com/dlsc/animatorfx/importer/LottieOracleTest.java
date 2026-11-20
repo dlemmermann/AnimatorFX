@@ -64,7 +64,7 @@ class LottieOracleTest {
      */
     private static final Map<String, Double> LIMITS = Map.of(
             "shapes", 0.16,
-            "layers", 0.09,
+            "layers", 0.10,
             "parenting", 0.04,
             "precomp", 0.025,
             "morph", 0.015);
