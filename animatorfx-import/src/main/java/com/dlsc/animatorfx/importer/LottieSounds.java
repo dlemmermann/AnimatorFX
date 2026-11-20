@@ -7,14 +7,14 @@ import com.dlsc.animatorfx.model.Keyframe;
 import com.dlsc.animatorfx.model.Layer;
 import com.dlsc.animatorfx.model.LayerBase;
 
+import com.lottie4j.core.model.layer.AudioSettings;
+
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-
-import static com.dlsc.animatorfx.importer.LottieJson.get;
 
 /**
  * Converts the audio layers of a Lottie document. Only sounds embedded in the file as a base64
@@ -52,7 +52,7 @@ final class LottieSounds {
     private final Warnings warnings;
     private final LottieProperties properties;
     private final double duration;
-    private final Map<String, Object> lottieAssets;
+    private final Map<String, com.lottie4j.core.model.asset.Asset> lottieAssets;
     private final List<Asset> assets;
     private final Map<String, byte[]> assetBytes;
     private final Map<String, Sound> sounds = new HashMap<>();
@@ -61,7 +61,7 @@ final class LottieSounds {
      * @param assets     the assets of the document that is built; sounds are added to it
      * @param assetBytes their content by asset id
      */
-    LottieSounds(Warnings warnings, LottieProperties properties, double duration, Map<String, Object> lottieAssets,
+    LottieSounds(Warnings warnings, LottieProperties properties, double duration, Map<String, com.lottie4j.core.model.asset.Asset> lottieAssets,
                  List<Asset> assets, Map<String, byte[]> assetBytes) {
         this.warnings = warnings;
         this.properties = properties;
@@ -80,18 +80,16 @@ final class LottieSounds {
      *
      * @return {@code null}, with a warning, if the sound is not embedded in the file or cannot be used
      */
-    Layer layer(Object json, String name, double frameOffset) {
-        String reference = LottieJson.string(json, "refId", "");
+    Layer layer(com.lottie4j.core.model.layer.Layer json, String name, double frameOffset) {
+        String reference = json.referenceId() == null ? "" : json.referenceId();
         Sound sound = sounds.computeIfAbsent(reference, this::sound);
         if (sound.assetId() == null) {
             warnings.add(sound.problem(), "layer", "layers");
             return null;
         }
-        double in = LottieJson.has(json, "ip") ? clamp(properties.time(LottieJson.number(json, "ip", 0), frameOffset))
-                : 0;
-        double out = LottieJson.has(json, "op")
-                ? clamp(properties.time(LottieJson.number(json, "op", 0), frameOffset)) : duration;
-        double start = properties.time(LottieJson.number(json, "st", 0), frameOffset);
+        double in = json.inPoint() != null ? clamp(properties.time(json.inPoint(), frameOffset)) : 0;
+        double out = json.outPoint() != null ? clamp(properties.time(json.outPoint(), frameOffset)) : duration;
+        double start = properties.time(json.startTime() != null ? json.startTime() : 0, frameOffset);
         double clipOffset = 0;
         if (Limits.usable(start)) {
             // the sound cannot be heard before it starts
@@ -99,8 +97,8 @@ final class LottieSounds {
             clipOffset = Math.max(0, in - start);
         }
         LayerBase base = LayerBase.create(name, duration)
-                .withVisible(!LottieJson.flag(json, "hd")).withInPoint(in).withOutPoint(Math.max(in, out));
-        return new AudioLayer(base, sound.assetId(), clipOffset, volume(json, frameOffset), Animatable.of(0.0), false,
+                .withVisible(!json.isHidden()).withInPoint(in).withOutPoint(Math.max(in, out));
+        return new AudioLayer(base, sound.assetId(), clipOffset, volume(json.audioSettings(), frameOffset), Animatable.of(0.0), false,
                 false);
     }
 
@@ -113,16 +111,15 @@ final class LottieSounds {
      * as it is, which is how lottie-web reads them. The model has one volume from 0 to 1: the
      * louder channel decides, and levels above 100 are limited to full volume.
      */
-    private Animatable<Double> volume(Object json, double frameOffset) {
-        Object levels = get(get(json, "au"), "lv");
-        if (levels == null) {
+    private Animatable<Double> volume(AudioSettings settings, double frameOffset) {
+        if (settings == null || settings.level() == null) {
             return Animatable.of(1.0);
         }
-        Animatable<double[]> channels = properties.read(levels, frameOffset, FULL, value -> {
-            double[] numbers = LottieJson.numbers(value);
-            return numbers == null || numbers.length == 0 ? UNKNOWN : numbers;
-        });
-        boolean unknown = channels.at(0) == UNKNOWN;
+        // levels that are no numbers are left out when the file is read: nothing remains of them
+        List<?> values = settings.level().keyframes();
+        Animatable<double[]> channels = properties.read(settings.level(), frameOffset, FULL,
+                numbers -> numbers.length == 0 ? UNKNOWN : numbers);
+        boolean unknown = values == null || values.isEmpty() || channels.at(0) == UNKNOWN;
         for (Keyframe<double[]> keyframe : channels.keyframes()) {
             unknown |= keyframe.value() == UNKNOWN;
         }
@@ -152,12 +149,11 @@ final class LottieSounds {
     }
 
     private Sound sound(String reference) {
-        Object asset = lottieAssets.get(reference);
-        if (LottieJson.has(asset, "layers")) {
+        com.lottie4j.core.model.asset.Asset asset = lottieAssets.get(reference);
+        if (asset != null && asset.layers() != null) {
             return new Sound(null, NO_SOUND);
         }
-        String source = LottieJson.string(asset, "p", null);
-        if (source == null || source.isBlank()) {
+        if (asset == null || !(asset.fileName() instanceof String source) || source.isBlank()) {
             return new Sound(null, MISSING);
         }
         source = source.trim();
@@ -203,7 +199,7 @@ final class LottieSounds {
             return new Sound(null, TOO_LARGE);
         }
         String id = UUID.randomUUID().toString();
-        String name = LottieJson.string(asset, "nm", "");
+        String name = asset.name() == null ? "" : asset.name();
         assets.add(new Asset(id, Asset.Kind.AUDIO, "assets/" + id + "." + extension,
                 name.isBlank() ? reference : name));
         assetBytes.put(id, bytes);

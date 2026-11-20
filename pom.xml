@@ -33,6 +33,9 @@
         <ikonli.version>12.4.0</ikonli.version>
         <gemsfx.version>4.16.0</gemsfx.version>
         <testfx.version>4.0.18</testfx.version>
+        <!-- "core" reads Lottie files for the importer; "fxplayer" is test scope only: the reference
+             renderer of the Lottie import tests (see LottieOracleTest) -->
+        <lottie4j.version>1.4.0</lottie4j.version>
         <monocle.version>21.0.2</monocle.version>
 
         <!-- Headless JavaFX tests (Monocle). Modules with JavaFX tests opt in with
@@ -95,6 +98,16 @@
                 <groupId>com.dlsc.gemsfx</groupId>
                 <artifactId>gemsfx</artifactId>
                 <version>${gemsfx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lottie4j</groupId>
+                <artifactId>core</artifactId>
+                <version>${lottie4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lottie4j</groupId>
+                <artifactId>fxplayer</artifactId>
+                <version>${lottie4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.testfx</groupId>

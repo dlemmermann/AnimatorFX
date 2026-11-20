@@ -83,6 +83,11 @@ final class MenuBarFactory {
                 item("menu-file-import-image", "Image…", null, () -> window.getCanvasView().getActions().chooseImage()),
                 item("menu-file-import-audio", "Audio…", null, () -> imports().chooseAndImportAudio()));
 
+        Menu exports = new Menu("Export");
+        exports.setId("menu-file-export");
+        exports.getItems().add(item("menu-file-export-lottie", "Lottie…", null,
+                () -> window.getExportActions().chooseAndExportLottie()));
+
         // macOS has Quit in the application menu, where it ends the application the same way
         MenuItem quit = always("menu-file-quit", "Quit", shortcut(KeyCode.Q), Platform::exit);
         quit.setVisible(!MAC);
@@ -101,6 +106,7 @@ final class MenuBarFactory {
                 revert,
                 new SeparatorMenuItem(),
                 imports,
+                exports,
                 new SeparatorMenuItem(),
                 item("menu-file-close", "Close", shortcut(KeyCode.W), files::close),
                 quitSeparator,
