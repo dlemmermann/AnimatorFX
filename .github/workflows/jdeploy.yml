@@ -36,11 +36,11 @@ jobs:
           fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up JDK 26
+      - name: Set up JDK 27
         uses: actions/setup-java@v6
         with:
           distribution: zulu
-          java-version: "26"
+          java-version: "27"
           cache: maven
 
       - name: Set release version

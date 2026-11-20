@@ -69,11 +69,11 @@ jobs:
       - name: Check out verified source
         uses: actions/checkout@v7
 
-      - name: Set up JDK 26, Central credentials and signing
+      - name: Set up JDK 27, Central credentials and signing
         uses: actions/setup-java@v6
         with:
           distribution: zulu
-          java-version: "26"
+          java-version: "27"
           server-id: central
           server-username: MAVEN_USERNAME
           server-password: MAVEN_CENTRAL_TOKEN
