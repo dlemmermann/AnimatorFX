@@ -1,5 +1,8 @@
 # AnimatorFX
 
+[![Build](https://github.com/dlemmermann/AnimatorFX/actions/workflows/build.yml/badge.svg)](https://github.com/dlemmermann/AnimatorFX/actions/workflows/build.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+
 AnimatorFX is a keyframe animation editor for JavaFX and a small runtime library that plays the
 animations it creates inside JavaFX applications.
 
@@ -10,6 +13,8 @@ animations it creates inside JavaFX applications.
   placeholders that the application fills with its own nodes, which the animation then drives.
 - An animation can carry **sound**: audio layers that play in sync with it and cues that fire
   at a point in time.
+
+**User manual:** [Read online](docs/USER_MANUAL.md) · [Download the PDF](docs/AnimatorFX-User-Manual.pdf)
 
 ![The AnimatorFX editor, dark theme](docs/images/editor-dark.png)
 
@@ -34,6 +39,8 @@ animations it creates inside JavaFX applications.
 - [Known limitations](#known-limitations)
 - [Project layout](#project-layout)
 - [Development](#development)
+- [Contributing](#contributing)
+- [Builds and releases](#builds-and-releases)
 - [License](#license)
 
 ## Features
@@ -92,7 +99,9 @@ artifacts it uses (`javafx-controls`, `javafx-media` and what those need) transi
 | Runtime (`model`, `player`) | 21 or later | 21 or later: `javafx.base`, `javafx.graphics`, `javafx.controls`, `javafx.media` | none |
 | Editor and importers | JDK 26 | 25 | AtlantaFX 3.0.0, Ikonli 12.4.0, GemsFX 4.16.0 (editor only) |
 
-Building the whole project needs **JDK 26** and Maven 3.9. The runtime modules are compiled with
+Building the whole project needs **JDK 26**; the included Maven wrapper pins Maven 3.9.11.
+Use `./mvnw` (or `mvnw.cmd` on Windows) instead of `mvn` in the commands below if Maven is not installed.
+The runtime modules are compiled with
 `--release 21` against JavaFX 21.0.13.
 
 The player requires the module `javafx.media` since it plays sound. With Maven or Gradle there is
@@ -782,7 +791,7 @@ Out of scope by design:
 
 Gaps in what is there:
 
-- **Not published.** The artifacts have to be installed locally. No license has been chosen.
+- **Not published yet.** The artifacts have to be installed locally until the first Maven Central release.
 - **Multi-selection** can be moved, nudged, grouped and edited in the inspector, but has no
   scale or rotate handles.
 - **Text** is a single line in one style; multi-line text cannot be typed in the editor.
@@ -863,6 +872,8 @@ mvn -pl animatorfx-editor test -Dtest=MainWindowTest   # one test class
 - Editor tests never touch the real session directory; they pass a temporary one.
 - `README.md` is tested too: `ReadmeTest` in the sample application loads the JSON examples above
   and checks the Java snippets against the API.
+- To rebuild the PDF after editing the [user manual](docs/USER_MANUAL.md), install
+  `Markdown==3.10.2` for Python 3 and run `python3 docs/manual/build.py` with Chrome or Chromium 131+.
 - No test is audible. The editor's tests run with `-Danimatorfx.audio=off` and observe sound
   through a recording output; the sample application's tests start it muted
   (`-Danimatorfx.sample.muted=true`); tests that use real media players run them muted or at
@@ -871,6 +882,27 @@ mvn -pl animatorfx-editor test -Dtest=MainWindowTest   # one test class
 - The design is described in `docs/superpowers/specs/2026-11-18-animatorfx-design.md` and, for
   sound, `docs/superpowers/specs/2026-11-19-audio-support-design.md`.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and pull request guidelines and the
+[Code of Conduct](CODE_OF_CONDUCT.md) for participation expectations. Report vulnerabilities
+privately as described in [SECURITY.md](SECURITY.md).
+
+## Builds and releases
+
+[GitHub Actions](https://github.com/dlemmermann/AnimatorFX/actions) builds and tests the project
+on Linux, Windows and macOS and uploads native editor application archives with a bundled Java
+runtime. Download an archive for your platform from a successful Build run's artifacts, extract it,
+and launch the application. The packages are unsigned.
+
+The manually triggered Release workflow publishes the embeddable runtime (`animatorfx-model`,
+`animatorfx-player`, and their parent POM) to Maven Central with GPG signatures, sources and Javadoc,
+then attaches the native editor archives to a tagged GitHub release. It uses the same Central Portal
+publishing approach and secret names as GemsFX. See [the release guide](docs/RELEASING.md) for setup,
+credentials and the release procedure.
+
 ## License
 
-No license has been chosen yet.
+Copyright 2026 DLSC Software & Consulting GmbH. Licensed under the
+[Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
+Dependencies retain their own licenses.

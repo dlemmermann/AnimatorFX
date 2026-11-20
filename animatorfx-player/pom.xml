@@ -12,6 +12,7 @@
 
     <artifactId>animatorfx-player</artifactId>
     <name>AnimatorFX Player</name>
+    <description>Embeddable JavaFX animation playback, rendering, slot binding and synchronized sound.</description>
 
     <properties>
         <maven.compiler.release>${runtime.java.release}</maven.compiler.release>

@@ -1,0 +1,48 @@
+# Contributing to AnimatorFX
+
+Bug reports, documentation improvements and focused pull requests are welcome. By participating,
+you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Contributions are licensed under
+[Apache-2.0](LICENSE).
+
+## Reporting issues
+
+Search [existing issues](https://github.com/dlemmermann/AnimatorFX/issues) first. Include the
+AnimatorFX version or commit, operating system and architecture, JDK/JavaFX versions, reproduction
+steps, and expected versus actual behavior. A small `.afx`, SVG, Lottie or FXML example is useful;
+remove personal, proprietary and third-party material you cannot share.
+
+For suspected vulnerabilities, follow [SECURITY.md](SECURITY.md), not a public issue.
+Discuss substantial features or file-format changes in an issue before implementing them.
+
+## Building
+
+Install JDK 26 and set `JAVA_HOME` to it. The Maven wrapper downloads the pinned Maven distribution;
+no separate Maven installation is needed.
+
+```bash
+./mvnw -B clean install
+./mvnw -pl animatorfx-editor javafx:run -Danimatorfx.configDir=/path/to/scratch/config
+./mvnw -Ppackage -pl animatorfx-editor -am package
+```
+
+On Windows, use `mvnw.cmd` in place of `./mvnw`. On Ubuntu 24.04, install `libgtk-3-0t64`
+and `libasound2t64` for JavaFX. Linux CI also installs `xvfb` and `xauth` and runs the full test
+suite through `xvfb-run`, providing a virtual display alongside Monocle's headless mode.
+CI builds/tests and packages native application images on Linux, Windows and macOS. Packages are unsigned.
+
+## Pull requests
+
+- Branch from the repository's current default branch. Keep changes focused and explain their purpose.
+- Add regression tests for changed behavior; run the affected tests before submitting.
+- JavaFX tests run headless through TestFX/Monocle. Keep tests silent and use temporary session
+  directories; never access a user's real editor configuration.
+- Keep `animatorfx-model` independent of JavaFX. Model and player target Java 21; tooling targets
+  Java 26. The sample app must remain independent of the tooling.
+- Keep model records immutable. Editor document edits go through commands and remain undoable.
+- JavaFX property accessors are `final`; property Javadoc belongs on `xxxProperty()` only.
+- Use the looked-up colors in `editor.css`, and check UI changes in both themes.
+- Preserve `.afx` backward compatibility and update documentation for API or format changes.
+- Do not commit generated `target/` files, IDE settings, credentials or signing keys.
+
+See the [README](README.md#development) for targeted test commands and architecture notes.
+Maintainers handle publication using the [release guide](docs/RELEASING.md).

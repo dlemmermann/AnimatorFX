@@ -1,0 +1,231 @@
+@page {
+    size: A4;
+    margin: 20mm 20mm 19mm;
+
+    @top-left {
+        content: "ANIMATORFX";
+        color: #176957;
+        font: 700 8pt Arial, sans-serif;
+        letter-spacing: 0.13em;
+    }
+
+    @top-right {
+        content: "USER MANUAL";
+        color: #546478;
+        font: 700 8pt Arial, sans-serif;
+        letter-spacing: 0.13em;
+    }
+
+    @bottom-left {
+        content: "DESKTOP EDITOR / JAVAFX RUNTIME";
+        color: #546478;
+        font: 700 7.5pt Arial, sans-serif;
+        letter-spacing: 0.08em;
+    }
+
+    @bottom-right {
+        content: counter(page);
+        color: #176957;
+        font: 700 10pt Arial, sans-serif;
+    }
+}
+
+@page cover {
+    margin: 0;
+    @top-left { content: none; }
+    @top-right { content: none; }
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+}
+
+:root {
+    --ink: #172738;
+    --secondary: #42586c;
+    --accent: #176957;
+    --rule: #d3e1e6;
+    --mint: #79ebcd;
+    color: var(--ink);
+    font: 10.4pt/1.44 Georgia, "Times New Roman", serif;
+    print-color-adjust: exact;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1, h2, h3, th, caption, .eyebrow, .cover-footer {
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.cover {
+    page: cover;
+    padding: 21mm 20mm 19mm;
+    position: relative;
+    min-height: 296.5mm;
+    overflow: hidden;
+    color: #e9f4f3;
+    background:
+        radial-gradient(ellipse at 92% 18%, #215450 0, transparent 56%),
+        linear-gradient(148deg, #102d39 0%, #111e32 68%, #142f3a 100%);
+}
+
+.eyebrow, .cover-footer {
+    margin: 0;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+}
+
+.cover .eyebrow { color: var(--mint); }
+.cover .eyebrow span {
+    display: inline-block;
+    width: 3mm;
+    height: 3mm;
+    margin-right: 2mm;
+    border: 0.6mm solid var(--mint);
+    transform: rotate(45deg);
+    vertical-align: -0.5mm;
+}
+
+.cover h1 {
+    max-width: 120mm;
+    margin: 21mm 0 5mm;
+    font-size: 48pt;
+    line-height: 0.98;
+    letter-spacing: -0.055em;
+    color: white;
+}
+
+.cover h1 + p {
+    color: var(--mint);
+    margin: 0 0 5mm;
+    font: 16pt/1.3 Arial, sans-serif;
+    letter-spacing: -0.022em;
+}
+
+.cover h1 + p + p { max-width: 128mm; }
+.cover p:has(> img:only-child) { margin-top: 12mm; }
+.cover img {
+    border: 0.45mm solid #457b7a;
+    border-radius: 2mm;
+    box-shadow: 0 5mm 12mm #090f1a99;
+}
+
+.cover-footer {
+    position: absolute;
+    bottom: 17mm;
+    left: 20mm;
+    right: 20mm;
+    padding-top: 4mm;
+    border-top: 0.3mm solid #57817f;
+    color: #c0d8dd;
+}
+
+.cover-footer b {
+    display: inline-block;
+    width: 2mm;
+    height: 2mm;
+    margin: 0 2mm;
+    background: var(--mint);
+    border-radius: 50%;
+}
+
+.contents { break-after: page; padding-top: 21mm; }
+.contents .eyebrow { color: var(--accent); margin-bottom: 4mm; }
+.contents h2 { margin-bottom: 6mm; }
+.contents ul { list-style: none; padding: 0; }
+.contents li {
+    margin: 0;
+    padding: 5mm 0;
+    border-bottom: 0.3mm solid var(--rule);
+    color: var(--secondary);
+}
+.contents li a {
+    display: block;
+    margin-bottom: 0.8mm;
+    font: 700 13pt/1.2 Arial, sans-serif;
+    text-decoration: none;
+}
+
+h2 {
+    margin: 0 0 5mm;
+    border-bottom: 0.65mm solid var(--accent);
+    padding: 0 0 3mm;
+    color: #122e3c;
+    font-size: 27pt;
+    line-height: 1.06;
+    letter-spacing: -0.045em;
+    break-after: avoid;
+}
+
+main h2:not(:first-child) { break-before: page; }
+#load-show-and-play, #put-a-javafx-node-into-the-animation {
+    break-before: page;
+    margin-top: 0;
+}
+
+h3 {
+    margin: 4.5mm 0 2mm;
+    color: var(--accent);
+    font-size: 13.5pt;
+    line-height: 1.16;
+    letter-spacing: -0.025em;
+    break-after: avoid;
+}
+
+p { margin: 0 0 3mm; orphans: 3; widows: 3; }
+a { color: var(--accent); text-underline-offset: 0.14em; }
+ul, ol { margin: 0 0 3mm; padding-left: 6mm; }
+li { margin-bottom: 2mm; break-inside: avoid; }
+li::marker { color: var(--accent); font-weight: 700; }
+
+img { display: block; max-width: 100%; }
+main img {
+    max-height: 82mm;
+    margin-inline: auto;
+    border: 0.28mm solid var(--rule);
+    border-radius: 1.3mm;
+}
+main img[src$="/sample-app.png"] { max-height: 58mm; }
+p:has(> img:only-child) { break-inside: avoid; break-after: avoid; margin: 3mm 0 1.5mm; }
+p:has(> img:only-child) + p:has(> em:only-child) {
+    margin-bottom: 4mm;
+    color: var(--secondary);
+    font: italic 8.7pt/1.3 Arial, sans-serif;
+}
+
+blockquote {
+    margin: 4mm 0;
+    padding: 3mm 4mm;
+    border-left: 1.05mm solid var(--accent);
+    background: #e9f5ef;
+    break-inside: avoid;
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+table { width: 100%; margin: 3mm 0; border-collapse: collapse; font-size: 9.5pt; }
+thead { display: table-header-group; }
+th, td { padding: 1.4mm 2.4mm; text-align: left; vertical-align: top; }
+th { background: #163a45; color: white; font-size: 8.8pt; }
+td { border-bottom: 0.25mm solid var(--rule); }
+td:first-child { width: 32%; }
+tr { break-inside: avoid; }
+tbody tr:nth-child(even) { background: #f0f5f7; }
+
+code {
+    font: 0.86em/1.35 "DejaVu Sans Mono", Consolas, monospace;
+    color: #224e58;
+    background: #edf4f6;
+    overflow-wrap: anywhere;
+}
+pre {
+    margin: 2.5mm 0 4mm;
+    padding: 3mm 4mm;
+    border: 0.3mm solid var(--rule);
+    border-left: 1mm solid #367681;
+    border-radius: 1.3mm;
+    background: #f3f7fa;
+    font: 8.4pt/1.44 "DejaVu Sans Mono", Consolas, monospace;
+    break-inside: avoid;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+pre code { color: #173c49; background: none; font: inherit; }

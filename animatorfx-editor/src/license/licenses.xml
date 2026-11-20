@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<licenseSummary>
+    <dependencies>
+        <!-- These POMs declare Apache 2.0 but omit the license URL. -->
+        <dependency>
+            <groupId>com\.dlsc\.(gemsfx|pickerfx)</groupId>
+            <artifactId>.*</artifactId>
+            <matchLicenses>
+                <license>
+                    <name>Apache 2\.0</name>
+                </license>
+            </matchLicenses>
+            <licenses>
+                <license>
+                    <name>Apache License, Version 2.0</name>
+                    <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+                </license>
+            </licenses>
+        </dependency>
+    </dependencies>
+</licenseSummary>
