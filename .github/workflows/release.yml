@@ -23,7 +23,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -63,7 +63,7 @@ jobs:
     environment: maven-central
     steps:
       - name: Check out verified source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 26, Central credentials and signing
         uses: actions/setup-java@v5
@@ -101,7 +101,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download application archives
         uses: actions/download-artifact@v8
