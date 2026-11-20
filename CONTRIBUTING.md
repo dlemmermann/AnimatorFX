@@ -26,9 +26,20 @@ no separate Maven installation is needed.
 ```
 
 On Windows, use `mvnw.cmd` in place of `./mvnw`. On Ubuntu 24.04, install `libgtk-3-0t64`
-and `libasound2t64` for JavaFX. Linux CI also installs `xvfb` and `xauth` and runs the full test
+and `libasound2t64` for JavaFX. Linux CI also installs `xvfb` and `xauth` and runs the portable test
 suite through `xvfb-run`, providing a virtual display alongside Monocle's headless mode.
 CI builds/tests and packages native application images on Linux, Windows and macOS. Packages are unsigned.
+
+CI excludes the `native-audio` tests: hosted runners do not provide a reliable audio device, and
+JavaFX's native media backend can fail or crash the test JVM there. Deterministic audio scheduling,
+cue lifecycle and playback-controller tests still run on every platform. Native media tests remain
+included in local builds; on a machine with a working audio device, run them alone with:
+
+```bash
+./mvnw -B -ntp -pl animatorfx-player -am -Dgroups=native-audio test
+```
+
+For a local build without an audio device, use `-DexcludedGroups=native-audio` as CI does.
 
 ## Pull requests
 

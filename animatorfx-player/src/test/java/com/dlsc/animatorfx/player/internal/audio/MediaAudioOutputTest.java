@@ -12,6 +12,7 @@ import com.dlsc.animatorfx.player.AnimationPlayer.Status;
 import com.dlsc.animatorfx.player.FxThreadExtension;
 import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -29,9 +30,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Real JavaFX media under the headless toolkit. Whether sound comes out depends on the machine;
- * what must hold everywhere is that nothing is thrown and the animation plays to its end.
+ * Real JavaFX media under the headless toolkit. Requires a working native media backend and audio
+ * device; a virtual display alone is not enough.
  */
+@Tag("native-audio")
 @ExtendWith(FxThreadExtension.class)
 class MediaAudioOutputTest {
 
@@ -277,10 +279,16 @@ class MediaAudioOutputTest {
     void cuesRingOutThroughSilenceAndAreCutByStopCues() {
         MediaAudioOutput output = output(false);
         try {
+            // AudioClip.isPlaying() can be true even when its native player failed to start.
+            output.apply(List.of(inaudibleAt(0)));
+            boolean played = await(() -> output.hasPlayed() || output.failedAssets().contains("tone"), 8);
+            assumeTrue(played && output.hasPlayed(), "JavaFX media does not play in this environment: "
+                    + logger.warnings);
+            output.silence();
+
             // inaudible: volume 0
             output.playCue("long", 0);
-            assumeTrue(await(output::cuesSounding, 3), "JavaFX media does not play in this environment: "
-                    + logger.warnings);
+            assertTrue(await(output::cuesSounding, 3), "the cue starts");
 
             output.silence();
             await(() -> false, 0.2);

@@ -57,9 +57,10 @@ jobs:
       - name: Build and test all modules
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run -a --server-args="-screen 0 1920x1080x24" ./mvnw -B -ntp clean verify
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+              ./mvnw -B -ntp -DexcludedGroups=native-audio clean verify
           else
-            ./mvnw -B -ntp clean verify
+            ./mvnw -B -ntp -DexcludedGroups=native-audio clean verify
           fi
 
       - name: Package native editor

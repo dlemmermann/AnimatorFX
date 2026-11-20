@@ -13,8 +13,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Starts the headless JavaFX toolkit once and runs every test method on the FX application
- * thread. Use with {@code @ExtendWith(FxThreadExtension.class)}.
+ * Starts the headless JavaFX toolkit once and constructs test fixtures and runs every test method
+ * on the FX application thread. Use with {@code @ExtendWith(FxThreadExtension.class)}.
  */
 public final class FxThreadExtension implements InvocationInterceptor {
 
@@ -27,24 +27,28 @@ public final class FxThreadExtension implements InvocationInterceptor {
         }
     }
 
-    /** Controls cannot even be loaded before the toolkit runs, so start it before the test instance exists. */
     @Override
     public <T> T interceptTestClassConstructor(Invocation<T> invocation,
                                                ReflectiveInvocationContext<Constructor<T>> invocationContext,
                                                ExtensionContext extensionContext) throws Throwable {
         start();
-        return invocation.proceed();
+        return invokeOnFxThread(invocation);
     }
 
     @Override
     public void interceptTestMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
                                     ExtensionContext extensionContext) throws Throwable {
         start();
+        invokeOnFxThread(invocation);
+    }
+
+    private static <T> T invokeOnFxThread(Invocation<T> invocation) throws Throwable {
+        AtomicReference<T> result = new AtomicReference<>();
         AtomicReference<Throwable> failure = new AtomicReference<>();
         CountDownLatch done = new CountDownLatch(1);
         Platform.runLater(() -> {
             try {
-                invocation.proceed();
+                result.set(invocation.proceed());
             } catch (Throwable t) {
                 failure.set(t);
             } finally {
@@ -57,5 +61,6 @@ public final class FxThreadExtension implements InvocationInterceptor {
         if (failure.get() != null) {
             throw failure.get();
         }
+        return result.get();
     }
 }
