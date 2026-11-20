@@ -18,7 +18,7 @@ concurrency:
 jobs:
   prepare:
     name: Validate release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -53,7 +53,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Verify and package applications
+    name: Verify build and tests
     needs: prepare
     uses: ./.github/workflows/build.yml
     with:
@@ -62,7 +62,7 @@ jobs:
   publish:
     name: Publish runtime to Maven Central
     needs: [prepare, build]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: maven-central
     steps:
@@ -100,7 +100,7 @@ jobs:
   github-release:
     name: Publish GitHub release
     needs: [prepare, publish]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
@@ -108,19 +108,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download application archives
-        uses: actions/download-artifact@v8
-        with:
-          pattern: AnimatorFX-*
-          path: artifacts
-          merge-multiple: true
-
       - name: Create tagged release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          gh release create "v$VERSION" artifacts/*.tar.gz \
+          gh release create "v$VERSION" \
             --target "$GITHUB_SHA" --title "AnimatorFX $VERSION" --generate-notes
 
       - name: Start jDeploy installer publication
