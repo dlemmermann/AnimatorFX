@@ -296,6 +296,33 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>license-maven-plugin</artifactId>
+                        <version>2.7.0</version>
+                        <executions>
+                            <execution>
+                                <id>package-dependency-licenses</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>download-licenses</goal>
+                                </goals>
+                                <configuration>
+                                    <includedScopes>compile,runtime</includedScopes>
+                                    <excludedGroups>com\.dlsc\.animatorfx</excludedGroups>
+                                    <licensesOutputDirectory>${package.dist}/licenses</licensesOutputDirectory>
+                                    <licensesOutputFile>${package.dist}/licenses/dependencies.xml</licensesOutputFile>
+                                    <errorRemedy>xmlOutput</errorRemedy>
+                                    <licenseUrlReplacements>
+                                        <licenseUrlReplacement>
+                                            <regexp>https://github.com/weisj/jsvg/blob/master/LICENSE</regexp>
+                                            <replacement>https://raw.githubusercontent.com/weisj/jsvg/master/LICENSE</replacement>
+                                        </licenseUrlReplacement>
+                                    </licenseUrlReplacements>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
                 </plugins>
             </build>
         </profile>

@@ -1,0 +1,94 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version; omitted for development builds
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      MAVEN_OPTS: -Duser.language=en -Duser.country=US
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 26
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: "26"
+          cache: maven
+
+      - name: Install Linux JavaFX dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libgtk-3-0t64 libasound2t64 xvfb xauth
+
+      - name: Set release version
+        if: inputs.version != ''
+        run: |
+          [[ "$RELEASE_VERSION" =~ ^[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]] || exit 1
+          ./mvnw -B -ntp org.codehaus.mojo:versions-maven-plugin:2.19.1:set \
+            -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
+
+      - name: Build and test all modules
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" ./mvnw -B -ntp clean verify
+          else
+            ./mvnw -B -ntp clean verify
+          fi
+
+      - name: Package native editor
+        run: |
+          ./mvnw -B -ntp -Ppackage -pl animatorfx-editor -am package -DskipTests \
+            -Dpackage.version="${RELEASE_VERSION:-1.0.0}"
+
+      - name: Archive application
+        env:
+          PLATFORM: ${{ runner.os }}-${{ runner.arch }}
+        run: |
+          mkdir -p artifacts
+          cp LICENSE NOTICE animatorfx-editor/target/dist/
+          tar -czf "artifacts/AnimatorFX-${RELEASE_VERSION:-snapshot}-$PLATFORM.tar.gz" \
+            -C animatorfx-editor/target/dist .
+
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimatorFX-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ runner.os }}-${{ runner.arch }}
+          path: "**/target/surefire-reports/"
+          if-no-files-found: ignore
+          retention-days: 14

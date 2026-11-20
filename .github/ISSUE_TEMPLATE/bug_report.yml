@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a reproducible problem with the editor or runtime
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For vulnerabilities, please follow [the security policy](https://github.com/dlemmermann/AnimatorFX/blob/HEAD/SECURITY.md) instead.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: AnimatorFX version/commit, operating system and architecture, JDK and JavaFX versions
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal example or animation if possible; remove confidential material.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include relevant logs or an application-only screenshot.
+    validations:
+      required: true

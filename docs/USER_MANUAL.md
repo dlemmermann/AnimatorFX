@@ -1,0 +1,286 @@
+# AnimatorFX User Manual
+
+**Design in the editor. Play in JavaFX.**
+
+Create a keyframed animation, save it as an `.afx` document, and play it inside a JavaFX application. This guide takes you from your first keyframe to a running application.
+
+![AnimatorFX in dark mode, with an animation open on the canvas](images/editor-dark.png)
+
+## Contents
+
+- [1. Get started](#1-get-started) — Launch the editor and find your way around.
+- [2. Make your first animation](#2-make-your-first-animation) — Animate a shape, preview it, and save it.
+- [3. Build a composition](#3-build-a-composition) — Organize layers, import artwork, and add markers or slots.
+- [4. Add sound](#4-add-sound) — Work with audio layers, waveforms, and cues.
+- [5. Embed in JavaFX](#5-embed-in-javafx) — Add the player, package an `.afx` file, and run it.
+- [6. Connect animations to your UI](#6-connect-animations-to-your-ui) — Play named ranges and animate application nodes.
+- [7. Shortcuts and troubleshooting](#7-shortcuts-and-troubleshooting) — Find common commands and solve playback problems.
+
+## 1. Get started
+
+Launch the packaged **AnimatorFX** editor for your platform. The application image includes a Java runtime. If you are working from a source checkout, use JDK 26 and run these commands from the repository root:
+
+```shell
+mvn clean install
+mvn -pl animatorfx-editor javafx:run
+```
+
+See the [README](../README.md#quick-start) for Maven wrapper, packaging, and sample-app instructions.
+
+### Find your way around
+
+![Light-theme workspace showing the canvas, Document tab, and timeline](images/editor-light.png)
+
+*Figure 1. The workspace with the Document tab open.*
+
+| Area | What you do there |
+|---|---|
+| **Toolbar and tabs** | Switch documents, play or pause, jump to the beginning or end, loop, mute, and zoom. |
+| **Tool rail and canvas** | Choose a tool on the left. Draw, select, and edit layers on the artboard. |
+| **Side panel** | Edit the selection in **Inspector**, manage media in **Assets**, and set size, duration, and frame rate in **Document**. |
+| **Timeline** | Arrange layers on the left. On the right, scrub the ruler, edit keyframes, trim layer bars, and place markers and cues. |
+| **Status bar** | Check document size, selection, and autosave state. |
+
+> **Start with a sample.** Use **File → Open…** to open `samples/animations/success.afx`. Press **Space** to preview it, then drag the playhead to see how its layers and keyframes work together.
+
+## 2. Make your first animation
+
+In this exercise, a rectangle moves across a two-second artboard. You will set its first keyframe manually and let Auto-Key record the second.
+
+1. Choose **File → New**. In the **Document** tab, set **Size** to `480 × 270`, **Duration** to `2 s`, and **Frame rate** to `30`. Leave the playhead at the start.
+2. Press **R** for the Rectangle tool and drag a small rectangle on the left side of the canvas. Switch to **Select** (**V**) and select the rectangle if it is not already selected.
+3. Open **Inspector → Transform**. Click the diamond beside **Position** to record the starting position at `0 s`.
+4. Click the ruler at `1.5 s`. Turn on **Auto-Key** with the record button in the timeline header, then drag the rectangle to the right without changing its size. Turn Auto-Key off again. Expand the rectangle row in the timeline to see the two Position keyframes.
+5. Return to the start using the toolbar and press **Space**. The rectangle moves between the two keyframes and holds its final position for the rest of the document.
+6. Choose **File → Save As…** and save `slide.afx`. This is the file you will use in the JavaFX example.
+
+### Refine timing and easing
+
+Drag a keyframe to change when it happens. Keyframe times snap to frames; hold **Alt** while dragging for free positioning. To change how the rectangle moves without changing when it arrives, select the **first** Position keyframe and pick a curve in the **Easing** section of the Inspector. Try **Ease In Out** for a gentler start and finish.
+
+| Easing | Effect on the segment after the keyframe |
+|---|---|
+| **Linear** | Changes the value at a constant rate. |
+| **Hold** | Keeps the value until the next keyframe, then jumps. |
+| **Preset or custom Bézier** | Changes the rate over the segment. Drag handles or enter a `cubic-bezier(...)` curve. |
+
+> **Which diamond should I edit?** The Inspector diamond adds or removes a keyframe at the playhead. To change a keyframe already there, edit the property value rather than clicking the diamond again.
+
+### Save and recover
+
+Use **Save** for the current `.afx` and **Save As…** to make a separate copy. An `.afx` contains the document and its embedded assets; share it intact. Recovery autosaves are separate from your saved file. If the editor restores unsaved edits after a restart, review the recovered document and save it explicitly. Undo history is not restored.
+
+## 3. Build a composition
+
+### Work with layers
+
+Draw rectangles, ellipses, lines, polygons, and stars with the shape tools. Use the **Pen** tool for Bézier paths: click for corners, drag for smooth points, click the first point to close the contour, or press **Enter** to finish it open. The **Text** tool places a single line of text. Use **Image** to place a PNG or JPEG.
+
+In the timeline, drag rows to reorder layers or move them into groups. Lock a layer to prevent accidental editing; hide it to exclude it from the preview. Drag the middle of a layer bar to move its active interval, or drag an edge to change when the layer appears or disappears. Expand a row to edit its property keyframes.
+
+### Give a layer more movement
+
+| To achieve this | Use this |
+|---|---|
+| Draw a stroke on over time | **Trim**: animate Start, End, or Offset. |
+| Move a layer along a curve | **Motion Path**: draw a route and keyframe Progress. Enable **Orient to path** to turn along the route. |
+| Morph one outline into another | Choose **Edit → Convert to Path** if needed, then edit path points at different times with Auto-Key on. |
+| Reveal content through another shape | **Mask**: pick a sibling layer as a Clip or Alpha mask. The mask itself is no longer drawn separately. |
+| Add depth or emphasis | **Effects**: add blur, drop shadow, or glow. |
+
+### Import artwork
+
+Use **File → Import** for SVG, Lottie JSON, or FXML. These imports open a new document by default; **SVG into Current Document…** adds SVG artwork to the active one. Images and sounds import into the active document. If an import reports skipped content, select **Show warnings** and inspect the resulting layers before saving. See [importer coverage](../README.md#importers) for format-specific limitations.
+
+### Name the parts your app will use
+
+- **Marker:** a named time range, such as `intro`. Double-click empty space in the marker lane beneath the ruler to create one. Drag its body to move it, drag an edge to resize it, or double-click the marker to rename it. JavaFX can play the range by name.
+- **Slot:** a named placeholder for a JavaFX node. Choose the **Slot** tool (**K**), drag a rectangle, and give it a unique name such as `title`. Animate the slot just like a visual layer. Use the same name when you bind the node in Java.
+
+## 4. Add sound
+
+Use an **audio layer** for a clip that must follow timeline time, such as narration or music. Use a **cue** for a one-shot sound, such as a click or completion chime.
+
+![Timeline with an audio waveform, sound cue, and audio inspector](images/editor-audio.png)
+
+*Figure 2. Audio layers and one-shot cues share the animation timeline.*
+
+### Place and trim a clip
+
+1. Move the playhead to the desired start and choose **File → Import → Audio…**. The editor embeds the asset and adds an audio layer starting at the playhead. It accepts MP3, WAV, AIFF, M4A, and AAC files up to 50 MB; playback support depends on the platform's JavaFX media stack.
+2. Drag the bar to move the clip. Drag the left edge to trim the beginning while keeping the remaining sound in sync; drag the right edge to set the end. **Alt**-drag the bar to slide the sound within the existing interval.
+3. In the **Audio** section of the Inspector, edit **Clip offset**, **Loop**, or **Mute**, and keyframe **Volume** or **Balance** as needed.
+
+The waveform is generated in the background. Compressed formats may take longer and show an approximate waveform. If you only want a reusable asset, use **Assets → Add…** instead of importing it as a layer.
+
+### Place a cue and preview
+
+Move the playhead and use **+** in the cue lane, then select or import a sound if prompted. Drag the cue to adjust its time; select it to edit its name, sound, or volume in the Inspector. To align a cue exactly with a marker, use the marker's **Add Cue at Marker Start** context command.
+
+Press **Space** to hear the full mix. Scrubbing the ruler previews audio layers, not cues. Cues fire when forward playback reaches them, not when you jump past them. **M** mutes the editor preview without changing the saved animation.
+
+## 5. Embed in JavaFX
+
+The editor and the runtime are separate. Your application needs **`animatorfx-player`**, not the editor or the importers. The player runs on Java 21 or later with JavaFX 21 or later and includes its JavaFX dependencies transitively when resolved with Maven.
+
+### Add the dependency and the animation
+
+If you are using this checkout's `1.0-SNAPSHOT`, run `mvn clean install` with JDK 26 at the repository root first. In your JavaFX application's `pom.xml`, add:
+
+```xml
+<dependency>
+    <groupId>com.dlsc.animatorfx</groupId>
+    <artifactId>animatorfx-player</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+Use the corresponding release version if you are using a published player. For a modular application, add `requires com.dlsc.animatorfx.player;` to `module-info.java`. For the example below, a minimal descriptor is:
+
+```java
+module com.example.app {
+    requires com.dlsc.animatorfx.player;
+    exports com.example.app to javafx.graphics;
+}
+```
+
+Save the animation to `src/main/resources/animations/slide.afx` in your application. For an existing sample instead, copy `samples/animations/success.afx` there as `slide.afx`. Keep it as an `.afx` archive; do not extract its assets. If your Maven build filters resources, exclude `.afx` files from filtering and copy them unchanged.
+
+> **Building the module path by hand?** Include `javafx.media` even for silent animations. It is a dependency of the player; Maven resolves it automatically.
+
+![JavaFX sample application displaying five animations and playback controls](images/sample-app.png)
+
+*Figure 3. The sample JavaFX application plays `.afx` files without loading the editor.*
+
+### Load, show, and play
+
+In your JavaFX project, save this as `src/main/java/com/example/app/AnimatorExample.java`. Run `AnimatorExample` as the JavaFX application (use `com.example.app/com.example.app.AnimatorExample` as the main class if your Maven JavaFX launcher expects a module-qualified name).
+
+```java
+package com.example.app;
+
+import com.dlsc.animatorfx.model.io.AnimationIO;
+import com.dlsc.animatorfx.player.AnimationView;
+import com.dlsc.animatorfx.player.Fit;
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
+
+import java.net.URL;
+import java.util.Objects;
+
+public class AnimatorExample extends Application {
+    private AnimationView view;
+
+    @Override
+    public void start(Stage stage) throws Exception {
+        URL resource = Objects.requireNonNull(
+                getClass().getResource("/animations/slide.afx"),
+                "Missing /animations/slide.afx on the classpath");
+        view = new AnimationView(AnimationIO.read(resource));
+        view.setFit(Fit.CONTAIN);
+        stage.setScene(new Scene(new StackPane(view), 480, 270));
+        stage.setTitle("AnimatorFX Example");
+        stage.show();
+        view.play();
+    }
+
+    @Override
+    public void stop() {
+        if (view != null) {
+            view.dispose();
+        }
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}
+```
+
+`AnimationIO.read(URL)` works with resources in a JAR as well as in a development directory. For an animation chosen from disk, use the `Path` overload. Loading can throw `IOException`, including an `AnimationFormatException` for invalid animation data. Report that error to your user instead of trying to play an invalid file.
+
+## 6. Connect animations to your UI
+
+### Control the view
+
+| Want to… | Call… |
+|---|---|
+| Pause, jump, or reset | `view.pause()`, `view.seek(0.5)` (seconds), or `view.stop()`. |
+| Loop | `view.setCycleCount(AnimationPlayer.INDEFINITE)`. |
+| Change speed | `view.setRate(1.5)`; a negative rate plays backward without sound. |
+| Start when shown | `view.setAutoPlay(true)` instead of calling `play()` explicitly. |
+| Fit the available space | `view.setFit(Fit.CONTAIN)` fits everything; `COVER` fills and may crop; `NONE` keeps the original size. |
+| Change audio | `view.setMuted(true)` or `view.setVolume(0.5)`; volume ranges from `0` to `1`. |
+
+Use JavaFX's application thread to configure and control the view. A view pauses playback outside a showing window. Call `dispose()` when you permanently discard a view or standalone player so it can release its media resources.
+
+### Play a named range
+
+If the animation has a marker named `intro`, replace `view.play()` with `view.playMarker("intro")`. A marker plays just its range and respects cycle count and auto-reverse. Use an exact name: an unknown marker raises `IllegalArgumentException`. The underlying `AnimationPlayer`, available through `view.getPlayer()`, exposes `setOnFinished` and `setOnMarkerReached`.
+
+### Put a JavaFX node into the animation
+
+Use an **embedded binding** when the animation should own the node's placement. For example, package `samples/animations/card.afx` as `src/main/resources/animations/card.afx`. In your `start` method, load it in place of `slide.afx` and bind these nodes before playback:
+
+```java
+// Imports: javafx.scene.control.Label and javafx.scene.control.Button
+view.bind("title", new Label("New message"));
+view.bind("action", new Button("Open"));
+```
+
+The nodes become children of the animation view, take the slot's transform, and are resized to the slot if resizable. Give the view new or unparented nodes. An unbound slot is skipped; binding an unknown slot name raises `IllegalArgumentException`.
+
+### Animate a node that is already in your layout
+
+Use an **in-place binding** when the application should keep ownership of the node's layout. Package `samples/animations/attention.afx` under `src/main/resources/animations/`. With an existing `button` in your layout, run this code on the JavaFX application thread:
+
+```java
+// Import: com.dlsc.animatorfx.player.AnimationPlayer
+URL resource = Objects.requireNonNull(
+        getClass().getResource("/animations/attention.afx"),
+        "Missing /animations/attention.afx");
+AnimationPlayer player = new AnimationPlayer(AnimationIO.read(resource));
+player.bindInPlace("target", button);
+player.setOnFinished(event -> player.unbind("target"));
+player.play();
+```
+
+No `AnimationView` is needed for this example. The button stays in its layout; the player changes properties such as translation, scale, rotation, and opacity relative to their original values. Keep a reference to the player. When discarding it, unbind any remaining slots to restore the node properties, then call `player.dispose()`.
+
+For views with several in-place slots, `view.autoBind(root)` matches slot names to node IDs. For FXML, `view.autoBind(root, loader.getNamespace())` checks the loader's namespace first, then node IDs.
+
+> **Generate a starting point.** Open **Document → Copy Java Snippet** to copy loading, slot, and marker calls for the active document. Adjust the resource path and supply the actual nodes from your application.
+
+See the [sample application](../samples/animatorfx-sample-app) for a complete application with both binding modes.
+
+## 7. Shortcuts and troubleshooting
+
+Use **Cmd** on macOS and **Ctrl** elsewhere for shortcuts shown with **Cmd/Ctrl**.
+
+| Action | Shortcut |
+|---|---|
+| Select, rectangle, ellipse, line | `V`, `R`, `O`, `L` |
+| Polygon, star, pen, text, image, slot | `Y`, `S`, `P`, `T`, `I`, `K` |
+| Play / pause; mute | `Space`; `M` |
+| Pan; zoom to fit | `Space` + drag; `Cmd/Ctrl` + `0` |
+| Nudge selection; nudge by 10 px | Arrow key; `Shift` + arrow key |
+| Edit selected path; exit editing or cancel | `Enter`; `Esc` |
+| Undo; redo | `Cmd/Ctrl` + `Z`; `Shift` + `Cmd/Ctrl` + `Z` |
+| Group; ungroup | `Cmd/Ctrl` + `G`; `Shift` + `Cmd/Ctrl` + `G` |
+| Save; save as | `Cmd/Ctrl` + `S`; `Shift` + `Cmd/Ctrl` + `S` |
+
+### Diagnose a problem
+
+| Symptom | What to check |
+|---|---|
+| A property changed everywhere | Place a keyframe at the starting time, move the playhead, then turn on Auto-Key before editing the next value. |
+| A layer is missing in the preview | Check its visibility, its timeline in/out range, and whether it is used as a mask. |
+| An import looks different | Open **Show warnings** and look for unsupported features. Preview and correct the editable result before saving. |
+| Java cannot find the animation | Check the leading `/` in the resource path, spelling and case, and that your build copied the `.afx` into the JAR. |
+| The view is blank or does not advance | Add it to the scene and show the stage before playing. For a slot-only file, bind a node or use a standalone player. |
+| Sound is missing | Check the editor or view mute state, clip range and volume, and playback direction. Confirm platform codec support and that `javafx.media` is on the module path. |
+| A cue did not fire | Play forward across its time instead of seeking past it. If playing a marker, place the cue inside that range or at its start. |
+
+**More information:** [AnimatorFX project documentation](../README.md) · [Sample `.afx` files](../samples/animations)

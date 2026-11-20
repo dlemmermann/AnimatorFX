@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable release version (for example 1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version and release branch
+        id: version
+        env:
+          VERSION: ${{ inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo "::error::Release from the default branch ($DEFAULT_BRANCH)."
+            exit 1
+          fi
+          if [[ ! "$VERSION" =~ ^[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Use a stable major.minor.patch version with major >= 1."
+            exit 1
+          fi
+          if git rev-parse --verify "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag v$VERSION already exists."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Verify and package applications
+    needs: prepare
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  publish:
+    name: Publish runtime to Maven Central
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: maven-central
+    steps:
+      - name: Check out verified source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 26, Central credentials and signing
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: "26"
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_CENTRAL_TOKEN
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Set release version
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          ./mvnw -B -ntp org.codehaus.mojo:versions-maven-plugin:2.19.1:set \
+            -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+
+      - name: Publish signed runtime, sources and Javadoc
+        env:
+          MAVEN_USERNAME: ${{ secrets.PUBLISHER_PORTAL_USERNAME }}
+          MAVEN_CENTRAL_TOKEN: ${{ secrets.PUBLISHER_PORTAL_TOKEN }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          MAVEN_OPTS: -Duser.language=en -Duser.country=US
+        run: |
+          ./mvnw -B -ntp -Drelease=true -DskipTests \
+            -pl :animatorfx-parent,:animatorfx-model,:animatorfx-player deploy
+
+  github-release:
+    name: Publish GitHub release
+    needs: [prepare, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download application archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: AnimatorFX-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create tagged release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release create "v$VERSION" artifacts/*.tar.gz \
+            --target "$GITHUB_SHA" --title "AnimatorFX $VERSION" --generate-notes

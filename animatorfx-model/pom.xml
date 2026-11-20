@@ -12,6 +12,7 @@
 
     <artifactId>animatorfx-model</artifactId>
     <name>AnimatorFX Model</name>
+    <description>Immutable animation documents, interpolation, easing and portable .afx file I/O.</description>
 
     <properties>
         <maven.compiler.release>${runtime.java.release}</maven.compiler.release>
