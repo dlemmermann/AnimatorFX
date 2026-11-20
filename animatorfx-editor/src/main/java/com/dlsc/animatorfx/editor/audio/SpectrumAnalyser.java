@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
+import javafx.application.Platform;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.util.Duration;
@@ -65,7 +66,7 @@ public final class SpectrumAnalyser {
     public static Analysis analyse(URI source, DoubleConsumer onDuration, Consumer<Waveform> onProgress,
                                    Consumer<Optional<Waveform>> onDone) {
         Run run = new Run(onDuration, onProgress, onDone);
-        run.start(source);
+        Platform.runLater(() -> run.start(source));
         return run;
     }
 
@@ -90,6 +91,9 @@ public final class SpectrumAnalyser {
         }
 
         void start(URI source) {
+            if (finished) {
+                return;
+            }
             started = lastData = System.nanoTime();
             watchdog.setCycleCount(Timeline.INDEFINITE);
             watchdog.play();

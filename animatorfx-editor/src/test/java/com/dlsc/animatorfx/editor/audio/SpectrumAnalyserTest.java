@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.testfx.api.FxToolkit;
 
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -154,6 +155,21 @@ class SpectrumAnalyserTest {
         Files.write(file, new byte[]{1, 2, 3, 4, 5, 6, 7, 8});
 
         assertFalse(analyse(file).waveform().isPresent());
+    }
+
+    @Test
+    void cancellingImmediatelyDoesNotReportCompletion() throws Exception {
+        CompletableFuture<Optional<Waveform>> done = new CompletableFuture<>();
+        CompletableFuture<Void> cancelled = new CompletableFuture<>();
+        Platform.runLater(() -> {
+            SpectrumAnalyser.analyse(URI.create("unsupported://source"), d -> {
+            }, partial -> {
+            }, done::complete).cancel();
+            cancelled.complete(null);
+        });
+
+        cancelled.get(5, TimeUnit.SECONDS);
+        assertFalse(done.isDone());
     }
 
     @Test

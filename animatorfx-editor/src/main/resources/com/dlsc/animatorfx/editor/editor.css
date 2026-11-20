@@ -648,7 +648,7 @@
 }
 
 .side-panel .tab-pane > .tab-header-area > .headers-region > .tab {
-    -fx-padding: 7 8 7 8;
+    -fx-padding: 7 7 7 7;
 }
 
 /* Three fixed tabs need no overflow menu; its button would take the room of the last title in a narrow panel. */
