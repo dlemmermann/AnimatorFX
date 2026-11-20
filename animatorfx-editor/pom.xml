@@ -176,6 +176,133 @@
     -->
     <profiles>
         <profile>
+            <id>jdeploy</id>
+            <build>
+                <finalName>AnimatorFX</finalName>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>${maven-dependency-plugin.version}</version>
+                        <configuration>
+                            <includeScope>runtime</includeScope>
+                            <!-- jDeploy supplies platform-specific JavaFX, including media. -->
+                            <excludeGroupIds>org.openjfx</excludeGroupIds>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>jdeploy-dependencies</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/jdeploy/lib</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>${maven-antrun-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>jdeploy-prepare</id>
+                                <phase>initialize</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <delete dir="${project.build.directory}/jdeploy"/>
+                                        <mkdir dir="${project.build.directory}/jdeploy"/>
+                                        <copy file="${project.basedir}/src/package/AnimatorFX.png"
+                                              tofile="${project.build.directory}/jdeploy/icon.png"/>
+                                        <copy file="${maven.multiModuleProjectDirectory}/LICENSE"
+                                              todir="${project.build.directory}/jdeploy"/>
+                                        <copy file="${maven.multiModuleProjectDirectory}/NOTICE"
+                                              todir="${project.build.directory}/jdeploy"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>jdeploy-manifest</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <manifestclasspath property="jdeploy.classpath"
+                                                           jarfile="${project.build.directory}/jdeploy/AnimatorFX-jdeploy.jar">
+                                            <classpath>
+                                                <fileset dir="${project.build.directory}/jdeploy/lib" includes="*.jar"/>
+                                            </classpath>
+                                        </manifestclasspath>
+                                        <manifest file="${project.build.directory}/jdeploy/MANIFEST.MF">
+                                            <attribute name="Class-Path" value="${jdeploy.classpath}"/>
+                                        </manifest>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <version>3.4.1</version>
+                        <executions>
+                            <execution>
+                                <id>jdeploy-launcher</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                                <configuration>
+                                    <classifier>jdeploy</classifier>
+                                    <outputDirectory>${project.build.directory}/jdeploy</outputDirectory>
+                                    <archive>
+                                        <manifest>
+                                            <mainClass>com.dlsc.animatorfx.editor.Launcher</mainClass>
+                                        </manifest>
+                                        <manifestFile>${project.build.directory}/jdeploy/MANIFEST.MF</manifestFile>
+                                    </archive>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>license-maven-plugin</artifactId>
+                        <version>2.9.0</version>
+                        <executions>
+                            <execution>
+                                <id>jdeploy-dependency-licenses</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>download-licenses</goal>
+                                </goals>
+                                <configuration>
+                                    <includedScopes>compile,runtime</includedScopes>
+                                    <excludedGroups>com\.dlsc\.animatorfx</excludedGroups>
+                                    <licensesOutputDirectory>${project.build.directory}/jdeploy/licenses</licensesOutputDirectory>
+                                    <licensesOutputFile>${project.build.directory}/jdeploy/licenses/dependencies.xml</licensesOutputFile>
+                                    <errorRemedy>xmlOutput</errorRemedy>
+                                    <licenseUrlReplacements>
+                                        <licenseUrlReplacement>
+                                            <regexp>https://github.com/weisj/jsvg/blob/master/LICENSE</regexp>
+                                            <replacement>https://raw.githubusercontent.com/weisj/jsvg/master/LICENSE</replacement>
+                                        </licenseUrlReplacement>
+                                    </licenseUrlReplacements>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>package-macos</id>
             <activation>
                 <os>

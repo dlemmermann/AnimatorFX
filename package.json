@@ -1,0 +1,48 @@
+{
+  "name": "animatorfx-editor",
+  "version": "0.0.0-development",
+  "private": true,
+  "description": "A desktop animation editor for JavaFX applications",
+  "author": "DLSC Software & Consulting GmbH",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/dlemmermann/AnimatorFX",
+  "repository": "https://github.com/dlemmermann/AnimatorFX",
+  "files": [
+    "jdeploy-bundle"
+  ],
+  "publishTargets": [
+    {
+      "name": "GitHub Releases",
+      "type": "GITHUB",
+      "url": "https://github.com/dlemmermann/AnimatorFX",
+      "isDefault": true
+    }
+  ],
+  "jdeploy": {
+    "title": "AnimatorFX",
+    "jar": "animatorfx-editor/target/jdeploy/AnimatorFX-jdeploy.jar",
+    "javaVersion": "26",
+    "javafx": true,
+    "javafxVersion": "27.0.1",
+    "jdk": false,
+    "downloadPage": {
+      "platforms": [
+        "windows-x64",
+        "mac-x64",
+        "mac-arm64",
+        "linux-x64",
+        "debian-x64"
+      ]
+    },
+    "files": [
+      {
+        "dir": "animatorfx-editor/target/jdeploy",
+        "includes": [
+          "LICENSE",
+          "NOTICE",
+          "licenses/**"
+        ]
+      }
+    ]
+  }
+}

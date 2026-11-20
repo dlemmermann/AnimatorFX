@@ -22,17 +22,18 @@ no separate Maven installation is needed.
 ```bash
 ./mvnw -B clean install
 ./mvnw -pl animatorfx-editor javafx:run -Danimatorfx.configDir=/path/to/scratch/config
-./mvnw -Ppackage -pl animatorfx-editor -am package
+./mvnw -Pjdeploy -pl animatorfx-editor -am package
 ```
 
 On Windows, use `mvnw.cmd` in place of `./mvnw`. On Ubuntu 24.04, install `libgtk-3-0t64`
-and `libasound2t64` for JavaFX. Linux CI also installs `xvfb` and `xauth` and runs the portable test
+and `libasound2t64` for JavaFX. CI also installs `xvfb` and `xauth` and runs the portable test
 suite through `xvfb-run`, providing a virtual display alongside Monocle's headless mode.
-CI builds/tests and packages native application images on Linux, Windows and macOS. Packages are unsigned.
+All workflows run on `ubuntu-latest`. CI verifies the portable jDeploy payload; releases distribute
+the editor through jDeploy rather than building platform-specific application images or archives.
 
 CI excludes the `native-audio` tests: hosted runners do not provide a reliable audio device, and
 JavaFX's native media backend can fail or crash the test JVM there. Deterministic audio scheduling,
-cue lifecycle and playback-controller tests still run on every platform. Native media tests remain
+cue lifecycle and playback-controller tests still run in CI. Native media tests remain
 included in local builds; on a machine with a working audio device, run them alone with:
 
 ```bash
