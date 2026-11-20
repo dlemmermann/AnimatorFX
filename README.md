@@ -898,8 +898,12 @@ and launch the application. The packages are unsigned.
 The manually triggered Release workflow publishes the embeddable runtime (`animatorfx-model`,
 `animatorfx-player`, and their parent POM) to Maven Central with GPG signatures, sources and Javadoc,
 then attaches the native editor archives to a tagged GitHub release. It uses the same Central Portal
-publishing approach and secret names as GemsFX. See [the release guide](docs/RELEASING.md) for setup,
-credentials and the release procedure.
+publishing approach and secret names as GemsFX. It also starts a tag-bound **jDeploy** workflow,
+which adds editor installers for Windows x64, Linux x64 and macOS (Intel and Apple Silicon) to the
+same [GitHub release](https://github.com/dlemmermann/AnimatorFX/releases).
+jDeploy manages Java/JavaFX installation and application updates; application binaries
+and update metadata are hosted on GitHub, not npm. See [the release guide](docs/RELEASING.md) for
+setup, local jDeploy packaging, credentials and the release procedure.
 
 ## License
 

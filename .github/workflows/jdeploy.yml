@@ -1,0 +1,63 @@
+name: jDeploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jdeploy
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish editor installers to GitHub
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate release tag
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$TAG" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ || ${#TAG} -gt 16 ]]; then
+            echo "::error::Run this workflow at a stable v<major>.<minor>.<patch> tag of at most 16 characters."
+            exit 1
+          fi
+          RELEASE_UNSTABLE=$(gh release view "$TAG" --json isDraft,isPrerelease --jq '.isDraft or .isPrerelease')
+          if [[ "$RELEASE_UNSTABLE" != "false" ]]; then
+            echo "::error::Publish a stable GitHub release before generating its installers."
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 26
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: "26"
+          cache: maven
+
+      - name: Set release version
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          ./mvnw -B -ntp org.codehaus.mojo:versions-maven-plugin:2.19.1:set \
+            -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+
+      - name: Build portable editor bundle
+        env:
+          MAVEN_OPTS: -Duser.language=en -Duser.country=US
+        run: ./mvnw -B -ntp -Pjdeploy -pl animatorfx-editor -am package -DskipTests
+
+      - name: Publish installers and update metadata
+        uses: shannah/jdeploy@81273524df925e2078ea9063ff35b7f9ffe777bc # v6.1.12
+        with:
+          deploy_target: github
+          github_token: ${{ github.token }}
+          jdeploy_version: "6.1.12"

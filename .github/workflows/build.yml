@@ -63,6 +63,10 @@ jobs:
             ./mvnw -B -ntp -DexcludedGroups=native-audio clean verify
           fi
 
+      - name: Verify portable jDeploy editor bundle
+        if: runner.os == 'Linux'
+        run: ./mvnw -B -ntp -Pjdeploy -pl animatorfx-editor -am package -DskipTests
+
       - name: Package native editor
         run: |
           ./mvnw -B -ntp -Ppackage -pl animatorfx-editor -am package -DskipTests \

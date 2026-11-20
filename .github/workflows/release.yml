@@ -42,6 +42,10 @@ jobs:
             echo "::error::Use a stable major.minor.patch version with major >= 1."
             exit 1
           fi
+          if [[ ${#VERSION} -gt 15 ]]; then
+            echo "::error::jDeploy release tags (including v) must not exceed 16 characters."
+            exit 1
+          fi
           if git rev-parse --verify "refs/tags/v$VERSION" >/dev/null 2>&1; then
             echo "::error::Tag v$VERSION already exists."
             exit 1
@@ -100,6 +104,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v7
 
@@ -117,3 +122,9 @@ jobs:
         run: |
           gh release create "v$VERSION" artifacts/*.tar.gz \
             --target "$GITHUB_SHA" --title "AnimatorFX $VERSION" --generate-notes
+
+      - name: Start jDeploy installer publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: gh workflow run jdeploy.yml --ref "v$VERSION"

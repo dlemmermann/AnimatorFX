@@ -3,6 +3,9 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 .kotlin
+/jdeploy/
+/jdeploy-bundle/
+/node_modules/
 
 ### IntelliJ IDEA ###
 .idea/
